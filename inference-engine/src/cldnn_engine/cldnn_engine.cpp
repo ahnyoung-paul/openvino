@@ -145,6 +145,18 @@ static bool disableReduceDecomposition(const std::shared_ptr<const ngraph::Node>
     return false;
 }
 
+static void check_loops(std::shared_ptr<ngraph::Function> func) {
+    size_t count = 0;
+    for (auto& op : func->get_ops()) {
+        std::string type_str(op->get_type_name());
+        if (type_str == "Loop") {
+            count++;
+        }
+        // std::cout << op->get_name() << " : " << op->get_type_name() << std::endl;
+    }
+    std::cout << "CloneAndTransformNetwork Number of Loop: " << count << std::endl;
+}
+
 InferenceEngine::CNNNetwork clDNNEngine::CloneAndTransformNetwork(const InferenceEngine::CNNNetwork& network,
                                                                   const CLDNNPlugin::Config& config) const {
     OV_ITT_SCOPED_TASK(itt::domains::CLDNNPlugin, "clDNNEngine::CloneAndTransformNetwork");
@@ -153,6 +165,13 @@ InferenceEngine::CNNNetwork clDNNEngine::CloneAndTransformNetwork(const Inferenc
     if (clonedNetwork.getFunction()) {
         OV_ITT_SCOPED_TASK(itt::domains::CLDNNPlugin, "clDNNEngine::TransformNetwork");
         auto nGraphFunc = clonedNetwork.getFunction();
+        check_loops(nGraphFunc);
+
+        if (config.enable_loop_unrolling) {
+            std::cout << "EEEEEEEEEEEEEEE enable_loop_unrolling: TRUE" << std::endl;
+        } else {
+            std::cout << "EEEEEEEEEEEEEEE enable_loop_unrolling: FALSE" << std::endl;
+        }
 
         using const_node_ptr = const std::shared_ptr<const ngraph::Node>;
 

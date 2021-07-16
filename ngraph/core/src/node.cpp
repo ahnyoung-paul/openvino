@@ -1015,7 +1015,7 @@ bool Node::constant_fold(OutputVector& output_values, const OutputVector& input_
             make_shared<HostTensor>(output.get_element_type(), output.get_partial_shape());
         output_tensors.push_back(tensor);
     }
-    if (evaluate(output_tensors, input_tensors))
+    if (evaluate(output_tensors, input_tensors))//In Loop op, Get the calculate output tesnsors
     {
         for (size_t i = 0; i < output_tensors.size(); ++i)
         {

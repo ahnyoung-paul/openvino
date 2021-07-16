@@ -281,6 +281,12 @@ void loop_inst::preprocess_backedge_memory() {
         const auto input_map_ptrs = node.find_io_primitive_maps(back_edge.to, false);
         const auto backedge_to_prim = body_network->get_primitive(back_edge.to);
         const auto backedge_from_prim = body_network->get_primitive(back_edge.from);
+        const auto to_layout = backedge_to_prim->get_node().get_output_layout();
+        const auto from_layout = backedge_from_prim->get_node().get_output_layout();
+        if (to_layout != from_layout) {
+            std::cout << back_edge.to << "(" << format::traits(to_layout.format).order << ")";
+            std::cout << back_edge.to << "(" << format::traits(to_layout.format).order << ")" << std::endl;
+        }
 
         memory::ptr initial_mem;
         if (back_edge.to == node.get_current_iteration_id()) {

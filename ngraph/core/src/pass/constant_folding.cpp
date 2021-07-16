@@ -12,20 +12,55 @@ using namespace ngraph;
 
 NGRAPH_RTTI_DEFINITION(ngraph::pass::ConstantFolding, "ConstantFolding", 0);
 
+static size_t check_idx = 0;
+static size_t check_loops(std::shared_ptr<ngraph::Function> func, std::string comments, size_t idx) {
+    size_t count = 0;
+    for (auto& op : func->get_ops()) {
+        std::string type_str(op->get_type_name());
+        if (type_str == "Loop" || type_str == "TensorIterator") {
+            count++;
+        }
+        // std::cout << op->get_name() << " : " << op->get_type_name() << std::endl;
+    }
+    size_t count2 = 0;
+    for (const auto& op : func->get_ordered_ops()) {
+        std::string type_str(op->get_type_name());
+        if (type_str == "Loop" || type_str == "TensorIterator") {
+            count2++;
+        }
+    }
+    std::cout << "[" << std::to_string(idx) << "-" << comments << "] Number of Loop: (" << count << "/" << count2 << ") sizeof ops : " << func->get_ops().size() << std::endl;
+    return count;
+}
+
 bool ngraph::pass::ConstantFolding::run_on_function(std::shared_ptr<ngraph::Function> f)
 {
+    size_t curr_idx = check_idx++;
     bool rewritten = pre_calculated_values_folding(f);
+    std::cout << "ConstantFolding " << f->get_name() << std::endl;
+    size_t count = check_loops(f, "ConstantFolding START .. rewritten("+std::to_string(rewritten)+")", curr_idx);
 
     for (const auto& node : f->get_ordered_ops())
     {
+        // if (count > 0)
+        //     std::cout << "ConstantFolding::Node:: " << node->get_type_name() << std::endl;
+        std::string type_str(node->get_type_name());
+        if (type_str == "Loop" || type_str == "TensorIterator") {
+            std::cout << node->get_name() << " : " << type_str << " in ConstantFolding" << std::endl;
+        }
+
+
         if (rewritten)
         {
             node->validate_and_infer_types();
         }
 
+        bool is_constant_fold = false;
         OutputVector replacements(node->get_output_size());
-        if (node->constant_fold(replacements, node->input_values()))
+        if ((type_str != "Loop" && type_str != "TensorIterator") && node->constant_fold(replacements, node->input_values()))
+        // if (node->constant_fold(replacements, node->input_values()))
         {
+            is_constant_fold = true;
             NGRAPH_CHECK(replacements.size() == node->get_output_size(),
                          "constant_fold_default returned incorrect number of replacements for ",
                          node);
@@ -56,6 +91,7 @@ bool ngraph::pass::ConstantFolding::run_on_function(std::shared_ptr<ngraph::Func
         }
         else
         {
+            is_constant_fold = false;
             // recursively constant fold operators containing subgraphs (ie: TensorIterator, Loop)
             if (auto sub_graph_node = std::dynamic_pointer_cast<op::util::SubGraphOp>(node))
             {
@@ -65,8 +101,16 @@ bool ngraph::pass::ConstantFolding::run_on_function(std::shared_ptr<ngraph::Func
                 }
             }
         }
+        if (rewritten) {
+            std::string type_str2(node->get_type_name());
+            if (type_str2 == "Loop" || type_str == "TensorIterator") {
+                std::cout << "replacement " << type_str2 << " is constant_fold: " << (is_constant_fold? "True" : "False") << std::endl;
+            }
+        }
+
     }
 
+    check_loops(f, "ConstantFolding END .. rewritten("+std::to_string(rewritten)+")", curr_idx);
     return rewritten;
 }
 

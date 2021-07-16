@@ -21,6 +21,7 @@
 #include "ngraph/pass/visualize_tree.hpp"
 #include "ngraph/util.hpp"
 #include "perf_counters.hpp"
+#include <iostream>
 
 using namespace std;
 using namespace ngraph;
@@ -53,11 +54,25 @@ pass::Manager::Manager(std::shared_ptr<ngraph::pass::PassConfig> pass_config)
 {
 }
 
+static void check_loops(std::shared_ptr<ngraph::Function> func, std::string comments) {
+    size_t count = 0;
+    for (auto& op : func->get_ops()) {
+        std::string type_str(op->get_type_name());
+        if (type_str == "Loop") {
+            count++;
+        }
+        // std::cout << op->get_name() << " : " << op->get_type_name() << std::endl;
+    }
+    std::cout << "pass::Manager::run_passes [" << comments << "] Number of Loop: " << count << std::endl;
+}
+
 void pass::Manager::run_passes(shared_ptr<Function> func)
 {
     OV_ITT_SCOPED_TASK(itt::domains::nGraph, "pass::Manager::run_passes");
 
     static bool profile_enabled = getenv_bool("NGRAPH_PROFILE_PASS_ENABLE");
+
+    // check_loops(func, "Start function " + func->get_name());
 
     size_t index = 0;
     stopwatch pass_timer;
@@ -72,6 +87,13 @@ void pass::Manager::run_passes(shared_ptr<Function> func)
             continue;
         }
 
+        auto pass_name = pass->get_name();
+        // if (pass_name == "ConvertRNNSequenceToTensorIterator"
+        //     || pass_name == "ConvertLSTMSequenceToTensorIterator"
+        //     || pass_name == "ConvertGRUSequenceToTensorIterator") {
+        //     std::cout << "Check Pass " << pass->get_name() << std::endl;
+        // }
+        // check_loops(func, pass_name + " start");
         OV_ITT_SCOPE(FIRST_INFERENCE,
                      itt::domains::nGraphPass_LT,
                      pass::internal::perf_counters()[pass->get_type_info()]);
@@ -88,10 +110,17 @@ void pass::Manager::run_passes(shared_ptr<Function> func)
             {
                 NGRAPH_DEBUG << "Pass " << pass->get_name() << " requires static shape but the "
                              << "function is dynamic. Skipping this transformation";
+                std::cout << "Pass " << pass->get_name() << " requires static shape but the "
+                             << "function is dynamic. Skipping this transformation" << std::endl;
                 continue;
             }
             // GraphRewrite is a temporary container for MatcherPass to make execution
             // on on entire ngraph::Function
+            if (pass_name == "ConvertRNNSequenceToTensorIterator"
+                || pass_name == "ConvertLSTMSequenceToTensorIterator"
+                || pass_name == "ConvertGRUSequenceToTensorIterator") {
+                std::cout << "Pass " << func->get_name() << " run function " << std::endl;
+            }
             function_changed = GraphRewrite(matcher_pass).run_on_function(func);
         }
         else if (auto function_pass = dynamic_pointer_cast<FunctionPass>(pass))
@@ -133,7 +162,7 @@ void pass::Manager::run_passes(shared_ptr<Function> func)
             }
         }
         NGRAPH_SUPPRESS_DEPRECATED_END
-
+        // check_loops(func, pass_name + " working");
         if (m_visualize)
         {
             // visualizations and serializations will be named after the outermost function
@@ -153,6 +182,7 @@ void pass::Manager::run_passes(shared_ptr<Function> func)
         }
         index++;
         pass_timer.stop();
+        // check_loops(func, pass_name + " finish");
         if (profile_enabled)
         {
             cout << setw(7) << pass_timer.get_milliseconds() << "ms " << pass->get_name() << "\n";

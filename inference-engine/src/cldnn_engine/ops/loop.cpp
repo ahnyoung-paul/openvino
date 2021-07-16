@@ -70,6 +70,7 @@ static std::string GetExternalInputName(const int64_t body_parameter_index,
 }
 
 void CreateLoopOp(Program& p, const std::shared_ptr<Loop>& op) {
+    std::cout << "CreateLoopOp .............. " << std::endl;
     const std::string layerName = layer_type_name_ID(op);
     auto inputPrimitives = p.GetInputPrimitiveIDs(op);
     const auto& loop_input_descs = op->get_input_descriptions();

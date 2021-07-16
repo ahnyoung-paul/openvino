@@ -827,6 +827,9 @@ std::shared_ptr<ngraph::Node> XmlDeserializer::createNode(
         }
 
         auto const& opset = opsetIt->second;
+        if (type == "TensorIterator" || type == "Loop") {
+            std::cout << "TensorIterator / Loop is called" << std::endl;
+        }
 
         ngraphNode = std::shared_ptr<ngraph::Node>(opset.create_insensitive(type));
         if (!ngraphNode) {

@@ -298,6 +298,11 @@ public:
         for (const auto& pm : input_primitive_maps) {
             layout calculated_layout = calc_body_input_layout(pm);
             const primitive_id& internal_input_id = pm.internal_id;
+            // if input pm is in backedge:
+            //      get output layout
+            //      check corresponding input/output layouts are same
+            //      if not change input layout corresponding output layout
+            //      Need to check it is avaiable
 
             // add inputs for body network if not exist
             if (body.get_primitives().count(internal_input_id) == 0) {

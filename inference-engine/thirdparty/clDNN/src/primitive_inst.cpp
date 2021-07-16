@@ -26,6 +26,9 @@ namespace cldnn {
 uint32_t primitive_inst::get_network_id() const { return _network.get_id(); }
 
 void primitive_inst::check_memory_to_set(const memory& mem, const layout& layout) const {
+    if (mem.get_layout() != layout) {
+        std::cout << "layout is not matched " << std::endl;
+    }
     CLDNN_ERROR_LAYOUT_MISMATCH("network layout",
         "set memory layout",
         mem.get_layout(),

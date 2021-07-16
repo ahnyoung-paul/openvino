@@ -14,11 +14,13 @@
 #include <vpu/configuration/options/ir_with_scales_directory.hpp>
 #include <vpu/configuration/options/force_pure_tensor_iterator.hpp>
 #include <vpu/configuration/options/enable_tensor_iterator_unrolling.hpp>
+#include <iostream>
 
 namespace vpu {
 
 void FrontEnd::unrollLoops(ie::CNNNetwork& network) {
     VPU_PROFILE(unrollLoops);
+    std::cout << "unrollLoops is started ..." << std::endl;
 
     const auto& env = CompileEnv::get();
 
