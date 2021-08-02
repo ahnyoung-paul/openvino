@@ -100,7 +100,7 @@ struct CPUStreamsExecutor::Impl {
                 if (ThreadBindingType::CORES == _impl->_config._threadBindingType) {
                     CpuSet processMask;
                     int    ncpus = 0;
-                    std::tie(processMask, ncpus) = GetProcessMask();
+                    std::tie(processMask, ncpus) = GetProcessMask();//return nullpt for processMask on windows
                     if (nullptr != processMask) {
                         _observer.reset(new Observer{*_taskArena,
                                                      std::move(processMask),

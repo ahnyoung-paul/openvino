@@ -21,6 +21,41 @@
 
 using namespace cldnn;
 
+// struct Observer: public tbb::task_scheduler_observer {
+//     CpuSet              _mask;
+//     int                 _ncpus                  = 0;
+//     int                 _threadBindingStep      = 0;
+//     int                 _offset                 = 0;
+//     tbb::task_arena&    _my_arena;
+//     Observer(tbb::task_arena&    arena,
+//                 CpuSet              mask,
+//                 int                 ncpus,
+//                 const int           streamId,
+//                 const int           threadsPerStream,
+//                 const int           threadBindingStep,
+//                 const int           threadBindingOffset) :
+//         tbb::task_scheduler_observer(arena),
+//         _my_arena(arena),
+//         _mask{std::move(mask)},
+//         _ncpus(ncpus),
+//         _threadBindingStep(threadBindingStep),
+//         _offset{streamId * threadsPerStream  + threadBindingOffset} {
+//     }
+//     void on_scheduler_entry(bool) override {
+//         PinThreadToVacantCore(_offset + tbb::this_task_arena::current_thread_index(), _threadBindingStep, _ncpus, _mask);
+//     }
+//     void on_scheduler_exit(bool) override {
+//         PinCurrentThreadByMask(_ncpus, _mask);
+//     }
+//     void observe(bool state = true) {
+//         if (state) {
+//             _my_arena.initialize();
+//         }
+//         tbb::task_scheduler_observer::observe(state);
+//     }
+//     ~Observer() override = default;
+// };
+
 void compile_graph::run(program_impl& p) {
     OV_ITT_SCOPED_TASK(itt::domains::CLDNN, "CLDNN::pass::CompileGraph");
     size_t order_idx = 0;
