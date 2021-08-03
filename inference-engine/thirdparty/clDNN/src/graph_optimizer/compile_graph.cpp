@@ -124,12 +124,12 @@ struct Observer: public tbb::task_scheduler_observer {
     tbb::task_arena&    _my_arena;
     binding_handler* my_binding_handler;
     Observer(tbb::task_arena&    arena) :
-        tbb::task_scheduler_observer(arena),
+        tbb::task_scheduler_observer(static_cast<tbb::task_arena&>(arena)),
         _my_arena(arena) {
             initialize_system_topology();
             int num_slots = 12;
             int numa_id = -1;
-            int core_type = 2;
+            int core_type = 0;
             int max_threads_per_core = -1;
             std::cout << "num_slots: " << num_slots << std::endl;
             std::cout << "c.numa_id: " << numa_id << std::endl;
@@ -154,7 +154,7 @@ struct Observer: public tbb::task_scheduler_observer {
         }
         tbb::task_scheduler_observer::observe(state);
     }
-    Observer::~Observer() {
+    ~Observer() {
         if (my_binding_handler != nullptr)
             __TBB_internal_deallocate_binding_handler(my_binding_handler);
     }
