@@ -34,8 +34,8 @@ namespace CLDNNPlugin {
 
 CLDNNExecNetwork::CLDNNExecNetwork(InferenceEngine::CNNNetwork &network, RemoteContext::Ptr context, Config config) :
     InferenceEngine::ExecutableNetworkThreadSafeDefault{[&]()->InferenceEngine::ITaskExecutor::Ptr {
-#if defined(_WIN32)
         if (config.throughput_streams > 1) {
+#if 0
             auto streamsExecutorConfig = InferenceEngine::IStreamsExecutor::Config::MakeDefaultMultiThreaded(
                 IStreamsExecutor::Config{"CLDNNPlugin executor",
                     config.throughput_streams,

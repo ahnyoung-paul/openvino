@@ -100,12 +100,23 @@ void initialize_system_topology() {
             core_types_count = 1;
             core_types_indexes = &dummy_index;
         }
+        std::cout << "numa_nodes_count["<< std::to_string(numa_nodes_count) << "] = {";
+        for (int i = 0; i < numa_nodes_count; i++) {
+            std::cout << std::to_string(numa_nodes_indexes[i]) << ", ";
+        }
+        std::cout << "}" << std::endl;
+        std::cout << "core_types_count["<< std::to_string(core_types_count) << "] = {";
+        for (int i = 0; i < core_types_count; i++) {
+            std::cout << std::to_string(core_types_indexes[i]) << ", ";
+        }
+        std::cout << "}" << std::endl;
     });
 }
 
 //! Returns the index, aka slot number, of the calling thread in its current arena
 inline int current_thread_index() {
     int idx = tbb::task_arena::current_thread_index();
+    std::cout << "current_thread_index(" << idx << ")" << std::endl;
     return idx == -1 ? tbb::task_arena::not_initialized : idx;
 }
 
@@ -116,12 +127,26 @@ struct Observer: public tbb::task_scheduler_observer {
         tbb::task_scheduler_observer(arena),
         _my_arena(arena) {
             initialize_system_topology();
+            int num_slots = 12;
+            int numa_id = -1;
+            int core_type = 2;
+            int max_threads_per_core = -1;
+            std::cout << "num_slots: " << num_slots << std::endl;
+            std::cout << "c.numa_id: " << numa_id << std::endl;
+            std::cout << "c.core_type: " << core_type << std::endl;
+            std::cout << "c.max_threads_per_core: " << max_threads_per_core << std::endl;
+            my_binding_handler = __TBB_internal_allocate_binding_handler(num_slots, numa_id, core_type/*BIG*/, max_threads_per_core);
+            if (my_binding_handler == nullptr) {
+                std::cout << "Fail to create binder " << std::endl;
+            }
     }
     void on_scheduler_entry(bool) override {
-        __TBB_internal_apply_affinity(my_binding_handler, tbb::this_task_arena::current_thread_index());
+        if (my_binding_handler != nullptr)
+            __TBB_internal_apply_affinity(my_binding_handler, tbb::this_task_arena::current_thread_index());
     }
     void on_scheduler_exit(bool) override {
-        __TBB_internal_restore_affinity(my_binding_handler, tbb::this_task_arena::current_thread_index());
+        if (my_binding_handler != nullptr)
+            __TBB_internal_restore_affinity(my_binding_handler, tbb::this_task_arena::current_thread_index());
     }
     void observe(bool state = true) {
         if (state) {
@@ -130,7 +155,8 @@ struct Observer: public tbb::task_scheduler_observer {
         tbb::task_scheduler_observer::observe(state);
     }
     Observer::~Observer() {
-        __TBB_internal_deallocate_binding_handler(my_binding_handler);
+        if (my_binding_handler != nullptr)
+            __TBB_internal_deallocate_binding_handler(my_binding_handler);
     }
 };
 

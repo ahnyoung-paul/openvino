@@ -141,51 +141,51 @@ IStreamsExecutor::Config IStreamsExecutor::Config::MakeDefaultMultiThreaded(cons
     const int numaNodesNum = numaNodes.size();
     auto streamExecutorConfig = initial;
     const bool bLatencyCase = streamExecutorConfig._streams <= numaNodesNum;
-    std::cout << "bLatencyCase("<< (bLatencyCase? "True" : "False");
-    std::cout << ")= streamExecutorConfig._streams("<< std::to_string(streamExecutorConfig._streams);
-    std::cout << ") <= numaNodesNum("<< std::to_string(numaNodesNum) << ")" << std::endl;
+    // std::cout << "bLatencyCase("<< (bLatencyCase? "True" : "False");
+    // std::cout << ")= streamExecutorConfig._streams("<< std::to_string(streamExecutorConfig._streams);
+    // std::cout << ") <= numaNodesNum("<< std::to_string(numaNodesNum) << ")" << std::endl;
 
-    {
-        std::cout << "initial config: {" << std::endl;
-        switch (streamExecutorConfig._threadBindingType) {
-        case ThreadBindingType::HYBRID_AWARE:
-            std::cout << "ThreadBindingType::HYBRID_AWARE" << std::endl;
-            break;
-        case ThreadBindingType::CORES:
-            std::cout << "ThreadBindingType::CORES" << std::endl;
-            break;
-        case ThreadBindingType::NONE:
-            std::cout << "ThreadBindingType::NONE" << std::endl;
-            break;
-        case ThreadBindingType::NUMA:
-            std::cout << "ThreadBindingType::NUMA" << std::endl;
-            break;
-        default:
-            std::cout << "ThreadBindingType::UnKnown" << std::endl;
-            break;
-        }
+    // {
+    //     std::cout << "initial config: {" << std::endl;
+    //     switch (streamExecutorConfig._threadBindingType) {
+    //     case ThreadBindingType::HYBRID_AWARE:
+    //         std::cout << "ThreadBindingType::HYBRID_AWARE" << std::endl;
+    //         break;
+    //     case ThreadBindingType::CORES:
+    //         std::cout << "ThreadBindingType::CORES" << std::endl;
+    //         break;
+    //     case ThreadBindingType::NONE:
+    //         std::cout << "ThreadBindingType::NONE" << std::endl;
+    //         break;
+    //     case ThreadBindingType::NUMA:
+    //         std::cout << "ThreadBindingType::NUMA" << std::endl;
+    //         break;
+    //     default:
+    //         std::cout << "ThreadBindingType::UnKnown" << std::endl;
+    //         break;
+    //     }
 
-        switch (streamExecutorConfig._threadPreferredCoreType) {
-            case IStreamsExecutor::Config::PreferredCoreType::ANY:
-                std::cout << "ThreadPreferredCoreType: ANY" << std::endl;
-                break;
-            case IStreamsExecutor::Config::PreferredCoreType::BIG:
-                std::cout << "ThreadPreferredCoreType: BIG" << std::endl;
-                break;
-            case IStreamsExecutor::Config::PreferredCoreType::LITTLE:
-                std::cout << "ThreadPreferredCoreType: LITTLE" << std::endl;
-                break;
-            case IStreamsExecutor::Config::PreferredCoreType::ROUND_ROBIN:
-                std::cout << "ThreadPreferredCoreType: ROUND_ROBIN" << std::endl;
-                break;
-            default:
-                std::cout << "ThreadPreferredCoreType: not defined" << std::endl;
-                break;
-        }
+    //     switch (streamExecutorConfig._threadPreferredCoreType) {
+    //         case IStreamsExecutor::Config::PreferredCoreType::ANY:
+    //             std::cout << "ThreadPreferredCoreType: ANY" << std::endl;
+    //             break;
+    //         case IStreamsExecutor::Config::PreferredCoreType::BIG:
+    //             std::cout << "ThreadPreferredCoreType: BIG" << std::endl;
+    //             break;
+    //         case IStreamsExecutor::Config::PreferredCoreType::LITTLE:
+    //             std::cout << "ThreadPreferredCoreType: LITTLE" << std::endl;
+    //             break;
+    //         case IStreamsExecutor::Config::PreferredCoreType::ROUND_ROBIN:
+    //             std::cout << "ThreadPreferredCoreType: ROUND_ROBIN" << std::endl;
+    //             break;
+    //         default:
+    //             std::cout << "ThreadPreferredCoreType: not defined" << std::endl;
+    //             break;
+    //     }
 
 
-        std::cout << "}" << std::endl;
-    }
+    //     std::cout << "}" << std::endl;
+    // }
 
     // by default, do not use the hyper-threading (to minimize threads synch overheads)
     int num_cores_default = getNumberOfCPUCores();
@@ -199,15 +199,15 @@ IStreamsExecutor::Config IStreamsExecutor::Config::MakeDefaultMultiThreaded(cons
         const int fp32_threshold = 2; // ~relative efficiency of the AVX2 fp32 code for Big vs Little cores;
         // by default the latency case uses (faster) Big cores only, depending on the compute ratio
         const bool bLatencyCaseBigOnly = num_big_cores_phys > (num_little_cores / (fp_intesive ? fp32_threshold : int8_threshold));
-        {
-            std::cout << "num_big_cores_phys: " <<  std::to_string(num_big_cores_phys) << std::endl;
-            std::cout << "num_little_cores: " << std::to_string(num_little_cores) << std::endl;
-            std::cout << "fp_intesive: " << (fp_intesive? "True" : "False") << std::endl;
-            std::cout << "fp32_threshold: " << std::to_string(fp32_threshold) << std::endl;
-            std::cout << "int8_threshold: " << std::to_string(int8_threshold) << std::endl;
-            std::cout << "bLatencyCaseBigOnly("<< (bLatencyCaseBigOnly? "True" : "False") <<")";
-            std::cout << " = num_big_cores_phys > (num_little_cores / (fp_intesive ? fp32_threshold : int8_threshold))" << std::endl;
-        }
+        // {
+        //     std::cout << "num_big_cores_phys: " <<  std::to_string(num_big_cores_phys) << std::endl;
+        //     std::cout << "num_little_cores: " << std::to_string(num_little_cores) << std::endl;
+        //     std::cout << "fp_intesive: " << (fp_intesive? "True" : "False") << std::endl;
+        //     std::cout << "fp32_threshold: " << std::to_string(fp32_threshold) << std::endl;
+        //     std::cout << "int8_threshold: " << std::to_string(int8_threshold) << std::endl;
+        //     std::cout << "bLatencyCaseBigOnly("<< (bLatencyCaseBigOnly? "True" : "False") <<")";
+        //     std::cout << " = num_big_cores_phys > (num_little_cores / (fp_intesive ? fp32_threshold : int8_threshold))" << std::endl;
+        // }
         // selecting the preferred core type
         streamExecutorConfig._threadPreferredCoreType =
             bLatencyCase
@@ -216,25 +216,25 @@ IStreamsExecutor::Config IStreamsExecutor::Config::MakeDefaultMultiThreaded(cons
                     : IStreamsExecutor::Config::PreferredCoreType::ANY)
                 : IStreamsExecutor::Config::PreferredCoreType::ROUND_ROBIN;
 
-        {
-            switch (streamExecutorConfig._threadPreferredCoreType) {
-                case IStreamsExecutor::Config::PreferredCoreType::ANY:
-                    std::cout << "ThreadPreferredCoreType: ANY" << std::endl;
-                    break;
-                case IStreamsExecutor::Config::PreferredCoreType::BIG:
-                    std::cout << "ThreadPreferredCoreType: BIG" << std::endl;
-                    break;
-                case IStreamsExecutor::Config::PreferredCoreType::LITTLE:
-                    std::cout << "ThreadPreferredCoreType: LITTLE" << std::endl;
-                    break;
-                case IStreamsExecutor::Config::PreferredCoreType::ROUND_ROBIN:
-                    std::cout << "ThreadPreferredCoreType: ROUND_ROBIN" << std::endl;
-                    break;
-                default:
-                    std::cout << "ThreadPreferredCoreType: not defined" << std::endl;
-                    break;
-            }
-        }
+        // {
+        //     switch (streamExecutorConfig._threadPreferredCoreType) {
+        //         case IStreamsExecutor::Config::PreferredCoreType::ANY:
+        //             std::cout << "ThreadPreferredCoreType: ANY" << std::endl;
+        //             break;
+        //         case IStreamsExecutor::Config::PreferredCoreType::BIG:
+        //             std::cout << "ThreadPreferredCoreType: BIG" << std::endl;
+        //             break;
+        //         case IStreamsExecutor::Config::PreferredCoreType::LITTLE:
+        //             std::cout << "ThreadPreferredCoreType: LITTLE" << std::endl;
+        //             break;
+        //         case IStreamsExecutor::Config::PreferredCoreType::ROUND_ROBIN:
+        //             std::cout << "ThreadPreferredCoreType: ROUND_ROBIN" << std::endl;
+        //             break;
+        //         default:
+        //             std::cout << "ThreadPreferredCoreType: not defined" << std::endl;
+        //             break;
+        //     }
+        // }
 
         // additionally selecting the #cores to use in the "Big-only" case
         if (bLatencyCaseBigOnly) {
