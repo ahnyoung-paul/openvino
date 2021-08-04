@@ -95,6 +95,7 @@ program_impl::program_impl(engine& engine_ref,
       processing_order(),
       tuning_cache(nullptr),
       is_body_program(is_body_program) {
+    std::cout << "START create program_impl" << std::endl;
     init_primitives();
     set_options();
     pm = std::unique_ptr<pass_manager>(new pass_manager(*this));
@@ -104,6 +105,7 @@ program_impl::program_impl(engine& engine_ref,
     } else {
         build_program(is_internal);
     }
+    std::cout << "END create program_impl" << std::endl;
 }
 
 program_impl::program_impl(engine& engine_ref,
@@ -410,6 +412,7 @@ void program_impl::set_options() {
 }
 
 void program_impl::build_program(bool is_internal) {
+    std::cout << "START cldnn::program_impl::build_program" << std::endl;
     init_graph();
     { pre_optimize_graph(is_internal); }
     run_graph_compilation();
@@ -424,6 +427,7 @@ void program_impl::build_program(bool is_internal) {
     }
 
     cleanup();
+    std::cout << "START cldnn::program_impl::build_program" << std::endl;
 }
 
 void program_impl::init_graph() {

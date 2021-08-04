@@ -98,6 +98,7 @@ Program::Program(InferenceEngine::CNNNetwork& network, std::shared_ptr<cldnn::en
     , m_engine(engine)
     , m_curBatch(-1)
     , queryMode(false) {
+    std::cout << "START create CLDNNPlugin::Program ..." << std::endl;
     // Extract inputs/outputs info from CNNNetwork
     auto networkInputs = network.getInputsInfo();
     auto networkOutputs = network.getOutputsInfo();
@@ -133,6 +134,7 @@ Program::Program(InferenceEngine::CNNNetwork& network, std::shared_ptr<cldnn::en
     } else {
         m_programs.emplace_back(BuildProgram(ops, networkInputs, networkOutputs, createTopologyOnly));
     }
+    std::cout << "END create CLDNNPlugin::Program ..." << std::endl;
 }
 
 int Program::GetMaxBatchSizeForSingleProgram() {
@@ -176,6 +178,7 @@ std::shared_ptr<cldnn::program> Program::BuildProgram(const std::vector<std::sha
                                                       InferenceEngine::InputsDataMap networkInputs,
                                                       InferenceEngine::OutputsDataMap networkOutputs,
                                                       bool createTopologyOnly) {
+    std::cout << "START CLDNNPlugin::Program::BuildProgram ..." << std::endl;
     OV_ITT_SCOPED_TASK(itt::domains::CLDNNPlugin, "Program::BuildProgram");
     cldnn::build_options options;
     GPU_DEBUG_GET_INSTANCE(debug_config);
@@ -196,12 +199,13 @@ std::shared_ptr<cldnn::program> Program::BuildProgram(const std::vector<std::sha
         CreateSingleLayerPrimitive(*m_topology, op);
     }
     if (createTopologyOnly) {
+        std::cout << "END CLDNNPlugin::Program::BuildProgram ..." << std::endl;
         return {};
     } else {
         OV_ITT_SCOPED_TASK(itt::domains::CLDNNPlugin, "Program::CreateProgram");
         auto program = std::make_shared<cldnn::program>(*m_engine, *m_topology, options);
         CleanupBuild();
-
+        std::cout << "END CLDNNPlugin::Program::BuildProgram ..." << std::endl;
         return program;
     }
 }

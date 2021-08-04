@@ -392,6 +392,7 @@ kernel::ptr kernels_cache::get_kernel(kernel_id id) const {
 }
 
 void kernels_cache::build_all() {
+    std::cout << "START kernels_cache::build_all ..." << std::endl;
     OV_ITT_SCOPED_TASK(itt::domains::CLDNN, "KernelsCache::BuildAll");
     if (!_pending_compilation)
         return;
@@ -458,6 +459,7 @@ void kernels_cache::build_all() {
 #endif
 #endif
     }
+    std::cout << "END kernels_cache::build_all ..." << std::endl;
 }
 
 void kernels_cache::reset() {

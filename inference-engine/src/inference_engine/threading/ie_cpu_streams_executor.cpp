@@ -20,6 +20,7 @@
 #include "threading/ie_thread_affinity.hpp"
 #include "threading/ie_cpu_streams_executor.hpp"
 #include <openvino/itt.hpp>
+#include <iostream>
 
 using namespace openvino;
 
@@ -56,6 +57,7 @@ struct CPUStreamsExecutor::Impl {
 #endif
         explicit Stream(Impl* impl) :
             _impl(impl) {
+            std::cout << "START CPUStreamsExecutor::Impl::Stream ... " << std::endl;
             {
                 std::lock_guard<std::mutex> lock{_impl->_streamIdMutex};
                 if (_impl->_streamIdQueue.empty()) {
@@ -71,6 +73,7 @@ struct CPUStreamsExecutor::Impl {
                     ((_impl->_config._streams + _impl->_usedNumaNodes.size() - 1)/_impl->_usedNumaNodes.size()))
                 : _impl->_usedNumaNodes.at(_streamId % _impl->_usedNumaNodes.size());
 #if IE_THREAD == IE_THREAD_TBB || IE_THREAD == IE_THREAD_TBB_AUTO
+            std::cout << "START create and set custom::task_arena with cpu core type affinity" << std::endl;
             const auto concurrency = (0 == _impl->_config._threadsPerStream) ? custom::task_arena::automatic : _impl->_config._threadsPerStream;
             if (ThreadBindingType::HYBRID_AWARE == _impl->_config._threadBindingType) {
                 if (Config::PreferredCoreType::ROUND_ROBIN != _impl->_config._threadPreferredCoreType) {
@@ -113,6 +116,7 @@ struct CPUStreamsExecutor::Impl {
                     }
                 }
             }
+            std::cout << "END create and set custom::task_arena with cpu core type affinity" << std::endl;
 #elif IE_THREAD == IE_THREAD_OMP
             omp_set_num_threads(_impl->_config._threadsPerStream);
             if (!checkOpenMpEnvVars(false) && (ThreadBindingType::NONE != _impl->_config._threadBindingType)) {
@@ -138,6 +142,7 @@ struct CPUStreamsExecutor::Impl {
                 }
             }
 #endif
+            std::cout << "END CPUStreamsExecutor::Impl::Stream ... " << std::endl;
         }
         ~Stream() {
             {
@@ -165,8 +170,12 @@ struct CPUStreamsExecutor::Impl {
     explicit Impl(const Config& config) :
         _config{config},
         _streams([this] {
-            return std::make_shared<Impl::Stream>(this);
+            std::cout << "START std::make_shared<CPUStreamsExecutor::Impl::Stream> ..." << std::endl;
+            auto stream_ptr = std::make_shared<Impl::Stream>(this);
+            std::cout << "END std::make_shared<CPUStreamsExecutor::Impl::Stream> ..." << std::endl;
+            return stream_ptr;
         }) {
+        std::cout << "START CPUStreamsExecutor::Impl ..." << std::endl;
         auto numaNodes = getAvailableNUMANodes();
         if (_config._streams != 0) {
             std::copy_n(std::begin(numaNodes),
@@ -213,6 +222,7 @@ struct CPUStreamsExecutor::Impl {
                 }
             });
         }
+        std::cout << "END CPUStreamsExecutor::Impl ..." << std::endl;
     }
 
     void Enqueue(Task task) {

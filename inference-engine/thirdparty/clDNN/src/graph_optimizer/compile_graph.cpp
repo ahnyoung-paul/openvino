@@ -161,6 +161,7 @@ struct Observer: public tbb::task_scheduler_observer {
 };
 
 void compile_graph::run(program_impl& p) {
+    std::cout << "START compile_graph::run .... " << std::endl;
     OV_ITT_SCOPED_TASK(itt::domains::CLDNN, "CLDNN::pass::CompileGraph");
     size_t order_idx = 0;
     for (auto& node : p.get_processing_order()) {
@@ -173,8 +174,8 @@ void compile_graph::run(program_impl& p) {
 #if (CLDNN_THREADING == CLDNN_THREADING_TBB)
     const auto n_threads = p.get_engine().configuration().n_threads;
     auto arena = std::unique_ptr<tbb::task_arena>(new tbb::task_arena());
-    auto observer = std::unique_ptr<Observer>(new Observer(*arena));
-    observer->observe(true);
+    // auto observer = std::unique_ptr<Observer>(new Observer(*arena));
+    // observer->observe(true);
     arena->initialize(n_threads);
     arena->execute([this, &p] {
         auto& proc_order = p.get_processing_order();
@@ -196,4 +197,5 @@ void compile_graph::run(program_impl& p) {
         }
     }
 #endif
+    std::cout << "END compile_graph::run .... " << std::endl;
 }
