@@ -16,7 +16,11 @@
 #include <set>
 
 #if (CLDNN_THREADING == CLDNN_THREADING_TBB)
+#if 1
+#include "../src/include/cldnn_custom_arena.h"
+#else
 #include <tbb/task_arena.h>
+#endif
 #elif(CLDNN_THREADING == CLDNN_THREADING_THREADPOOL)
 #include <queue>
 #include <future>
@@ -137,7 +141,11 @@ private:
     std::atomic<bool> _pending_compilation{false};
     std::map<const std::string, kernel::ptr> _kernels;
 #if (CLDNN_THREADING == CLDNN_THREADING_TBB)
+#if 0
     std::unique_ptr<tbb::task_arena> arena;
+#else
+    std::unique_ptr<custom::task_arena> arena;
+#endif
 #elif(CLDNN_THREADING == CLDNN_THREADING_THREADPOOL)
     std::unique_ptr<thread_pool> pool;
 #endif
