@@ -34,9 +34,13 @@ source_group("${__CLDNN_Label__main}"             FILES ${__CLDNN_Sources__main}
 
 # ===================================== Include/Link directories =======================================
 
+message(STATUS "clDNN in CMAKE_CURRENT_SOURCE_DIR : ${CMAKE_CURRENT_SOURCE_DIR}")
+message(STATUS "clDNN in __CLDNN_Directory__main : ${__CLDNN_Directory__main}")
 include_directories(
     "${CMAKE_CURRENT_SOURCE_DIR}/include"
     "${__CLDNN_Directory__main}"
+    "${IE_MAIN_SOURCE_DIR}/src/inference_engine/threading/"
+    "${IE_MAIN_SOURCE_DIR}/include/"
   )
 
 # =================================== Link targets and dependencies ====================================
@@ -66,5 +70,12 @@ if(WIN32)
 elseif((NOT ANDROID) AND (UNIX))
   target_link_libraries("${CLDNN_BUILD__PROJ}" PRIVATE pthread)
 endif()
+
+
+message(STATUS "IE_MAIN_SOURCE_DIR: ${IE_MAIN_SOURCE_DIR}")
+# target_include_directories("${CLDNN_BUILD__PROJ}" PRIVATE
+#         $<TARGET_PROPERTY:inference_engine,INTERFACE_INCLUDE_DIRECTORIES>)
+
+target_link_libraries("${CLDNN_BUILD__PROJ}" INTERFACE inference_engine_s)
 
 # ======================================================================================================

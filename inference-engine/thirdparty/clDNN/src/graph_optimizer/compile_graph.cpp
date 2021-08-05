@@ -15,6 +15,7 @@
 #include <iomanip>
 
 #if (CLDNN_THREADING == CLDNN_THREADING_TBB)
+#include "ie_parallel_custom_arena.hpp"
 #include <tbb/parallel_for.h>
 #include <tbb/blocked_range.h>
 #endif
@@ -32,9 +33,18 @@ void compile_graph::run(program_impl& p) {
     }
 
 #if (CLDNN_THREADING == CLDNN_THREADING_TBB)
+#if 1
+    const auto concurrency = 16;//n_threads;
+    const auto core_type = custom::info::core_types().back(); /// running on Big cores only
+    // const auto core_type = custom::info::core_types().back(); /// running on Little cores only
+    // std::cout << "Run custom::task_arena (" << concurrency << ") [" << core_type << " / " << custom::info::core_types().size() << "] " << std::endl;
+    auto arena = std::unique_ptr<custom::task_arena>(new custom::task_arena{
+                           custom::task_arena::constraints{}.set_core_type(core_type).set_max_concurrency(concurrency)});
+#else
     const auto n_threads = p.get_engine().configuration().n_threads;
     auto arena = std::unique_ptr<tbb::task_arena>(new tbb::task_arena());
     arena->initialize(n_threads);
+#endif
     arena->execute([this, &p] {
         auto& proc_order = p.get_processing_order();
         tbb::parallel_for(tbb::blocked_range<size_t>(0, proc_order.size()), [&proc_order, &p](const tbb::blocked_range<size_t>& r) {
@@ -47,6 +57,7 @@ void compile_graph::run(program_impl& p) {
             }
         });
     });
+
     arena.reset();
 #else
     for (auto& node : p.get_processing_order()) {
