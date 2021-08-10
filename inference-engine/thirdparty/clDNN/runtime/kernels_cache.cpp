@@ -406,12 +406,11 @@ void kernels_cache::build_all() {
         get_program_source(_kernels_code, &batches);
 #if (CLDNN_THREADING == CLDNN_THREADING_TBB)
 #if 1
-        const auto concurrency = 16;//n_threads;
-        const auto core_type = custom::info::core_types().back(); /// running on Big cores only
-        // const auto core_type = custom::info::core_types().back(); /// running on Little cores only
+        const auto n_threads = _engine.configuration().n_threads;
+        const auto core_type = _engine.configuration().core_type;
         // std::cout << "Run custom::task_arena (" << concurrency << ") [" << core_type << " / " << custom::info::core_types().size() << "] " << std::endl;
         arena.reset(new custom::task_arena{
-                            custom::task_arena::constraints{}.set_core_type(core_type).set_max_concurrency(concurrency)});
+                            custom::task_arena::constraints{}.set_core_type(core_type).set_max_concurrency(n_threads)});
 #else
         int n_threads = _engine.configuration().n_threads;
         arena = std::unique_ptr<tbb::task_arena>(new tbb::task_arena());

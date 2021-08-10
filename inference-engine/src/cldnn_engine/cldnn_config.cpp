@@ -47,7 +47,31 @@ void Config::UpdateFromMap(const std::map<std::string, std::string>& configMap) 
         std::string key = kvp.first;
         std::string val = kvp.second;
 
-        if (key.compare(PluginConfigParams::KEY_PERF_COUNT) == 0) {
+        if (key == PluginConfigParams::KEY_CPU_BIND_THREAD) {
+            std::cout << key << " : " << val << std::endl;
+            if (val == PluginConfigParams::YES || val == PluginConfigParams::NUMA) {
+                #if (defined(__APPLE__) || defined(_WIN32))
+                thread_binding_type = IStreamsExecutor::ThreadBindingType::NUMA;
+                #else
+                thread_binding_type = (val == PluginConfigParams::YES)
+                        ? IStreamsExecutor::ThreadBindingType::CORES : IStreamsExecutor::ThreadBindingType::NUMA;
+                #endif
+            } else if (val == PluginConfigParams::HYBRID_AWARE) {
+                if (InferenceEngine::getAvailableCoresTypes().size() > 1 /*Hybrid CPU*/) {
+                    thread_binding_type = InferenceEngine::IStreamsExecutor::HYBRID_AWARE;
+                    std::cout << "UpdateConfig: InferenceEngine::IStreamsExecutor::HYBRID_AWARE" << std::endl;
+                } else {
+                    thread_binding_type = IStreamsExecutor::ThreadBindingType::CORES;
+                    std::cout << "UpdateConfig: InferenceEngine::IStreamsExecutor::CORES" << std::endl;
+                }
+            } else if (val == PluginConfigParams::NO) {
+                thread_binding_type = IStreamsExecutor::ThreadBindingType::NONE;
+            } else {
+                IE_THROW(NotFound) << "Unsupported property key by plulgin" << PluginConfigParams::KEY_CPU_BIND_THREAD
+                                   << ". Expected only YES(binds to cores) / NO(no binding) / NUMA(binds to NUMA nodes) / "
+                                                        "HYBRID_AWARE (let the runtime recognize and use the hybrid cores)";
+            }
+        } else if (key.compare(PluginConfigParams::KEY_PERF_COUNT) == 0) {
             if (val.compare(PluginConfigParams::YES) == 0) {
                 useProfiling = true;
             } else if (val.compare(PluginConfigParams::NO) == 0) {
@@ -258,6 +282,20 @@ void Config::UpdateFromMap(const std::map<std::string, std::string>& configMap) 
 
 void Config::adjustKeyMapValues() {
     OV_ITT_SCOPED_TASK(itt::domains::CLDNNPlugin, "Config::AdjustKeyMapValues");
+    switch (thread_binding_type) {
+        case IStreamsExecutor::ThreadBindingType::NONE:
+            key_config_map[PluginConfigParams::KEY_CPU_BIND_THREAD] = PluginConfigParams::NO;
+        break;
+        case IStreamsExecutor::ThreadBindingType::CORES:
+            key_config_map[PluginConfigParams::KEY_CPU_BIND_THREAD] = PluginConfigParams::YES;
+        break;
+        case IStreamsExecutor::ThreadBindingType::NUMA:
+            key_config_map[PluginConfigParams::KEY_CPU_BIND_THREAD] = PluginConfigParams::NUMA;
+        break;
+        case IStreamsExecutor::ThreadBindingType::HYBRID_AWARE:
+            key_config_map[PluginConfigParams::KEY_CPU_BIND_THREAD] = PluginConfigParams::HYBRID_AWARE;
+        break;
+    }
     if (useProfiling)
         key_config_map[PluginConfigParams::KEY_PERF_COUNT] = PluginConfigParams::YES;
     else

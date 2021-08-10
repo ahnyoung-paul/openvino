@@ -8,8 +8,12 @@
 #include <string>
 
 #include "cldnn_custom_layer.h"
+#include "ie_system_conf.h"
+#include "ie_parallel.hpp"
+#include <iostream>
 
 #include <cldnn/graph/network.hpp>
+#include <threading/ie_istreams_executor.hpp>
 
 namespace CLDNNPlugin {
 
@@ -33,7 +37,17 @@ struct Config {
                device_id(""),
                kernels_cache_dir(""),
                n_threads(std::max(static_cast<unsigned int>(1), std::thread::hardware_concurrency())),
-               enable_loop_unrolling(true) {
+               enable_loop_unrolling(true),
+               thread_binding_type(InferenceEngine::IStreamsExecutor::CORES) {
+        // default mode is CORES like CPUStreamExecutor
+        #if (IE_THREAD == IE_THREAD_TBB || IE_THREAD == IE_THREAD_TBB_AUTO)
+            if (InferenceEngine::getAvailableCoresTypes().size() > 1 /*Hybrid CPU*/) {
+                thread_binding_type = InferenceEngine::IStreamsExecutor::HYBRID_AWARE;
+                std::cout << "CTOR Config: InferenceEngine::IStreamsExecutor::HYBRID_AWARE" << std::endl;
+            } else {
+                std::cout << "CTOR Config: InferenceEngine::IStreamsExecutor::CORES" << std::endl;
+            }
+        #endif
         adjustKeyMapValues();
     }
 
@@ -62,6 +76,7 @@ struct Config {
     bool enable_loop_unrolling;
 
     std::map<std::string, std::string> key_config_map;
+    InferenceEngine::IStreamsExecutor::ThreadBindingType thread_binding_type;
 };
 
 }  // namespace CLDNNPlugin

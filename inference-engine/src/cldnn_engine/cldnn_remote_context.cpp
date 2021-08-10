@@ -7,6 +7,7 @@
 #include "cldnn_itt.h"
 
 #include "cldnn/runtime/device_query.hpp"
+#include "threading/ie_parallel_custom_arena.hpp"
 
 using namespace InferenceEngine;
 using namespace InferenceEngine::gpu;
@@ -236,6 +237,16 @@ CLDNNExecutionContextImpl::CLDNNExecutionContextImpl(const std::shared_ptr<IInfe
     auto iter = device_map.find(m_config.device_id);
     auto& dev = iter != device_map.end() ? iter->second : device_map.begin()->second;
 
+    auto n_threads = m_config.n_threads;
+    auto core_type = custom::task_arena::automatic;
+    if (m_config.thread_binding_type == InferenceEngine::IStreamsExecutor::HYBRID_AWARE) {
+        core_type = custom::info::core_types().back(); // Now only big core supports
+        n_threads = getNumberOfCPUCores(true);
+    }
+
+    std::cout << "cldnn_remote_context - n_threads: " << n_threads << std::endl;
+    std::cout << "cldnn_remote_context - core_type: " << core_type << std::endl;
+
     {
         OV_ITT_SCOPED_TASK(itt::domains::CLDNNPlugin, "CLDNNExecutionContextImpl::Create");
         bool enable_profiling = (m_config.useProfiling ||
@@ -251,7 +262,8 @@ CLDNNExecutionContextImpl::CLDNNExecutionContextImpl(const std::shared_ptr<IInfe
                                                                                                      m_config.memory_pool_on,
                                                                                                      use_unified_shared_memory,
                                                                                                      m_config.kernels_cache_dir,
-                                                                                                     m_config.n_threads));
+                                                                                                     n_threads,
+                                                                                                     core_type));
     }
 }
 

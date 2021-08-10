@@ -34,12 +34,11 @@ void compile_graph::run(program_impl& p) {
 
 #if (CLDNN_THREADING == CLDNN_THREADING_TBB)
 #if 1
-    const auto concurrency = 16;//n_threads;
-    const auto core_type = custom::info::core_types().back(); /// running on Big cores only
-    // const auto core_type = custom::info::core_types().back(); /// running on Little cores only
+    const auto core_type = p.get_engine().configuration().core_type;
+    const auto n_threads = p.get_engine().configuration().n_threads;
     // std::cout << "Run custom::task_arena (" << concurrency << ") [" << core_type << " / " << custom::info::core_types().size() << "] " << std::endl;
     auto arena = std::unique_ptr<custom::task_arena>(new custom::task_arena{
-                           custom::task_arena::constraints{}.set_core_type(core_type).set_max_concurrency(concurrency)});
+                           custom::task_arena::constraints{}.set_core_type(core_type).set_max_concurrency(n_threads)});
 #else
     const auto n_threads = p.get_engine().configuration().n_threads;
     auto arena = std::unique_ptr<tbb::task_arena>(new tbb::task_arena());

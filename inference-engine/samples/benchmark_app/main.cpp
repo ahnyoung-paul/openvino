@@ -278,6 +278,10 @@ int main(int argc, char* argv[]) {
             } else if (device == ("GPU")) {
                 // for GPU execution, more throughput-oriented execution via streams
                 setThroughputStreams();
+                if (isFlagSetInCommandLine("pin")) {
+                    // set to user defined value
+                    device_config[CONFIG_KEY(CPU_BIND_THREAD)] = FLAGS_pin;
+                }
 
                 if ((device_name.find("MULTI") != std::string::npos) && (device_name.find("CPU") != std::string::npos)) {
                     slog::warn << "Turn on GPU throttling. Multi-device execution with "
