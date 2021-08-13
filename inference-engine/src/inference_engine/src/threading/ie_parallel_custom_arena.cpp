@@ -3,6 +3,7 @@
 //
 
 #include "ie_parallel_custom_arena.hpp"
+#include <iostream>
 
 #if IE_THREAD == IE_THREAD_TBB || IE_THREAD == IE_THREAD_TBB_AUTO
 
@@ -136,6 +137,7 @@ binding_oberver_ptr construct_binding_observer(tbb::task_arena& ta, int num_slot
 #    if TBB_NUMA_SUPPORT_PRESENT
 tbb::task_arena::constraints convert_constraints(const custom::task_arena::constraints& c) {
     tbb::task_arena::constraints result{};
+    std::cout << "________ convert_constraints __________" << std::endl;
 #        if TBB_HYBRID_CPUS_SUPPORT_PRESENT
     result.core_type = c.core_type;
     result.max_threads_per_core = c.max_threads_per_core;
@@ -167,13 +169,17 @@ task_arena::task_arena(const constraints& constraints_, unsigned reserved_for_ma
     constraints_.max_concurrency, reserved_for_masters
 }
 #    endif
-, my_initialization_state{}, my_constraints{constraints_}, my_binding_observer{} {}
+, my_initialization_state{}, my_constraints{constraints_}, my_binding_observer{} {
+    std::cout << "________ Create task_arena(constraints_) __________" << std::endl;
+}
 
 task_arena::task_arena(const task_arena& s)
     : my_task_arena{s.my_task_arena},
       my_initialization_state{},
       my_constraints{s.my_constraints},
-      my_binding_observer{} {}
+      my_binding_observer{} {
+          std::cout << "________ Create task_arena(&) __________" << std::endl;
+      }
 
 void task_arena::initialize() {
     my_task_arena.initialize();
@@ -247,6 +253,7 @@ std::vector<core_type_id> core_types() {
 }
 
 int default_concurrency(task_arena::constraints c) {
+    std::cout << "________ default_concurrency __________" << std::endl;
     if (c.max_concurrency > 0) {
         return c.max_concurrency;
     }
