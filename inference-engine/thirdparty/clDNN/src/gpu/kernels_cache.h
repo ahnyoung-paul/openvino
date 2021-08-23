@@ -12,9 +12,24 @@
 #include <string>
 #include <unordered_set>
 #include <kernel_selector_common.h>
-#include "custom_task_arena.h"
+#include "configuration.h"
+// #include "custom_task_arena.h"
 
-#if(CLDNN_THREADING == CLDNN_THREADING_THREADPOOL)
+// #define CLDNN_THREADING_SEQ 0
+// #define CLDNN_THREADING_TBB 1
+// #define CLDNN_THREADING_THREADPOOL 2
+
+#if (CLDNN_THREADING == CLDNN_THREADING_TBB)
+#include "tbb/blocked_range.h"
+#include "tbb/blocked_range2d.h"
+#include "tbb/blocked_range3d.h"
+#include "tbb/parallel_for.h"
+#include "tbb/parallel_reduce.h"
+#include "tbb/parallel_sort.h"
+#include "tbb/task_arena.h"
+#include "tbb/task_scheduler_observer.h"
+#include "threading/ie_cpu_streams_executor.hpp"
+#elif(CLDNN_THREADING == CLDNN_THREADING_THREADPOOL)
 #include <queue>
 #include <future>
 #include <functional>
@@ -151,7 +166,7 @@ private:
                                                            // be removed later from the cache).
     uint32_t _prog_id;
 #if (CLDNN_THREADING == CLDNN_THREADING_TBB)
-    std::unique_ptr<cldnn::custom::task_arena> arena;
+    std::unique_ptr<InferenceEngine::CPUStreamsExecutor> taskExecutor;
 #elif(CLDNN_THREADING == CLDNN_THREADING_THREADPOOL)
     std::unique_ptr<thread_pool> pool;
 #endif
