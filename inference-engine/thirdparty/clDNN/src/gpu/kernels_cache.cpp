@@ -15,6 +15,7 @@
 #include <utility>
 #include "kernel_selector_helper.h"
 #include "cldnn_itt.h"
+#include <exception>
 #if(CLDNN_THREADING == CLDNN_THREADING_THREADPOOL)
 #include <thread>
 #include <future>
@@ -399,10 +400,17 @@ void kernels_cache::build_all() {
         get_program_source(_kernels_code, &batches);
         _one_time_kernels.clear();
 #if (CLDNN_THREADING == CLDNN_THREADING_TBB)
-        const auto core_type = _context.get_configuration().core_type;
         const auto n_threads = _context.get_configuration().n_threads;
-        arena.reset(new cldnn::custom::task_arena{
-                            cldnn::custom::task_arena::constraints{}.set_core_type(core_type).set_max_concurrency(n_threads)});
+        taskExecutor.reset(new InferenceEngine::CPUStreamsExecutor(
+            InferenceEngine::IStreamsExecutor::Config{
+                "CLDNNPlugin load network executor",                    // name
+                1,                                                      // Number of streams used to set number of stream threads
+                -1,                                                     // threadsPerStream used to set max_concurrency for task_arena
+                InferenceEngine::IStreamsExecutor::HYBRID_AWARE,        // threadBindingType
+                1,                                                      // threadBindingStep used in ThreadBindingType::Cores
+                0,                                                      // threadBindingOffset used in ThreadBindingType::Cores
+                n_threads,                                              // Number of threads
+                InferenceEngine::IStreamsExecutor::Config::BIG}));      // Core type
 #elif(CLDNN_THREADING == CLDNN_THREADING_THREADPOOL)
         int n_threads = _context.get_configuration().n_threads;
         pool = std::unique_ptr<thread_pool>(new thread_pool(n_threads));
@@ -410,13 +418,21 @@ void kernels_cache::build_all() {
     }
 
 #if (CLDNN_THREADING == CLDNN_THREADING_TBB)
-    arena->execute([this, &batches] {
-        tbb::parallel_for(tbb::blocked_range<size_t>(0, batches.size()), [this, &batches](const tbb::blocked_range<size_t>& r) {
-            for (auto i = r.begin(); i != r.end(); ++i) {
-                build_batch(batches[i]);
-            }
-        });
-    });
+    std::exception_ptr exception;
+    auto buildBatch = [&] {
+        try {
+            tbb::parallel_for(tbb::blocked_range<size_t>(0, batches.size()), [this, &batches](const tbb::blocked_range<size_t>& r) {
+                for (auto i = r.begin(); i != r.end(); ++i) {
+                    build_batch(batches[i]);
+                }
+            });
+        } catch(...) {
+            exception = std::current_exception();
+        }
+    };
+    std::vector<InferenceEngine::Task> tasks;
+    tasks.push_back(buildBatch);
+    taskExecutor->runAndWait(tasks);
 #elif(CLDNN_THREADING == CLDNN_THREADING_THREADPOOL)
     std::vector<std::future<void>> builds;
     for (size_t i = 0; i < batches.size(); ++i) {
@@ -437,7 +453,7 @@ void kernels_cache::build_all() {
         _kernels_code.clear();
         _pending_compilation = false;
 #if (CLDNN_THREADING == CLDNN_THREADING_TBB)
-        arena.reset();
+        taskExecutor.reset();
 #if defined(__unix__) && !defined(__ANDROID__)
     //  NOTE: In linux, without malloc_trim, an amount of the memory used by compilation is not being returned to system thought they are freed.
     //  (It is at least 500 MB when we perform parallel compilation)

@@ -132,7 +132,21 @@ source_group("${__CLDNN_Label__cg_cache}"             FILES ${__CLDNN_Sources__c
 
 # ===================================== Include/Link directories =======================================
 
-include_directories(
+
+if(CLDNN_THREADING STREQUAL "TBB")
+message("NEW_DIR_NAME: ${IE_MAIN_SOURCE_DIR}/src/inference_engine/")
+  include_directories(
+      "${CLDNN__MAIN_DIR}"
+      "${CMAKE_CURRENT_SOURCE_DIR}"
+      "${__CLDNN_Directory__include}"
+      "${__CLDNN_Directory__ks_core}"
+      "${__CLDNN_Directory__ks_core}/common"
+      "${__CLDNN_Directory__ks_actual_kernels}"
+      "${__CLDNN_Directory__ks_common}"
+      "${IE_MAIN_SOURCE_DIR}/src/plugin_api/"
+    )
+else()
+  include_directories(
     "${CLDNN__MAIN_DIR}"
     "${CMAKE_CURRENT_SOURCE_DIR}"
     "${__CLDNN_Directory__include}"
@@ -141,6 +155,7 @@ include_directories(
     "${__CLDNN_Directory__ks_actual_kernels}"
     "${__CLDNN_Directory__ks_common}"
   )
+endif()
 
 # =================================== Link targets and dependencies ====================================
 
@@ -182,3 +197,7 @@ elseif((NOT ANDROID) AND (UNIX))
   target_link_libraries("${CLDNN_BUILD__PROJ}" PRIVATE pthread)
 endif()
 target_link_libraries("${CLDNN_BUILD__PROJ}" PRIVATE ${CLDNN__SYSTEM_LINK_LIBRARIES})
+
+if(CLDNN_THREADING STREQUAL "TBB")
+  target_link_libraries(${CLDNN_BUILD__PROJ} PRIVATE inference_engine)
+endif()

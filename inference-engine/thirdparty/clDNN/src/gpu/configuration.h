@@ -8,6 +8,14 @@
 #include "api/cldnn.hpp"
 #include "api/engine.hpp"
 
+#define CLDNN_THREADING_SEQ 0
+#define CLDNN_THREADING_TBB 1
+#define CLDNN_THREADING_THREADPOOL 2
+
+#if (CLDNN_THREADING == CLDNN_THREADING_TBB)
+#include "threading/ie_cpu_streams_executor.hpp"
+#endif
+
 namespace cl {
 class Context;
 }
@@ -32,7 +40,9 @@ struct configuration {
     std::string tuning_cache_path;
     std::string kernels_cache_path;
     uint16_t n_threads;
-    int core_type;
+#if (CLDNN_THREADING == CLDNN_THREADING_TBB)
+    InferenceEngine::IStreamsExecutor::Config::PreferredCoreType core_type;
+#endif
 };
 }  // namespace gpu
 }  // namespace cldnn
