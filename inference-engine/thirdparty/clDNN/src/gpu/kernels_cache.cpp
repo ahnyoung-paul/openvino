@@ -430,11 +430,11 @@ void kernels_cache::build_all() {
         try {
             tbb::parallel_for(tbb::blocked_range<size_t>(0, batches.size()), [this, &batches](const tbb::blocked_range<size_t>& r) {
                 for (auto i = r.begin(); i != r.end(); ++i) {
-                    {
-                        const std::lock_guard<std::mutex> lock(debug_mutex);
-                        std::thread::id threadID = std::this_thread::get_id();
-                        std::cout << "CPUStreamExecutor :: Thread ID : " << threadID << " - " << i << " th batch \n";
-                    }
+                    // {
+                    //     const std::lock_guard<std::mutex> lock(debug_mutex);
+                    //     std::thread::id threadID = std::this_thread::get_id();
+                    //     std::cout << "CPUStreamExecutor :: Thread ID : " << threadID << " - " << i << " th batch \n";
+                    // }
                     build_batch(batches[i]);
                 }
             });
