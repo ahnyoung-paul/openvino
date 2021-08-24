@@ -13,6 +13,9 @@
 #include <climits>
 #include <cassert>
 #include <utility>
+#include <iostream>
+#include <chrono>
+#include <ctime>
 
 #include "threading/ie_thread_local.hpp"
 #include "ie_parallel_custom_arena.hpp"
@@ -20,6 +23,12 @@
 #include "threading/ie_thread_affinity.hpp"
 #include "threading/ie_cpu_streams_executor.hpp"
 #include <openvino/itt.hpp>
+
+typedef std::chrono::time_point<std::chrono::system_clock> time_point;
+typedef std::chrono::system_clock Time;
+#define TIMEDIFF(start, end) ((std::chrono::duration_cast<std::chrono::milliseconds>((end) - (start))).count());
+const std::string debug_key = "CLDNNPlugin load network executor";
+std::mutex debug_mutex;
 
 using namespace openvino;
 
@@ -77,9 +86,16 @@ struct CPUStreamsExecutor::Impl {
                    if (Config::PreferredCoreType::ANY == _impl->_config._threadPreferredCoreType) {
                        _taskArena.reset(new custom::task_arena{concurrency});
                    } else {
+
                        const auto selected_core_type = Config::PreferredCoreType::BIG == _impl->_config._threadPreferredCoreType
                            ? custom::info::core_types().back() // running on Big cores only
                            : custom::info::core_types().front(); // running on Little cores only
+                        if (_impl->_config._name == debug_key)
+                        {
+                            const std::lock_guard<std::mutex> lock(debug_mutex);
+                            std::cout << "Ctor Stream : ThreadBindingType::HYBRID_AWARE, selected_core_type: " << selected_core_type << "\n";
+                            std::cout << "Ctor Stream : ThreadBindingType::HYBRID_AWARE, concurrency: " << concurrency << "\n";
+                        }
                        _taskArena.reset(new custom::task_arena{
                            custom::task_arena::constraints{}.set_core_type(selected_core_type).set_max_concurrency(concurrency)});
                    }
@@ -90,7 +106,7 @@ struct CPUStreamsExecutor::Impl {
                     const auto streamId_wrapped = _streamId % total_streams;
                     const auto& selected_core_type = std::find_if(_impl->total_streams_on_core_types.cbegin(), _impl->total_streams_on_core_types.cend(),
                         [streamId_wrapped](const decltype(_impl->total_streams_on_core_types)::value_type & p) { return p.second > streamId_wrapped; })->first;
-                    _taskArena.reset(new custom::task_arena{
+                     _taskArena.reset(new custom::task_arena{
                         custom::task_arena::constraints{}.set_core_type(selected_core_type).set_max_concurrency(concurrency)});
                 }
             } else if (ThreadBindingType::NUMA == _impl->_config._threadBindingType) {
@@ -194,9 +210,18 @@ struct CPUStreamsExecutor::Impl {
             }
         }
         #endif
+        time_point end_impl_time = Time::now();
         for (auto streamId = 0; streamId < _config._streams; ++streamId) {
             _threads.emplace_back([this, streamId] {
-                openvino::itt::threadName(_config._name + "_" + std::to_string(streamId));
+                time_point start_thread_time = Time::now();
+                std::string thread_name = _config._name + "_" + std::to_string(streamId);
+                if (_config._name == debug_key)
+                {
+                    const std::lock_guard<std::mutex> lock(debug_mutex);
+                    std::thread::id threadID = std::this_thread::get_id();
+                    std::cout << "Ctor CPUStreamExecutor : Emplace back Thread : ID " << threadID << ", NAME " << thread_name << "\n";
+                }
+                openvino::itt::threadName(thread_name);
                 for (bool stopped = false; !stopped;) {
                     Task task;
                     {
@@ -208,6 +233,13 @@ struct CPUStreamsExecutor::Impl {
                         }
                     }
                     if (task) {
+                        time_point start_exec_time = Time::now();
+                        if (_config._name == debug_key)
+                        {
+                            const std::lock_guard<std::mutex> lock(debug_mutex);
+                            auto start_task_after_create_thread = TIMEDIFF(start_thread_time, start_exec_time);
+                            std::cout << "Time (starting Task - starting Thread) " << start_task_after_create_thread << " ms \n";
+                        }
                         Execute(task, *(_streams.local()));
                     }
                 }
@@ -218,12 +250,19 @@ struct CPUStreamsExecutor::Impl {
     void Enqueue(Task task) {
         {
             std::lock_guard<std::mutex> lock(_mutex);
+            if (_config._name == debug_key)
+                std::cout << "Call Stream::Enqueue ... \n";
             _taskQueue.emplace(std::move(task));
         }
         _queueCondVar.notify_one();
     }
 
     void Execute(const Task& task, Stream& stream) {
+        if (_config._name == debug_key)
+        {
+            const std::lock_guard<std::mutex> lock(debug_mutex);
+            std::cout << "Call Stream::Execute ... \n";
+        }
 #if IE_THREAD == IE_THREAD_TBB || IE_THREAD == IE_THREAD_TBB_AUTO
         auto& arena = stream._taskArena;
         if (nullptr != arena) {
@@ -237,6 +276,11 @@ struct CPUStreamsExecutor::Impl {
     }
 
     void Defer(Task task) {
+        if (_config._name == debug_key)
+        {
+            const std::lock_guard<std::mutex> lock(debug_mutex);
+            std::cout << "Call Stream::Defer ... \n";
+        }
         auto& stream = *(_streams.local());
         stream._taskQueue.push(std::move(task));
         if (!stream._execute) {
@@ -301,10 +345,14 @@ CPUStreamsExecutor::~CPUStreamsExecutor() {
 }
 
 void CPUStreamsExecutor::Execute(Task task) {
+    if (_impl->_config._name == debug_key)
+        std::cout << "Call CPUStreamsExecutor::Execute ... \n";
     _impl->Defer(std::move(task));
 }
 
 void CPUStreamsExecutor::run(Task task) {
+    if (_impl->_config._name == debug_key)
+        std::cout << "Call CPUStreamsExecutor::run ... \n";
     if (0 == _impl->_config._streams) {
         _impl->Defer(std::move(task));
     } else {

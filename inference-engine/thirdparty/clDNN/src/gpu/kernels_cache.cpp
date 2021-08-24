@@ -16,6 +16,8 @@
 #include "kernel_selector_helper.h"
 #include "cldnn_itt.h"
 #include <exception>
+#include <thread>
+#include <mutex>
 #if(CLDNN_THREADING == CLDNN_THREADING_THREADPOOL)
 #include <thread>
 #include <future>
@@ -44,6 +46,8 @@
 #else
 #include <Windows.h>
 #endif
+
+std::mutex debug_mutex;
 
 #if (CLDNN_THREADING != CLDNN_THREADING_SEQ)
 #define DEFAULT_NUM_THREADS 2
@@ -400,22 +404,18 @@ void kernels_cache::build_all() {
         get_program_source(_kernels_code, &batches);
         _one_time_kernels.clear();
 #if (CLDNN_THREADING == CLDNN_THREADING_TBB)
-        const auto core_type = _context.get_configuration().core_type;
+        // const auto core_type = _context.get_configuration().core_type;
         const auto n_threads = _context.get_configuration().n_threads;
-
-        InferenceEngine::IStreamsExecutor::Config config("CLDNNPlugin executor", n_threads);
-        config._threadPreferredCoreType = InferenceEngine::IStreamsExecutor::Config::BIG;
-
         taskExecutor.reset(new InferenceEngine::CPUStreamsExecutor(
             InferenceEngine::IStreamsExecutor::Config{
-                "CLDNNPlugin load network executor",
-                n_threads,
-                -1,
-                InferenceEngine::IStreamsExecutor::HYBRID_AWARE,
-                1,
-                0,
-                n_threads,
-                InferenceEngine::IStreamsExecutor::Config::ANY}));
+                "CLDNNPlugin load network executor",                    // name
+                1,                                              // Number of streams used to set number of thread
+                -1,                                                     // threadsPerStream used to set max_concurrency
+                InferenceEngine::IStreamsExecutor::HYBRID_AWARE,        // threadBindingType
+                1,                                                      // threadBindingStep used in ThreadBindingType::Cores
+                0,                                                      // threadBindingOffset used in ThreadBindingType::Cores
+                n_threads,                                              // Number of threads
+                InferenceEngine::IStreamsExecutor::Config::BIG}));      // Core type
         // arena.reset(new cldnn::custom::task_arena{
         //                     cldnn::custom::task_arena::constraints{}.set_core_type(core_type).set_max_concurrency(n_threads)});
 #elif(CLDNN_THREADING == CLDNN_THREADING_THREADPOOL)
@@ -430,6 +430,11 @@ void kernels_cache::build_all() {
         try {
             tbb::parallel_for(tbb::blocked_range<size_t>(0, batches.size()), [this, &batches](const tbb::blocked_range<size_t>& r) {
                 for (auto i = r.begin(); i != r.end(); ++i) {
+                    {
+                        const std::lock_guard<std::mutex> lock(debug_mutex);
+                        std::thread::id threadID = std::this_thread::get_id();
+                        std::cout << "CPUStreamExecutor :: Thread ID : " << threadID << " - " << i << " th batch \n";
+                    }
                     build_batch(batches[i]);
                 }
             });
