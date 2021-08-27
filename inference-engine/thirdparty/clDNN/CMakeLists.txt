@@ -781,6 +781,8 @@ set_property(DIRECTORY APPEND PROPERTY COMPILE_DEFINITIONS
 include_directories(
     ${CLDNN_UTILS__RAPIDJSON_INCDIRS}
     "${CLDNN__CODEGEN_INCDIR}"
+    "${IE_MAIN_SOURCE_DIR}/src/plugin_api/"
+    "${IE_MAIN_SOURCE_DIR}/include/"
   )
 
 include_directories(SYSTEM

@@ -11,6 +11,9 @@
 #include <vector>
 #include <map>
 #include <algorithm>
+#include "threading/ie_cpu_streams_executor.hpp"
+
+using namespace InferenceEngine;
 
 namespace cldnn {
 
@@ -64,6 +67,9 @@ struct engine_configuration {
     const std::string kernels_cache_path;     ///< Path to compiled kernels cache
     uint16_t n_threads;                       ///< Number of threads
     const std::string tuning_cache_path;      ///< Path to tuning kernel cache
+    IStreamsExecutor::ThreadBindingType binding_type;
+    IStreamsExecutor::Config::PreferredCoreType core_type;
+
 
     /// @brief Constructs engine configuration with specified options.
     /// @param profiling Enable per-primitive profiling.
@@ -86,7 +92,9 @@ struct engine_configuration {
         uint16_t n_streams = 1,
         const std::string& kernels_cache_path = "",
         uint16_t n_threads = std::max(static_cast<uint16_t>(std::thread::hardware_concurrency()), static_cast<uint16_t>(1)),
-        const std::string& tuning_cache_path = "cache.json")
+        const std::string& tuning_cache_path = "cache.json",
+        const IStreamsExecutor::ThreadBindingType binding_type = IStreamsExecutor::ThreadBindingType::NONE,
+        const IStreamsExecutor::Config::PreferredCoreType core_type = IStreamsExecutor::Config::PreferredCoreType::ANY)
         : enable_profiling(profiling)
         , meaningful_kernels_names(decorate_kernel_names)
         , dump_custom_program(dump_custom_program)
@@ -101,7 +109,10 @@ struct engine_configuration {
         , n_streams(n_streams)
         , kernels_cache_path(kernels_cache_path)
         , n_threads(n_threads)
-        , tuning_cache_path(tuning_cache_path) {
+        , tuning_cache_path(tuning_cache_path)
+        , binding_type(binding_type)
+        , core_type(core_type) {
+
         if (n_streams == 0) {
             throw std::invalid_argument("Invalid streams count set in engine config");
         }

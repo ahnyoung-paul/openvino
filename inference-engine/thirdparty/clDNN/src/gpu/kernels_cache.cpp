@@ -401,16 +401,56 @@ void kernels_cache::build_all() {
         _one_time_kernels.clear();
 #if (CLDNN_THREADING == CLDNN_THREADING_TBB)
         const auto n_threads = _context.get_configuration().n_threads;
+        const auto binding_type = _context.get_configuration().binding_type;
+        const auto core_type = _context.get_configuration().core_type;
+        {
+            std::cout << "n_threads: " << n_threads << "\n";
+            std::string str_binding_type = "NONE";
+            switch (binding_type) {
+                case IStreamsExecutor::HYBRID_AWARE:
+                    str_binding_type = "HYBRID_AWARE";
+                    break;
+                case IStreamsExecutor::CORES:
+                    str_binding_type = "CORES";
+                    break;
+                case IStreamsExecutor::NUMA:
+                    str_binding_type = "NUMA";
+                    break;
+                case IStreamsExecutor::NONE:
+                    str_binding_type = "NONE";
+                    break;
+                default:
+                    str_binding_type = "INVALID_BINDING_TYPE";
+                    break;
+            }
+            std::cout << "binding_type: " << str_binding_type << "\n";
+            std::string str_core_type = "ANY";
+            switch (core_type) {
+                case IStreamsExecutor::Config::ANY:
+                    str_core_type = "ANY";
+                    break;
+                case IStreamsExecutor::Config::BIG:
+                    str_core_type = "BIG";
+                    break;
+                case IStreamsExecutor::Config::LITTLE:
+                    str_core_type = "LITTLE";
+                    break;
+                case IStreamsExecutor::Config::ROUND_ROBIN:
+                    str_core_type = "ROUND_ROBIN";
+                    break;
+            }
+            std::cout << "core_type: " << str_core_type << "\n";
+        }
         taskExecutor.reset(new InferenceEngine::CPUStreamsExecutor(
             InferenceEngine::IStreamsExecutor::Config{
                 "CLDNNPlugin load network executor",                    // name
-                1,                                                      // Number of streams used to set number of stream threads
-                -1,                                                     // threadsPerStream used to set max_concurrency for task_arena
-                InferenceEngine::IStreamsExecutor::HYBRID_AWARE,        // threadBindingType
+                1,                                                      // Number of streams used to set number of stream threads, load_network has only 1 stream
+                n_threads,                                              // threadsPerStream used to set max_concurrency for task_arena
+                binding_type,                                           // threadBindingType
                 1,                                                      // threadBindingStep used in ThreadBindingType::Cores
                 0,                                                      // threadBindingOffset used in ThreadBindingType::Cores
-                n_threads,                                              // Number of threads
-                InferenceEngine::IStreamsExecutor::Config::BIG}));      // Core type
+                1,                                                      // Number of threads
+                core_type}));                                           // Core type
 #elif(CLDNN_THREADING == CLDNN_THREADING_THREADPOOL)
         int n_threads = _context.get_configuration().n_threads;
         pool = std::unique_ptr<thread_pool>(new thread_pool(n_threads));

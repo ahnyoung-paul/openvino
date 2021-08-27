@@ -12,12 +12,10 @@
 #include <string>
 #include <unordered_set>
 #include <kernel_selector_common.h>
-#include "configuration.h"
-// #include "custom_task_arena.h"
 
-// #define CLDNN_THREADING_SEQ 0
-// #define CLDNN_THREADING_TBB 1
-// #define CLDNN_THREADING_THREADPOOL 2
+#define CLDNN_THREADING_SEQ 0
+#define CLDNN_THREADING_TBB 1
+#define CLDNN_THREADING_THREADPOOL 2
 
 #if (CLDNN_THREADING == CLDNN_THREADING_TBB)
 #include "tbb/blocked_range.h"

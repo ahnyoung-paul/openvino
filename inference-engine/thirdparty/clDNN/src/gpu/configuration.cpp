@@ -6,8 +6,7 @@
 #include "configuration.h"
 #include <algorithm>
 
-// #include "threading/ie_cpu_streams_executor.hpp"
-// #include "custom_task_arena.h"
+using namespace InferenceEngine;
 
 namespace cldnn {
 namespace gpu {
@@ -27,12 +26,9 @@ configuration::configuration()
       queues_num(0),
       tuning_cache_path("cache.json"),
       kernels_cache_path(""),
-#if (CLDNN_THREADING == CLDNN_THREADING_TBB)
       n_threads(std::max(static_cast<uint16_t>(std::thread::hardware_concurrency()), static_cast<uint16_t>(1))),
-      core_type(InferenceEngine::IStreamsExecutor::Config::PreferredCoreType::ANY) {
-#else
-      n_threads(std::max(static_cast<uint16_t>(std::thread::hardware_concurrency()), static_cast<uint16_t>(1))) {
-#endif
+      binding_type(IStreamsExecutor::NONE),
+      core_type(IStreamsExecutor::Config::PreferredCoreType::ANY) {
       }
 }  // namespace gpu
 }  // namespace cldnn

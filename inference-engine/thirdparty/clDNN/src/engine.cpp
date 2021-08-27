@@ -83,7 +83,9 @@ gpu_toolkit_config convert_configuration(const engine_configuration conf) {
     result.queues_num = conf.n_streams;
     result.kernels_cache_path = conf.kernels_cache_path;
     result.tuning_cache_path = conf.tuning_cache_path;
-    result.n_threads = std::min(conf.n_threads, result.n_threads);
+    result.n_threads = conf.n_threads;
+    result.binding_type = conf.binding_type;
+    result.core_type = conf.core_type;
     return result;
 }
 
