@@ -42,12 +42,43 @@ static void createDirectory(std::string _path) {
 
 IE_SUPPRESS_DEPRECATED_START
 void Config::UpdateFromMap(const std::map<std::string, std::string>& configMap) {
+    bool update_EnforcedCPUCoreType = false
     OV_ITT_SCOPED_TASK(itt::domains::CLDNNPlugin, "Config::UpdateFromMap");
     for (auto& kvp : configMap) {
         std::string key = kvp.first;
         std::string val = kvp.second;
 
-        if (key.compare(PluginConfigParams::KEY_PERF_COUNT) == 0) {
+        if (key.compare(PluginConfigParams::KEY_CPU_BIND_THREAD) == 0) {
+            if (val == CONFIG_VALUE(YES) || val == CONFIG_VALUE(NUMA)) {
+                #if (defined(__APPLE__) || defined(_WIN32))
+                threadBindingType = IStreamsExecutor::ThreadBindingType::NUMA;
+                #else
+                threadBindingType = (val == CONFIG_VALUE(YES))
+                        ? IStreamsExecutor::ThreadBindingType::CORES : IStreamsExecutor::ThreadBindingType::NUMA;
+                #endif
+            } else if (val == CONFIG_VALUE(HYBRID_AWARE)) {
+                threadBindingType = IStreamsExecutor::ThreadBindingType::HYBRID_AWARE;
+            } else if (val == CONFIG_VALUE(NO)) {
+                threadBindingType = IStreamsExecutor::ThreadBindingType::NONE;
+            } else {
+                IE_THROW() << "Wrong value for property key " << CONFIG_KEY(CPU_BIND_THREAD)
+                                   << ". Expected only YES(binds to cores) / NO(no binding) / NUMA(binds to NUMA nodes) / "
+                                                        "HYBRID_AWARE (let the runtime recognize and use the hybrid cores)";
+            }
+        } else if (key.compare(PluginConfigParams::KEY_ENFORCE_CPU_CORE_TYPE) == 0) {
+            update_EnforcedCPUCoreType = true;
+            if (val == PluginConfigParams::ANY) {
+                enforcedCPUCoreType = IStreamsExecutor::Config::ANY;
+            } else if (val == PluginConfigParams::LITTLE) {
+                enforcedCPUCoreType = IStreamsExecutor::Config::LITTLE;
+            } else if (val == PluginConfigParams::BIG) {
+                enforcedCPUCoreType = IStreamsExecutor::Config::BIG;
+            } else if (val == PluginConfigParams::ROUND_ROBIN) {
+                enforcedCPUCoreType = IStreamsExecutor::Config::ROUND_ROBIN;
+            } else {
+                IE_THROW(NotFound) << "Unsupported property value by plugin: " << val;
+            }
+        } else if (key.compare(PluginConfigParams::KEY_PERF_COUNT) == 0) {
             if (val.compare(PluginConfigParams::YES) == 0) {
                 useProfiling = true;
             } else if (val.compare(PluginConfigParams::NO) == 0) {
@@ -251,7 +282,25 @@ void Config::UpdateFromMap(const std::map<std::string, std::string>& configMap) 
         } else {
             IE_THROW(NotFound) << "Unsupported property key by plugin: " << key;
         }
-
+        #if (IE_THREAD == IE_THREAD_TBB || IE_THREAD == IE_THREAD_TBB_AUTO)
+        if (update_EnforcedCPUCoreType) {
+            auto streamExeConfig = IStreamsExecutor::Config::MakeGPULoadNetworkConfig(
+                                                                IStreamsExecutor::HYBRID_AWARE,
+                                                                enforcedCPUCoreType,
+                                                                n_threads);
+            threadBindingType = streamExeConfig._threadBindingType;
+            enforcedCPUCoreType = streamExeConfig._threadPreferredCoreType;
+            n_threads = streamExeConfig._threadsPerStream;
+        } else if (threadBindingType == IStreamsExecutor::HYBRID_AWARE) {
+            auto streamExeConfig = IStreamsExecutor::Config::MakeGPULoadNetworkConfig(
+                                                                threadBindingType,
+                                                                IStreamsExecutor::Config::BIG,
+                                                                n_threads);
+            threadBindingType = streamExeConfig._threadBindingType;
+            enforcedCPUCoreType = streamExeConfig._threadPreferredCoreType;
+            n_threads = streamExeConfig._threadsPerStream;
+        }
+        #endif
         adjustKeyMapValues();
     }
 }
@@ -341,6 +390,29 @@ void Config::adjustKeyMapValues() {
         key_config_map[GPUConfigParams::KEY_GPU_ENABLE_LOOP_UNROLLING] = PluginConfigParams::YES;
     else
         key_config_map[GPUConfigParams::KEY_GPU_ENABLE_LOOP_UNROLLING] = PluginConfigParams::NO;
+    {
+        std::string bt = PluginConfigParams::NO;
+        switch (threadBindingType)
+        {
+        case IStreamsExecutor::NONE: bt = PluginConfigParams::NO; break;
+        case IStreamsExecutor::CORES : bt = PluginConfigParams::YES; break;
+        case IStreamsExecutor::NUMA: bt = PluginConfigParams::NUMA; break;
+        case IStreamsExecutor::HYBRID_AWARE: bt = PluginConfigParams::HYBRID_AWARE; break;
+        default: break;
+        }
+        key_config_map[PluginConfigParams::KEY_CPU_BIND_THREAD] = bt;
+    }
+    {
+        std::string ct = PluginConfigParams::ANY;
+        switch (enforcedCPUCoreType) {
+        case IStreamsExecutor::Config::ANY: ct = PluginConfigParams::ANY; break;
+        case IStreamsExecutor::Config::BIG: ct = PluginConfigParams::BIG; break;
+        case IStreamsExecutor::Config::LITTLE: ct = PluginConfigParams::LITTLE; break;
+        case IStreamsExecutor::Config::ROUND_ROBIN: ct = PluginConfigParams::ROUND_ROBIN; break;
+        default: break;
+        }
+        key_config_map[PluginConfigParams::KEY_ENFORCE_CPU_CORE_TYPE] = ct;
+    }
 }
 IE_SUPPRESS_DEPRECATED_END
 

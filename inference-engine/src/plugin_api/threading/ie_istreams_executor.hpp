@@ -12,6 +12,7 @@
 #include <memory>
 #include <vector>
 #include <string>
+#include <iostream>
 
 #include "ie_parameter.hpp"
 #include "threading/ie_itask_executor.hpp"
@@ -46,6 +47,33 @@ public:
         HYBRID_AWARE  //!< Let the runtime bind the inference threads depending on the cores type (default mode for the hybrid CPUs)
     };
 
+    static void ShowBindingType(const ThreadBindingType input_type, const std::string str_title="") {
+        std::cout << str_title << "BindingType: ";
+        switch (input_type) {
+            case ThreadBindingType::CORES:
+            {
+                std::cout << "CORE\n";
+                break;
+            }
+            case ThreadBindingType::HYBRID_AWARE:
+            {
+                std::cout << "HYBRID_AWARE\n";
+                break;
+            }
+            case ThreadBindingType::NUMA:
+            {
+                std::cout << "NUMA\n";
+                break;
+            }
+            case ThreadBindingType::NONE:
+            default:
+            {
+                std::cout << "NONE\n";
+                break;
+            }
+        }
+    }
+
     /**
      * @brief Defines IStreamsExecutor configuration
      */
@@ -79,6 +107,8 @@ public:
         * @return configured values
         */
         static Config MakeDefaultMultiThreaded(const Config& initial, const bool fp_intesive = true);
+
+
 
         std::string        _name;  //!< Used by `ITT` to name executor threads
         int                _streams                 = 1;  //!< Number of streams.
@@ -122,6 +152,37 @@ public:
         _threadBindingStep{threadBindingStep},
         _threadBindingOffset{threadBindingOffset},
         _threads{threads}, _threadPreferredCoreType(threadPreferredCoreType){
+        }
+
+        static Config MakeGPULoadNetworkConfig(const ThreadBindingType binding_type,
+                        const PreferredCoreType enforeced_core_type,
+                        const int n_threads);
+
+        static void ShowCoreType(const PreferredCoreType input_type, const std::string str_title="") {
+            std::cout << str_title << "CoreType: ";
+            switch (input_type) {
+                case PreferredCoreType::ROUND_ROBIN:
+                {
+                    std::cout << "ROUND_ROBIN\n";
+                    break;
+                }
+                case PreferredCoreType::BIG:
+                {
+                    std::cout << "BIG\n";
+                    break;
+                }
+                case PreferredCoreType::LITTLE:
+                {
+                    std::cout << "LITTLE\n";
+                    break;
+                }
+                case PreferredCoreType::ANY:
+                default:
+                {
+                    std::cout << "ANY\n";
+                    break;
+                }
+            }
         }
     };
 

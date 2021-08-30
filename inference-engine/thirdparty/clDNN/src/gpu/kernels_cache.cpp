@@ -403,44 +403,10 @@ void kernels_cache::build_all() {
         const auto n_threads = _context.get_configuration().n_threads;
         const auto binding_type = _context.get_configuration().binding_type;
         const auto core_type = _context.get_configuration().core_type;
-        {
-            std::cout << "n_threads: " << n_threads << "\n";
-            std::string str_binding_type = "NONE";
-            switch (binding_type) {
-                case IStreamsExecutor::HYBRID_AWARE:
-                    str_binding_type = "HYBRID_AWARE";
-                    break;
-                case IStreamsExecutor::CORES:
-                    str_binding_type = "CORES";
-                    break;
-                case IStreamsExecutor::NUMA:
-                    str_binding_type = "NUMA";
-                    break;
-                case IStreamsExecutor::NONE:
-                    str_binding_type = "NONE";
-                    break;
-                default:
-                    str_binding_type = "INVALID_BINDING_TYPE";
-                    break;
-            }
-            std::cout << "binding_type: " << str_binding_type << "\n";
-            std::string str_core_type = "ANY";
-            switch (core_type) {
-                case IStreamsExecutor::Config::ANY:
-                    str_core_type = "ANY";
-                    break;
-                case IStreamsExecutor::Config::BIG:
-                    str_core_type = "BIG";
-                    break;
-                case IStreamsExecutor::Config::LITTLE:
-                    str_core_type = "LITTLE";
-                    break;
-                case IStreamsExecutor::Config::ROUND_ROBIN:
-                    str_core_type = "ROUND_ROBIN";
-                    break;
-            }
-            std::cout << "core_type: " << str_core_type << "\n";
-        }
+
+        IStreamsExecutor::ShowBindingType(binding_type, "kernels_cache ");
+        IStreamsExecutor::Config::ShowCoreType(core_type, "kernels_cache ");
+
         taskExecutor.reset(new InferenceEngine::CPUStreamsExecutor(
             InferenceEngine::IStreamsExecutor::Config{
                 "CLDNNPlugin load network executor",                    // name
