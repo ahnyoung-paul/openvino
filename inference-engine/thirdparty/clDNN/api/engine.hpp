@@ -92,9 +92,9 @@ struct engine_configuration {
         uint16_t n_streams = 1,
         const std::string& kernels_cache_path = "",
         uint16_t n_threads = std::max(static_cast<uint16_t>(std::thread::hardware_concurrency()), static_cast<uint16_t>(1)),
-        const std::string& tuning_cache_path = "cache.json",
         const IStreamsExecutor::ThreadBindingType binding_type = IStreamsExecutor::ThreadBindingType::NONE,
-        const IStreamsExecutor::Config::PreferredCoreType core_type = IStreamsExecutor::Config::PreferredCoreType::ANY)
+        const IStreamsExecutor::Config::PreferredCoreType core_type = IStreamsExecutor::Config::PreferredCoreType::ANY,
+        const std::string& tuning_cache_path = "cache.json")
         : enable_profiling(profiling)
         , meaningful_kernels_names(decorate_kernel_names)
         , dump_custom_program(dump_custom_program)
@@ -112,6 +112,9 @@ struct engine_configuration {
         , tuning_cache_path(tuning_cache_path)
         , binding_type(binding_type)
         , core_type(core_type) {
+
+        IStreamsExecutor::ShowBindingType(binding_type, "engine_configuration ");
+        IStreamsExecutor::Config::ShowCoreType(core_type, "engine_configuration ");
 
         if (n_streams == 0) {
             throw std::invalid_argument("Invalid streams count set in engine config");

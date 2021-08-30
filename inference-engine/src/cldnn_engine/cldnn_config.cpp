@@ -47,7 +47,36 @@ void Config::UpdateFromMap(const std::map<std::string, std::string>& configMap) 
         std::string key = kvp.first;
         std::string val = kvp.second;
 
-        if (key.compare(PluginConfigParams::KEY_PERF_COUNT) == 0) {
+        if (key.compare(PluginConfigParams::KEY_CPU_BIND_THREAD) == 0) {
+            if (val == CONFIG_VALUE(YES) || val == CONFIG_VALUE(NUMA)) {
+                #if (defined(__APPLE__) || defined(_WIN32))
+                threadBindingType = IStreamsExecutor::ThreadBindingType::NUMA;
+                #else
+                threadBindingType = (val == CONFIG_VALUE(YES))
+                        ? IStreamsExecutor::ThreadBindingType::CORES : IStreamsExecutor::ThreadBindingType::NUMA;
+                #endif
+            } else if (val == CONFIG_VALUE(HYBRID_AWARE)) {
+                threadBindingType = IStreamsExecutor::ThreadBindingType::HYBRID_AWARE;
+            } else if (val == CONFIG_VALUE(NO)) {
+                threadBindingType = IStreamsExecutor::ThreadBindingType::NONE;
+            } else {
+                IE_THROW() << "Wrong value for property key " << CONFIG_KEY(CPU_BIND_THREAD)
+                                   << ". Expected only YES(binds to cores) / NO(no binding) / NUMA(binds to NUMA nodes) / "
+                                                        "HYBRID_AWARE (let the runtime recognize and use the hybrid cores)";
+            }
+        } else if (key.compare(GPUConfigParams::KEY_GPU_ENFORCE_CPU_CORE_TYPE) == 0) {
+            if (val == "ANY") {
+                enforcedCPUCoreType = IStreamsExecutor::Config::ANY;
+            } else if (val == "LITTLE") {
+                enforcedCPUCoreType = IStreamsExecutor::Config::LITTLE;
+            } else if (val == "BIG") {
+                enforcedCPUCoreType = IStreamsExecutor::Config::BIG;
+            } else if (val == "ROUND_ROBIN") {
+                enforcedCPUCoreType = IStreamsExecutor::Config::ROUND_ROBIN;
+            } else {
+                IE_THROW(NotFound) << "Unsupported property value by plugin: " << val;
+            }
+        } else if (key.compare(PluginConfigParams::KEY_PERF_COUNT) == 0) {
             if (val.compare(PluginConfigParams::YES) == 0) {
                 useProfiling = true;
             } else if (val.compare(PluginConfigParams::NO) == 0) {

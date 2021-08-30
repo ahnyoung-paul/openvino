@@ -275,15 +275,15 @@ bool program_node::need_lockable_memory() const {
     return need_lockable_mem;
 }
 
-primitive_id details::internal_program_node_base::get_next_internal_id() {
+primitive_id cldnn::details::internal_program_node_base::get_next_internal_id() {
     static std::atomic<uint64_t> counter{0};
     auto idx = counter++;
     return primitive_id("_cldnn_internal_") + std::to_string(idx);
 }
 
-details::internal_program_node_base::internal_program_node_base(program_impl& prog)
+cldnn::details::internal_program_node_base::internal_program_node_base(program_impl& prog)
     : program_node(nullptr, prog), internal_id(get_next_internal_id()) {}
 
-void details::internal_program_node_base::set_implementation(std::unique_ptr<primitive_impl>&& impl) {
+void cldnn::details::internal_program_node_base::set_implementation(std::unique_ptr<primitive_impl>&& impl) {
     selected_impl = std::move(impl);
 }

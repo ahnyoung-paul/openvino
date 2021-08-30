@@ -100,6 +100,8 @@ DECLARE_GPU_CONFIG_KEY(MAX_NUM_THREADS);
  * Thus, this key should be turned off if graph loading time is considered to be most important target to optimize.*/
 DECLARE_GPU_CONFIG_KEY(ENABLE_LOOP_UNROLLING);
 
+DECLARE_GPU_CONFIG_KEY(ENFORCE_CPU_CORE_TYPE);
+
 }  // namespace GPUConfigParams
 
 namespace PluginConfigParams {
