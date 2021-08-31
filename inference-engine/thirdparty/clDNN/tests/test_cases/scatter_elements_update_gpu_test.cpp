@@ -45,9 +45,12 @@ TEST(scatter_elements_update_gpu_fp16, d2411_axisF) {
     engine engine;
 
     auto input1 = memory::allocate(engine, { data_types::f16, format::bfyx, { 2, 4, 1, 1 } }); // Dictionary
-    auto input2 = memory::allocate(engine, { data_types::f16, format::bfyx, { 2, 2, 1, 1 } }); // Indexes
+    auto input2 = memory::allocate(engine, { data_types::f16, format::bfyx, { 2/*b*/, 2/*f*/, 1/*x*/, 1/*y*/ } }); // Indexes
     auto input3 = memory::allocate(engine, { data_types::f16, format::bfyx, { 2, 2, 1, 1 } }); // Updates
     auto axis = cldnn::scatter_elements_update::scatter_elements_update_axis::along_f;
+
+    format::bfyx => memory order bfxy
+    2, 3, 4, 1 -> 2, 3, 1, 4
 
     set_values(input1, {
         FLOAT16(3.0f), FLOAT16(6.0f), FLOAT16(5.0f), FLOAT16(4.0f),

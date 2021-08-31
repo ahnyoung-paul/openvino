@@ -74,6 +74,28 @@ public:
         }
     }
 
+    static std::string BindingTypeStr(const ThreadBindingType input_type) {
+        switch (input_type) {
+            case ThreadBindingType::CORES:
+            {
+                return "CORE";
+            }
+            case ThreadBindingType::HYBRID_AWARE:
+            {
+                return "HYBRID_AWARE";
+            }
+            case ThreadBindingType::NUMA:
+            {
+                return "NUMA";
+            }
+            case ThreadBindingType::NONE:
+            default:
+            {
+                return "NONE";
+            }
+        }
+    }
+
     /**
      * @brief Defines IStreamsExecutor configuration
      */
@@ -181,6 +203,28 @@ public:
                 {
                     std::cout << "ANY\n";
                     break;
+                }
+            }
+        }
+
+        static std::string CoreTypeStr(const PreferredCoreType input_type) {
+            switch (input_type) {
+                case PreferredCoreType::ROUND_ROBIN:
+                {
+                    return "ROUND_ROBIN";
+                }
+                case PreferredCoreType::BIG:
+                {
+                    return "BIG";
+                }
+                case PreferredCoreType::LITTLE:
+                {
+                    return "LITTLE";
+                }
+                case PreferredCoreType::ANY:
+                default:
+                {
+                    return "ANY";
                 }
             }
         }

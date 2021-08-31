@@ -301,6 +301,65 @@ void Config::UpdateFromMap(const std::map<std::string, std::string>& configMap) 
             n_threads = streamExeConfig._threadsPerStream;
         }
         #endif
+        {
+            auto checking_config_test = [&] (const IStreamsExecutor::ThreadBindingType in_binding_type,
+                bool is_set_enforced_core_type,
+                const IStreamsExecutor::Config::PreferredCoreType in_enforeced_core_type,
+                const int in_num_threads) {
+                    IStreamsExecutor::ThreadBindingType result_binding_type = in_binding_type;
+                    IStreamsExecutor::Config::PreferredCoreType result_core_type = in_enforeced_core_type;
+                    int result_num_threads = in_num_threads;
+
+                    if (update_EnforcedCPUCoreType) {
+                        auto streamExeConfig = IStreamsExecutor::Config::MakeGPULoadNetworkConfig(
+                                                                            IStreamsExecutor::HYBRID_AWARE,
+                                                                            in_enforeced_core_type,
+                                                                            in_num_threads);
+                        result_binding_type = streamExeConfig._threadBindingType;
+                        result_core_type = streamExeConfig._threadPreferredCoreType;
+                        result_num_threads = streamExeConfig._threadsPerStream;
+                    } else if (threadBindingType == IStreamsExecutor::HYBRID_AWARE) {
+                        auto streamExeConfig = IStreamsExecutor::Config::MakeGPULoadNetworkConfig(
+                                                                            in_binding_type,
+                                                                            IStreamsExecutor::Config::BIG,
+                                                                            in_num_threads);
+                        result_binding_type = streamExeConfig._threadBindingType;
+                        result_core_type = streamExeConfig._threadPreferredCoreType;
+                        result_num_threads = streamExeConfig._threadsPerStream;
+                    }
+                    std::cout << IStreamsExecutor::BindingTypeStr(in_binding_type) << ", ";
+                    std::cout << (is_set_enforced_core_type? IStreamsExecutor::Config::CoreTypeStr(in_enforeced_core_type)
+                                                            : "Not set") << ",";
+                    std::cout << in_num_threads << ", ";
+                    std::cout << IStreamsExecutor::BindingTypeStr(result_binding_type) << ", ";
+                    std::cout << IStreamsExecutor::Config::CoreTypeStr(result_core_type) << ",";
+                    std::cout << result_num_threads << "\n";
+
+                };
+            std::cout << "CPU TBB affinity scenario test ....." << std::endl;
+            std::cout << "hardware_concurrency: " << std::thread::hardware_concurrency() << "\n";
+            checking_config_test(IStreamsExecutor::NUMA, false, IStreamsExecutor::Config::ANY, n_threads);
+            checking_config_test(IStreamsExecutor::NUMA, false, IStreamsExecutor::Config::ANY, 2);
+            checking_config_test(IStreamsExecutor::NUMA, true,  IStreamsExecutor::Config::BIG, n_threads);
+            checking_config_test(IStreamsExecutor::NUMA, true,  IStreamsExecutor::Config::BIG, 2);
+            checking_config_test(IStreamsExecutor::NUMA, true,  IStreamsExecutor::Config::LITTLE, n_threads);
+            checking_config_test(IStreamsExecutor::NUMA, true,  IStreamsExecutor::Config::LITTLE, 2);
+            checking_config_test(IStreamsExecutor::NUMA, true,  IStreamsExecutor::Config::ROUND_ROBIN, n_threads);
+            checking_config_test(IStreamsExecutor::NUMA, true,  IStreamsExecutor::Config::ROUND_ROBIN, 2);
+            checking_config_test(IStreamsExecutor::NUMA, true,  IStreamsExecutor::Config::ANY, n_threads);
+            checking_config_test(IStreamsExecutor::NUMA, true,  IStreamsExecutor::Config::ANY, 2);
+            checking_config_test(IStreamsExecutor::HYBRID_AWARE, false, IStreamsExecutor::Config::ANY, n_threads);
+            checking_config_test(IStreamsExecutor::HYBRID_AWARE, false, IStreamsExecutor::Config::ANY, 2);
+            checking_config_test(IStreamsExecutor::HYBRID_AWARE, true,  IStreamsExecutor::Config::BIG, n_threads);
+            checking_config_test(IStreamsExecutor::HYBRID_AWARE, true,  IStreamsExecutor::Config::BIG, 2);
+            checking_config_test(IStreamsExecutor::HYBRID_AWARE, true,  IStreamsExecutor::Config::LITTLE, n_threads);
+            checking_config_test(IStreamsExecutor::HYBRID_AWARE, true,  IStreamsExecutor::Config::LITTLE, 2);
+            checking_config_test(IStreamsExecutor::HYBRID_AWARE, true,  IStreamsExecutor::Config::ROUND_ROBIN, n_threads);
+            checking_config_test(IStreamsExecutor::HYBRID_AWARE, true,  IStreamsExecutor::Config::ROUND_ROBIN, 2);
+            checking_config_test(IStreamsExecutor::HYBRID_AWARE, true,  IStreamsExecutor::Config::ANY, n_threads);
+            checking_config_test(IStreamsExecutor::HYBRID_AWARE, true,  IStreamsExecutor::Config::ANY, 2);
+
+        }
         adjustKeyMapValues();
     }
 }
