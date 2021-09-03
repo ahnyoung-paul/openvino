@@ -187,31 +187,4 @@ IStreamsExecutor::Config IStreamsExecutor::Config::MakeDefaultMultiThreaded(cons
     return streamExecutorConfig;
 }
 
-IStreamsExecutor::Config IStreamsExecutor::Config::MakeGPULoadNetworkConfig(const IStreamsExecutor::ThreadBindingType binding_type,
-                                                    const IStreamsExecutor::Config::PreferredCoreType enforeced_core_type,
-                                                    const int n_threads) {
-    IStreamsExecutor::Config config;
-    config._threadBindingType = binding_type;
-    config._threadPreferredCoreType = enforeced_core_type;
-    config._streams = 1;
-    config._threadsPerStream = std::min(n_threads, static_cast<int>(std::thread::hardware_concurrency()));
-
-    if (binding_type == IStreamsExecutor::HYBRID_AWARE) {
-        if (enforeced_core_type == IStreamsExecutor::Config::BIG
-            || enforeced_core_type == IStreamsExecutor::Config::LITTLE) {
-                if (custom::info::core_types().size() > 1) { /*Hybrid CPU*/
-                    auto selected_core_type = enforeced_core_type == IStreamsExecutor::Config::BIG
-                            ? custom::info::core_types().back()
-                            : custom::info::core_types().front();
-                    auto num_logical_cores = custom::info::default_concurrency(
-                            custom::task_arena::constraints{}.set_core_type(selected_core_type));
-                    config._threadsPerStream = std::min(n_threads, num_logical_cores);
-                } else {
-                    config._threadPreferredCoreType = IStreamsExecutor::Config::ANY;
-                }
-            }
-    }
-    return config;
-}
-
 }  //  namespace InferenceEngine

@@ -37,7 +37,7 @@ struct Config {
                kernels_cache_dir(""),
                n_threads(std::max(static_cast<unsigned int>(1), std::thread::hardware_concurrency())),
                enable_loop_unrolling(true),
-               cpu_binding_type(IStreamsExecutor::NONE),
+               cpu_thread_binding_type(IStreamsExecutor::NONE),
                cpu_core_type(IStreamsExecutor::Config::ANY) {
         adjustKeyMapValues();
     }
@@ -65,7 +65,7 @@ struct Config {
     std::string kernels_cache_dir;
     size_t n_threads;
     bool enable_loop_unrolling;
-    IStreamsExecutor::ThreadBindingType cpu_binding_type;
+    IStreamsExecutor::ThreadBindingType cpu_thread_binding_type;
     IStreamsExecutor::Config::PreferredCoreType cpu_core_type;
 
     std::map<std::string, std::string> key_config_map;

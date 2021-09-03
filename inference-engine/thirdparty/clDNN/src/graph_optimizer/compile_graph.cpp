@@ -35,11 +35,12 @@ void compile_graph::run(program& p) {
 
 #if (CLDNN_THREADING == CLDNN_THREADING_TBB)
     const auto n_threads = p.get_engine().configuration().n_threads;
-    const auto binding_type = p.get_engine().configuration().cpu_binding_type;
+    const auto binding_type = p.get_engine().configuration().cpu_thread_binding_type;
     const auto core_type = p.get_engine().configuration().cpu_core_type;
 
-    std::cout << "Binding type: " << binding_type << std::endl;
-    std::cout << "Core type: " << core_type << std::endl;
+    // std::cout << "Binding type: " << binding_type << std::endl;
+    // std::cout << "Core type: " << core_type << std::endl;
+    // std::cout << "Num threads: " << n_threads << std::endl;
     auto task_executor = std::unique_ptr<CPUStreamsExecutor>(new CPUStreamsExecutor(
             IStreamsExecutor::Config{
                 "CLDNNPlugin executor for compile graph on load network",   // name

@@ -412,7 +412,7 @@ void kernels_cache::build_all() {
         get_program_source(_kernels_code, &batches);
 #if (CLDNN_THREADING == CLDNN_THREADING_TBB)
         const auto n_threads = _engine.configuration().n_threads;
-        const auto binding_type = _engine.configuration().cpu_binding_type;
+        const auto binding_type = _engine.configuration().cpu_thread_binding_type;
         const auto core_type = _engine.configuration().cpu_core_type;
         _task_executor = std::unique_ptr<InferenceEngine::CPUStreamsExecutor>(new InferenceEngine::CPUStreamsExecutor(
             InferenceEngine::IStreamsExecutor::Config{
