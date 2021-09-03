@@ -34,10 +34,22 @@ source_group("${__CLDNN_Label__main}"             FILES ${__CLDNN_Sources__main}
 
 # ===================================== Include/Link directories =======================================
 
+if(CLDNN_THREADING MATCHES "TBB")
+include_directories(
+    "${CMAKE_CURRENT_SOURCE_DIR}/include"
+    "${__CLDNN_Directory__main}"
+    "${IE_MAIN_SOURCE_DIR}/src/inference_engine/src/"
+    "${IE_MAIN_SOURCE_DIR}/src/inference_engine/include/ie/"
+    "${IE_MAIN_SOURCE_DIR}/src/inference_engine/include/"
+    "${IE_MAIN_SOURCE_DIR}/src/plugin_api/"
+    "${OpenVINO_SOURCE_DIR}/ngraph/core/include/"
+    )
+else()
 include_directories(
     "${CMAKE_CURRENT_SOURCE_DIR}/include"
     "${__CLDNN_Directory__main}"
   )
+endif()
 
 # =================================== Link targets and dependencies ====================================
 
@@ -74,6 +86,10 @@ if(WIN32)
   target_link_libraries("${CLDNN_BUILD__PROJ}" PRIVATE setupapi)
 elseif((NOT ANDROID) AND (UNIX))
   target_link_libraries("${CLDNN_BUILD__PROJ}" PRIVATE pthread)
+endif()
+
+if(CLDNN_THREADING MATCHES "TBB")
+  target_link_libraries("${CLDNN_BUILD__PROJ}" PRIVATE inference_engine)
 endif()
 
 # ======================================================================================================

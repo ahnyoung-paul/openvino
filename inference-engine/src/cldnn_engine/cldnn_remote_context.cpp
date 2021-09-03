@@ -243,7 +243,8 @@ CLDNNExecutionContextImpl::CLDNNExecutionContextImpl(const std::shared_ptr<IInfe
                                                                                                      m_config.memory_pool_on,
                                                                                                      use_unified_shared_memory,
                                                                                                      m_config.kernels_cache_dir,
-                                                                                                     m_config.n_threads));
+                                                                                                     m_config.n_threads,
+                                                                                                     m_config.cpu_core_type));
     }
 }
 

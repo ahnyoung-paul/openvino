@@ -11,7 +11,10 @@
 #include "ie_api.h"
 #include "file_utils.h"
 #include "cldnn_itt.h"
+#include "ie_parallel.hpp"
+#include <ie_system_conf.h>
 #include <thread>
+#include <bitset>
 
 #ifdef _WIN32
 # include <direct.h>
@@ -21,6 +24,8 @@
 # define mkdir(dir, mode) _mkdir(dir)
 #endif  // OPENVINO_ENABLE_UNICODE_PATH_SUPPORT
 #endif  // _WIN32
+
+#define CORE_TYPE_BIT_OFFSET (4)
 
 using namespace InferenceEngine;
 
@@ -38,6 +43,20 @@ static void createDirectory(std::string _path) {
     if (err != 0 && errno != EEXIST) {
         IE_THROW() << "Couldn't create directory! (err=" << err << "; errno=" << errno << ")";
     }
+}
+
+static int getNumberOfCores(const IStreamsExecutor::Config::PreferredCoreType core_type) {
+    const auto total_num_cores = getNumberOfLogicalCPUCores();
+    const auto total_num_big_cores = getNumberOfLogicalCPUCores(true);
+    const auto total_num_little_cores = total_num_cores - total_num_big_cores;
+
+    int num_cores = total_num_cores;
+    if (core_type == IStreamsExecutor::Config::BIG) {
+        num_cores = total_num_big_cores;
+    } else if (core_type == IStreamsExecutor::Config::LITTLE) {
+        num_cores = total_num_little_cores;
+    }
+    return num_cores;
 }
 
 IE_SUPPRESS_DEPRECATED_START
@@ -75,13 +94,17 @@ void Config::UpdateFromMap(const std::map<std::string, std::string>& configMap) 
             }
         } else if (key.compare(GPUConfigParams::KEY_GPU_PLUGIN_PRIORITY) == 0 ||
                    key.compare(CLDNNConfigParams::KEY_CLDNN_PLUGIN_PRIORITY) == 0) {
-            std::stringstream ss(val);
-            uint32_t uVal(0);
-            ss >> uVal;
-            if (ss.fail()) {
-                IE_THROW(NotFound) << "Unsupported property value by plugin: " << val;
+            unsigned int val_h = 0;
+            try {
+                val_h = std::stoul(val, nullptr, 16);
+            } catch (const std::exception&) {
+                IE_THROW() << "Wrong value for property key " << GPUConfigParams::KEY_GPU_PLUGIN_PRIORITY
+                                    << ". Expected only double or single hex value such as 0x30, 0x31, 0x1.";
             }
-            switch (uVal) {
+
+            const uint32_t quque_priority = val_h & ((1 << CORE_TYPE_BIT_OFFSET) - 1);
+            const uint32_t core_type = val_h >> CORE_TYPE_BIT_OFFSET;
+            switch (quque_priority) {
                 case 0:
                     queuePriority = cldnn::priority_mode_types::disabled;
                     break;
@@ -95,9 +118,36 @@ void Config::UpdateFromMap(const std::map<std::string, std::string>& configMap) 
                     queuePriority = cldnn::priority_mode_types::high;
                     break;
                 default:
-                    IE_THROW(ParameterMismatch) << "Unsupported queue priority value: " << uVal;
+                    IE_THROW(ParameterMismatch) << "Unsupported queue priority value: " << quque_priority;
             }
-
+            switch (core_type) {
+                case 0: // default
+                    cpu_core_type = IStreamsExecutor::Config::ANY;
+                    break;
+                case 1: // Any
+                    cpu_core_type = IStreamsExecutor::Config::ANY;
+                    break;
+                case 2: // Little
+                    cpu_core_type = IStreamsExecutor::Config::LITTLE;
+                    break;
+                case 3: // Big
+                    cpu_core_type = IStreamsExecutor::Config::BIG;
+                    break;
+                case 4: // Round robin is not supported in load network
+                default:
+                    IE_THROW(ParameterMismatch) << "Unsupported tbb preferred core type value: " << core_type;
+            }
+#if (IE_THREAD == IE_THREAD_TBB || IE_THREAD == IE_THREAD_TBB_AUTO)
+            if (getAvailableCoresTypes().size() > 1) {
+                if (cpu_core_type == IStreamsExecutor::Config::BIG
+                    || cpu_core_type == IStreamsExecutor::Config::LITTLE) {
+                        n_threads = std::min(n_threads, static_cast<size_t>(getNumberOfCores(cpu_core_type)));
+                    }
+            } else {
+                cpu_core_type = IStreamsExecutor::Config::ANY;
+                n_threads = std::min(n_threads, static_cast<size_t>(std::thread::hardware_concurrency()));
+            }
+#endif
         } else if (key.compare(GPUConfigParams::KEY_GPU_PLUGIN_THROTTLE) == 0 ||
                    key.compare(CLDNNConfigParams::KEY_CLDNN_PLUGIN_THROTTLE) == 0) {
             std::stringstream ss(val);
@@ -233,10 +283,9 @@ void Config::UpdateFromMap(const std::map<std::string, std::string>& configMap) 
             try {
                 int val_i = std::stoi(val);
                 if (val_i <= 0 || val_i > max_threads) {
-                    n_threads = max_threads;
-                } else {
-                    n_threads = val_i;
+                    val_i = max_threads;
                 }
+                n_threads = std::min(n_threads, static_cast<size_t>(val_i));
             } catch (const std::exception&) {
                 IE_THROW() << "Wrong value for property key " << GPUConfigParams::KEY_GPU_MAX_NUM_THREADS << ": " << val
                                    << "\nSpecify the number of threads use for build as an integer."
@@ -253,7 +302,6 @@ void Config::UpdateFromMap(const std::map<std::string, std::string>& configMap) 
         } else {
             IE_THROW(NotFound) << "Unsupported property key by plugin: " << key;
         }
-
         adjustKeyMapValues();
     }
 }
@@ -299,15 +347,27 @@ void Config::adjustKeyMapValues() {
         key_config_map[CLDNNConfigParams::KEY_CLDNN_ENABLE_FP16_FOR_QUANTIZED_MODELS] = PluginConfigParams::NO;
 
     {
-        std::string qp = "0";
+        uint32_t qp = 0;
         switch (queuePriority) {
-        case cldnn::priority_mode_types::low: qp = "1"; break;
-        case cldnn::priority_mode_types::med: qp = "2"; break;
-        case cldnn::priority_mode_types::high: qp = "3"; break;
+        case cldnn::priority_mode_types::low: qp = 1; break;
+        case cldnn::priority_mode_types::med: qp = 2; break;
+        case cldnn::priority_mode_types::high: qp = 3; break;
         default: break;
         }
-        key_config_map[CLDNNConfigParams::KEY_CLDNN_PLUGIN_PRIORITY] = qp;
-        key_config_map[GPUConfigParams::KEY_GPU_PLUGIN_PRIORITY] = qp;
+        uint32_t ct = 0;
+        switch (cpu_core_type) {
+        case IStreamsExecutor::Config::LITTLE:      ct = 1; break;
+        case IStreamsExecutor::Config::BIG:         ct = 2; break;
+        case IStreamsExecutor::Config::ROUND_ROBIN: ct = 3; break;
+        case IStreamsExecutor::Config::ANY:
+        default:break;
+        }
+
+        uint32_t plugin_priority = qp | (ct << CORE_TYPE_BIT_OFFSET);
+        std::stringstream sstream;
+        sstream << std::hex << plugin_priority;
+        key_config_map[CLDNNConfigParams::KEY_CLDNN_PLUGIN_PRIORITY] = sstream.str();
+        key_config_map[GPUConfigParams::KEY_GPU_PLUGIN_PRIORITY] = sstream.str();
     }
     {
         std::string qt = "0";

@@ -90,11 +90,24 @@ set(CLDNN_BUILD__PROJ_LABEL__clDNN "clDNN")
 
 # ===================================== Include/Link directories =======================================
 
+if(CLDNN_THREADING MATCHES "TBB")
+include_directories(
+    ${CLDNN_UTILS__RAPIDJSON_INCDIRS}
+    "${CLDNN__CODEGEN_INCDIR}"
+    "${CLDNN__API_DIR}"
+    "${IE_MAIN_SOURCE_DIR}/src/inference_engine/src/"
+    "${IE_MAIN_SOURCE_DIR}/src/inference_engine/include/ie/"
+    "${IE_MAIN_SOURCE_DIR}/src/inference_engine/include/"
+    "${IE_MAIN_SOURCE_DIR}/src/plugin_api/"
+    "${OpenVINO_SOURCE_DIR}/ngraph/core/include/"
+  )
+else()
 include_directories(
     ${CLDNN_UTILS__RAPIDJSON_INCDIRS}
     "${CLDNN__CODEGEN_INCDIR}"
     "${CLDNN__API_DIR}"
   )
+endif()
 
 # =================================== Link targets and dependencies ====================================
 add_subdirectory(src)
@@ -105,3 +118,7 @@ if(CLDNN__INCLUDE_TESTS)
 endif()
 
 add_subdirectory(kernel_selector)
+
+if(CLDNN_THREADING MATCHES "TBB")
+  target_link_libraries(${CLDNN_BUILD__PROJ__clDNN} PRIVATE inference_engine)
+endif()

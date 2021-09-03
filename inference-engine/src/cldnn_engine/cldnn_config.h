@@ -10,6 +10,9 @@
 #include "cldnn_custom_layer.h"
 #include <ie_performance_hints.hpp>
 #include <cldnn/graph/network.hpp>
+#include <threading/ie_cpu_streams_executor.hpp>
+
+using namespace InferenceEngine;
 
 namespace CLDNNPlugin {
 
@@ -33,6 +36,7 @@ struct Config {
                device_id("0"),
                kernels_cache_dir(""),
                n_threads(std::max(static_cast<unsigned int>(1), std::thread::hardware_concurrency())),
+               cpu_core_type(IStreamsExecutor::Config::ANY),
                enable_loop_unrolling(true) {
         adjustKeyMapValues();
     }
@@ -59,6 +63,7 @@ struct Config {
     std::string device_id;
     std::string kernels_cache_dir;
     size_t n_threads;
+    IStreamsExecutor::Config::PreferredCoreType cpu_core_type;
     bool enable_loop_unrolling;
 
     std::map<std::string, std::string> key_config_map;
