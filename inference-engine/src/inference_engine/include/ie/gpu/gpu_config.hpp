@@ -115,6 +115,17 @@ namespace PluginConfigParams {
  */
 DECLARE_CONFIG_VALUE(GPU_THROUGHPUT_AUTO);
 DECLARE_CONFIG_KEY(GPU_THROUGHPUT_STREAMS);
+
+/**
+ * @brief Enforce CPU core type for loading network
+ *
+ *
+ */
+DECLARE_CONFIG_KEY(ENFORCE_CPU_CORE_TYPE);
+DECLARE_CONFIG_VALUE(ANY);
+DECLARE_CONFIG_VALUE(LITTLE);
+DECLARE_CONFIG_VALUE(BIG);
+DECLARE_CONFIG_VALUE(ROUND_ROBIN);
 }  // namespace PluginConfigParams
 
 }  // namespace InferenceEngine

@@ -46,6 +46,45 @@ public:
         HYBRID_AWARE  //!< Let the runtime bind the inference threads depending on the cores type (default mode for the hybrid CPUs)
     };
 
+
+    /**
+     * For Debugging, it will be removed
+     */
+    static std::string BindingTypeStr(const ThreadBindingType input_type) {
+        switch (input_type) {
+            case ThreadBindingType::CORES:
+            {
+                return "CORE";
+            }
+            case ThreadBindingType::HYBRID_AWARE:
+            {
+                return "HYBRID_AWARE";
+            }
+            case ThreadBindingType::NUMA:
+            {
+                return "NUMA";
+            }
+            case ThreadBindingType::NONE:
+            default:
+            {
+                return "NONE";
+            }
+        }
+    }
+
+    friend std::ostream& operator<<(std::ostream& out, const ThreadBindingType type) {
+        static std::map<IStreamsExecutor::ThreadBindingType, std::string> type_str_maps;
+        if (type_str_maps.size() == 0) {
+#define ADD_TYPE_STR(t) type_str_maps[t] = #t
+            ADD_TYPE_STR(CORES);
+            ADD_TYPE_STR(HYBRID_AWARE);
+            ADD_TYPE_STR(NONE);
+            ADD_TYPE_STR(NUMA);
+#undef ADD_TYPE_STR
+        }
+        return out << type_str_maps[type];
+    }
+
     /**
      * @brief Defines IStreamsExecutor configuration
      */
@@ -122,6 +161,24 @@ public:
         _threadBindingStep{threadBindingStep},
         _threadBindingOffset{threadBindingOffset},
         _threads{threads}, _threadPreferredCoreType(threadPreferredCoreType){
+        }
+
+        static Config MakeGPULoadNetworkConfig(const ThreadBindingType binding_type,
+                                                    const PreferredCoreType enforeced_core_type,
+                                                    const int n_threads);
+
+
+        friend std::ostream& operator<<(std::ostream& out, const PreferredCoreType type) {
+            static std::map<PreferredCoreType, std::string> core_type_str_maps;
+            if (core_type_str_maps.size() == 0) {
+#define ADD_CORE_TYPE_STR(t) core_type_str_maps[t] = #t
+                ADD_CORE_TYPE_STR(ROUND_ROBIN);
+                ADD_CORE_TYPE_STR(BIG);
+                ADD_CORE_TYPE_STR(LITTLE);
+                ADD_CORE_TYPE_STR(ANY);
+#undef ADD_CORE_TYPE_STR
+            }
+            return out << core_type_str_maps[type];
         }
     };
 

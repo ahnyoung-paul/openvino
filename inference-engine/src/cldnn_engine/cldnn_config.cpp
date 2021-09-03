@@ -11,6 +11,7 @@
 #include "ie_api.h"
 #include "file_utils.h"
 #include "cldnn_itt.h"
+#include "ie_parallel.hpp"
 #include <thread>
 
 #ifdef _WIN32
@@ -43,6 +44,7 @@ static void createDirectory(std::string _path) {
 IE_SUPPRESS_DEPRECATED_START
 void Config::UpdateFromMap(const std::map<std::string, std::string>& configMap) {
     OV_ITT_SCOPED_TASK(itt::domains::CLDNNPlugin, "Config::UpdateFromMap");
+    bool update_EnforcedCPUCoreType = false;
     for (auto& kvp : configMap) {
         std::string key = kvp.first;
         std::string val = kvp.second;
@@ -248,10 +250,120 @@ void Config::UpdateFromMap(const std::map<std::string, std::string>& configMap) 
             } else {
                 IE_THROW(ParameterMismatch) << "Unsupported KEY_GPU_ENABLE_LOOP_UNROLLING flag value: " << val;
             }
+        } else if (key.compare(PluginConfigParams::KEY_CPU_BIND_THREAD) == 0) {
+            if (val == CONFIG_VALUE(YES) || val == CONFIG_VALUE(NUMA)) {
+                #if (defined(__APPLE__) || defined(_WIN32))
+                cpu_binding_type = IStreamsExecutor::ThreadBindingType::NUMA;
+                #else
+                cpu_binding_type = (val == CONFIG_VALUE(YES))
+                        ? IStreamsExecutor::ThreadBindingType::CORES : IStreamsExecutor::ThreadBindingType::NUMA;
+                #endif
+            } else if (val == CONFIG_VALUE(HYBRID_AWARE)) {
+                cpu_binding_type = IStreamsExecutor::ThreadBindingType::HYBRID_AWARE;
+            } else if (val == CONFIG_VALUE(NO)) {
+                cpu_binding_type = IStreamsExecutor::ThreadBindingType::NONE;
+            } else {
+                IE_THROW() << "Wrong value for property key " << CONFIG_KEY(CPU_BIND_THREAD)
+                                   << ". Expected only YES(binds to cores) / NO(no binding) / NUMA(binds to NUMA nodes) / "
+                                                        "HYBRID_AWARE (let the runtime recognize and use the hybrid cores)";
+            }
+        } else if (key.compare(PluginConfigParams::KEY_ENFORCE_CPU_CORE_TYPE) == 0) {
+            update_EnforcedCPUCoreType = true;
+            if (val == PluginConfigParams::ANY) {
+                cpu_core_type = IStreamsExecutor::Config::ANY;
+            } else if (val == PluginConfigParams::LITTLE) {
+                cpu_core_type = IStreamsExecutor::Config::LITTLE;
+            } else if (val == PluginConfigParams::BIG) {
+                cpu_core_type = IStreamsExecutor::Config::BIG;
+            } else if (val == PluginConfigParams::ROUND_ROBIN) {
+                cpu_core_type = IStreamsExecutor::Config::ROUND_ROBIN;
+            } else {
+                IE_THROW(NotFound) << "Unsupported property value by plugin: " << val;
+            }
+
         } else {
             IE_THROW(NotFound) << "Unsupported property key by plugin: " << key;
         }
+        #if (IE_THREAD == IE_THREAD_TBB || IE_THREAD == IE_THREAD_TBB_AUTO)
+        if (update_EnforcedCPUCoreType) {
+            auto streamExeConfig = IStreamsExecutor::Config::MakeGPULoadNetworkConfig(
+                                                                IStreamsExecutor::HYBRID_AWARE,
+                                                                cpu_core_type,
+                                                                n_threads);
+            cpu_binding_type = streamExeConfig._threadBindingType;
+            cpu_core_type = streamExeConfig._threadPreferredCoreType;
+            n_threads = streamExeConfig._threadsPerStream;
+        } else if (cpu_binding_type == IStreamsExecutor::HYBRID_AWARE) {
+            auto streamExeConfig = IStreamsExecutor::Config::MakeGPULoadNetworkConfig(
+                                                                cpu_binding_type,
+                                                                IStreamsExecutor::Config::BIG,
+                                                                n_threads);
+            cpu_binding_type = streamExeConfig._threadBindingType;
+            cpu_core_type = streamExeConfig._threadPreferredCoreType;
+            n_threads = streamExeConfig._threadsPerStream;
+        }
+        #endif
+        {
+            auto checking_config_test = [&] (const IStreamsExecutor::ThreadBindingType in_binding_type,
+                bool is_set_enforced_core_type,
+                const IStreamsExecutor::Config::PreferredCoreType in_enforeced_core_type,
+                const int in_num_threads) {
+                    IStreamsExecutor::ThreadBindingType result_binding_type = in_binding_type;
+                    IStreamsExecutor::Config::PreferredCoreType result_core_type = in_enforeced_core_type;
+                    int result_num_threads = in_num_threads;
 
+                    if (update_EnforcedCPUCoreType) {
+                        auto streamExeConfig = IStreamsExecutor::Config::MakeGPULoadNetworkConfig(
+                                                                            IStreamsExecutor::HYBRID_AWARE,
+                                                                            in_enforeced_core_type,
+                                                                            in_num_threads);
+                        result_binding_type = streamExeConfig._threadBindingType;
+                        result_core_type = streamExeConfig._threadPreferredCoreType;
+                        result_num_threads = streamExeConfig._threadsPerStream;
+                    } else if (in_binding_type == IStreamsExecutor::HYBRID_AWARE) {
+                        auto streamExeConfig = IStreamsExecutor::Config::MakeGPULoadNetworkConfig(
+                                                                            in_binding_type,
+                                                                            IStreamsExecutor::Config::BIG,
+                                                                            in_num_threads);
+                        result_binding_type = streamExeConfig._threadBindingType;
+                        result_core_type = streamExeConfig._threadPreferredCoreType;
+                        result_num_threads = streamExeConfig._threadsPerStream;
+                    }
+                    std::cout << in_binding_type << ", ";
+                    if (is_set_enforced_core_type) {
+                        std::cout << in_enforeced_core_type << ",";
+                    } else {
+                        std::cout << "Not set" << ",";
+                    }
+                    std::cout << in_num_threads << ", ";
+                    std::cout << result_binding_type << ", ";
+                    std::cout << result_core_type << ",";
+                    std::cout << result_num_threads << "\n";
+                };
+            std::cout << "CPU TBB affinity scenario test ....." << std::endl;
+            std::cout << "hardware_concurrency: " << std::thread::hardware_concurrency() << "\n";
+            auto default_threads = std::thread::hardware_concurrency();
+            checking_config_test(IStreamsExecutor::NUMA, false, IStreamsExecutor::Config::ANY, default_threads);
+            checking_config_test(IStreamsExecutor::NUMA, false, IStreamsExecutor::Config::ANY, 2);
+            checking_config_test(IStreamsExecutor::NUMA, true,  IStreamsExecutor::Config::BIG, default_threads);
+            checking_config_test(IStreamsExecutor::NUMA, true,  IStreamsExecutor::Config::BIG, 2);
+            checking_config_test(IStreamsExecutor::NUMA, true,  IStreamsExecutor::Config::LITTLE, default_threads);
+            checking_config_test(IStreamsExecutor::NUMA, true,  IStreamsExecutor::Config::LITTLE, 2);
+            checking_config_test(IStreamsExecutor::NUMA, true,  IStreamsExecutor::Config::ROUND_ROBIN, default_threads);
+            checking_config_test(IStreamsExecutor::NUMA, true,  IStreamsExecutor::Config::ROUND_ROBIN, 2);
+            checking_config_test(IStreamsExecutor::NUMA, true,  IStreamsExecutor::Config::ANY, default_threads);
+            checking_config_test(IStreamsExecutor::NUMA, true,  IStreamsExecutor::Config::ANY, 2);
+            checking_config_test(IStreamsExecutor::HYBRID_AWARE, false, IStreamsExecutor::Config::ANY, default_threads);
+            checking_config_test(IStreamsExecutor::HYBRID_AWARE, false, IStreamsExecutor::Config::ANY, 2);
+            checking_config_test(IStreamsExecutor::HYBRID_AWARE, true,  IStreamsExecutor::Config::BIG, default_threads);
+            checking_config_test(IStreamsExecutor::HYBRID_AWARE, true,  IStreamsExecutor::Config::BIG, 2);
+            checking_config_test(IStreamsExecutor::HYBRID_AWARE, true,  IStreamsExecutor::Config::LITTLE, default_threads);
+            checking_config_test(IStreamsExecutor::HYBRID_AWARE, true,  IStreamsExecutor::Config::LITTLE, 2);
+            checking_config_test(IStreamsExecutor::HYBRID_AWARE, true,  IStreamsExecutor::Config::ROUND_ROBIN, default_threads);
+            checking_config_test(IStreamsExecutor::HYBRID_AWARE, true,  IStreamsExecutor::Config::ROUND_ROBIN, 2);
+            checking_config_test(IStreamsExecutor::HYBRID_AWARE, true,  IStreamsExecutor::Config::ANY, default_threads);
+            checking_config_test(IStreamsExecutor::HYBRID_AWARE, true,  IStreamsExecutor::Config::ANY, 2);
+        }
         adjustKeyMapValues();
     }
 }
