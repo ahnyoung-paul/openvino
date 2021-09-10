@@ -164,14 +164,14 @@ std::string getMeanOpString(MeanOp op) {
 
 std::string toCodeString(uint8_t val) {
     std::stringstream ss;
-    ss.imbue(std::locale("C"));
+    ss.imbue(code_locale);
     ss << static_cast<int>(val);
     return ss.str();
 }
 
 std::string toCodeString(int8_t val) {
     std::stringstream ss;
-    ss.imbue(std::locale("C"));
+    ss.imbue(code_locale);
     ss << static_cast<int>(val);
     return ss.str();
 }
@@ -180,7 +180,7 @@ std::string toCodeString(float val) {
     if (std::isinf(val))
         return std::signbit(val) ? "-INFINITY" : "INFINITY";
     std::stringstream ss;
-    ss.imbue(std::locale("C"));
+    ss.imbue(code_locale);
     // Workaround GCC compiler/STL bug
     ss << "as_float(0x" << std::hex << *reinterpret_cast<uint32_t*>(&val) << ")";
 
@@ -192,7 +192,7 @@ std::string toCodeString(double val) {
     if (std::isinf(val))
         return std::signbit(val) ? "-INFINITY" : "INFINITY";
     std::stringstream ss;
-    ss.imbue(std::locale("C"));
+    ss.imbue(code_locale);
     // Workaround GCC compiler/STL bug
     ss << "as_double(0x" << std::hex << *reinterpret_cast<uint64_t*>(&val) << ")";
 

@@ -73,6 +73,7 @@ inline std::string GetTypeName<double>() {
 std::string toCLType(WeightsType wType);
 std::string toCLType(Datatype dType);
 std::string getMeanOpString(MeanOp op);
+static std::locale code_locale("C");
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // ToCodeString functions
@@ -81,7 +82,7 @@ std::string getMeanOpString(MeanOp op);
 template <typename T>
 std::string toCodeString(T val) {
     std::stringstream ss;
-    ss.imbue(std::locale("C"));
+    ss.imbue(code_locale);
     ss << val;
     return ss.str();
 }
