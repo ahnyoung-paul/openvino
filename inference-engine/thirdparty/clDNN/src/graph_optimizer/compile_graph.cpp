@@ -24,6 +24,7 @@ using namespace cldnn;
 using namespace InferenceEngine;
 
 void compile_graph::run(program& p) {
+    auto all_start = std::chrono::high_resolution_clock::now();
     OV_ITT_SCOPED_TASK(itt::domains::CLDNN, "CLDNN::pass::CompileGraph");
     size_t order_idx = 0;
     for (auto& node : p.get_processing_order()) {
@@ -70,7 +71,10 @@ void compile_graph::run(program& p) {
     };
     std::vector<Task> tasks;
     tasks.push_back(compile_graph_func);
+    auto start = std::chrono::high_resolution_clock::now();
     task_executor->runAndWait(tasks);
+    auto end = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
     task_executor.reset();
 #else
     for (auto& node : p.get_processing_order()) {
@@ -79,4 +83,9 @@ void compile_graph::run(program& p) {
         }
     }
 #endif
+
+    auto all_end = std::chrono::high_resolution_clock::now();
+    auto all_duration = std::chrono::duration_cast<std::chrono::microseconds>(all_end - all_start).count();
+    std::cout << "compile_graph::run duration: " << (static_cast<double>(duration) / 1000);
+    std::cout << "ms / " << (static_cast<double>(all_duration) / 1000) << "ms" << std::endl;
 }

@@ -398,6 +398,7 @@ kernel::ptr kernels_cache::get_kernel(kernel_id id) const {
 }
 
 void kernels_cache::build_all() {
+    auto all_start = std::chrono::high_resolution_clock::now();
     OV_ITT_SCOPED_TASK(itt::domains::CLDNN, "KernelsCache::BuildAll");
     if (!_pending_compilation)
         return;
@@ -430,6 +431,7 @@ void kernels_cache::build_all() {
 #endif
     }
 
+
 #if (CLDNN_THREADING == CLDNN_THREADING_TBB)
     std::exception_ptr exception;
     auto buildBatch = [this, &_build_engine, &batches, &exception] {
@@ -445,7 +447,10 @@ void kernels_cache::build_all() {
     };
     std::vector<InferenceEngine::Task> tasks;
     tasks.push_back(buildBatch);
+    auto start = std::chrono::high_resolution_clock::now();
     _task_executor->runAndWait(tasks);
+    auto end = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
 #elif(CLDNN_THREADING == CLDNN_THREADING_THREADPOOL)
     std::vector<std::future<void>> builds;
     for (size_t i = 0; i < batches.size(); ++i) {
@@ -482,6 +487,10 @@ void kernels_cache::build_all() {
 #endif
 #endif
     }
+    auto all_end = std::chrono::high_resolution_clock::now();
+    auto all_duration = std::chrono::duration_cast<std::chrono::microseconds>(all_end - all_start).count();
+    std::cout << "kernels_cache::build_all duration: " << (static_cast<double>(duration) / 1000);
+    std::cout << "ms / " << (static_cast<double>(all_duration) / 1000) << "ms" << std::endl;
 }
 
 void kernels_cache::reset() {
