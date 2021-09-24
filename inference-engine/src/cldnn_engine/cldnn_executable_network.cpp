@@ -26,6 +26,7 @@
 #include "cldnn_executable_network.h"
 #include "threading/ie_cpu_streams_executor.hpp"
 #include "cpp_interfaces/interface/ie_iinfer_request_internal.hpp"
+#include "ie_system_conf.h"
 
 using namespace InferenceEngine;
 using namespace InferenceEngine::details;
@@ -47,6 +48,11 @@ CLDNNExecNetwork::CLDNNExecNetwork(InferenceEngine::CNNNetwork &network, std::sh
     }()},
     m_config(config),
     m_taskExecutor{_taskExecutor} {
+    std::cout << "getNumberOfCPUCores(false): " << getNumberOfCPUCores() << std::endl;
+    std::cout << "getNumberOfCPUCores(true): " << getNumberOfCPUCores(true) << std::endl;
+    std::cout << "getNumberOfLogicalCPUCores(false): " << getNumberOfLogicalCPUCores() << std::endl;
+    std::cout << "getNumberOfLogicalCPUCores(true): " << getNumberOfLogicalCPUCores(true) << std::endl;
+
     auto casted_context = std::dynamic_pointer_cast<gpu::ClContext>(context);
 
     if (nullptr == casted_context) {
