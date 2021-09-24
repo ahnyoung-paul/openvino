@@ -44,6 +44,20 @@ int getNumberOfCPUCores(bool bigCoresOnly) {
     return phys_cores;
 }
 
+int getNumberOfLogicalCPUCores(bool bigCoresOnly) {
+    int logical_cores = parallel_get_max_threads();
+    #if (IE_THREAD == IE_THREAD_TBB || IE_THREAD == IE_THREAD_TBB_AUTO)
+    auto core_types = custom::info::core_types();
+    if (bigCoresOnly && core_types.size() > 1) /*Hybrid CPU*/ {
+        logical_cores = custom::info::default_concurrency(custom::task_arena::constraints{}
+                                                               .set_core_type(core_types.back())
+                                                               .set_max_threads_per_core(-1));
+    }
+    #endif
+    return logical_cores;
+}
+
+
 #if !(IE_THREAD == IE_THREAD_TBB || IE_THREAD == IE_THREAD_TBB_AUTO)
 // OMP/SEQ threading on the Windows doesn't support NUMA
 std::vector<int> getAvailableNUMANodes() { return {-1}; }
