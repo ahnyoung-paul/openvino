@@ -37,7 +37,11 @@ target_link_libraries(${TARGET_NAME} PRIVATE clDNN_lib pugixml::static
 target_include_directories(${TARGET_NAME} PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}
         $<TARGET_PROPERTY:inference_engine_transformations,INTERFACE_INCLUDE_DIRECTORIES>
-        ${clDNN_SOURCE_DIR}/api)
+        ${clDNN_SOURCE_DIR}/api
+        ${clDNN_SOURCE_DIR}/src/include
+        ${clDNN_SOURCE_DIR}/kernel_selector/core
+        ${clDNN_SOURCE_DIR}/kernel_selector/common
+        ${clDNN_SOURCE_DIR}/utils/rapidjson)
 
 set_target_properties(${TARGET_NAME} PROPERTIES INTERPROCEDURAL_OPTIMIZATION_RELEASE ${ENABLE_LTO})
 

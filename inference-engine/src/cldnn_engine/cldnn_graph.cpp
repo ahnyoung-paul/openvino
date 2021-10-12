@@ -34,6 +34,8 @@
 #include <ngraph/variant.hpp>
 #include <ngraph/ngraph.hpp>
 #include "cldnn_itt.h"
+#include "primitive_inst.h"
+#include "loop_inst.h"
 
 using namespace InferenceEngine;
 using namespace InferenceEngine::details;
@@ -311,7 +313,7 @@ std::shared_ptr<ngraph::Function> CLDNNGraph::GetExecGraphInfoByPrimitivesInfo(s
 
         if (prim_info.type_id == "input_layout") {
             auto param = std::make_shared<ngraph::op::Parameter>(
-                details::convertPrecision(desc.getPrecision()),
+                InferenceEngine::details::convertPrecision(desc.getPrecision()),
                 ngraph::PartialShape(desc.getDims()));
             params.push_back(param);
             return_node = param;
@@ -323,7 +325,7 @@ std::shared_ptr<ngraph::Function> CLDNNGraph::GetExecGraphInfoByPrimitivesInfo(s
                 nodes.push_back(return_node);
                 node2layer[prim_info.original_id] = return_node;
                 return_node->set_output_type(0,
-                    details::convertPrecision(desc.getPrecision()),
+                    InferenceEngine::details::convertPrecision(desc.getPrecision()),
                     ngraph::PartialShape(desc.getDims()));
                 results.emplace_back(std::make_shared<ngraph::op::Result>(return_node->get_default_output()));
             } else {
@@ -336,7 +338,7 @@ std::shared_ptr<ngraph::Function> CLDNNGraph::GetExecGraphInfoByPrimitivesInfo(s
                         continue;
 
                     return_node->set_output_type(port,
-                                                details::convertPrecision(desc.getPrecision()),
+                                                InferenceEngine::details::convertPrecision(desc.getPrecision()),
                                                 ngraph::PartialShape(desc.getDims()));
                     port++;
                 }
@@ -491,6 +493,23 @@ void CLDNNGraph::UpdatePerfStatistics() {
         if (pcIter == perfMap.end())  continue;
 
         auto execIter = executedPrimitives.find(profiledID);
+        try {
+            auto primitiveInst = GetNetwork()->get_primitive(profiledID);
+            if (primitiveInst->get_node().is_type<cldnn::loop>()) {
+                std::cout << "This is Loop primitive inst " << std::endl;
+                std::shared_ptr<cldnn::loop_inst> loopInst = std::dynamic_pointer_cast<cldnn::loop_inst>(primitiveInst);
+                auto body_net = loopInst->get_body_network();
+                if (body_net != nullptr) {
+                    std::cout << "Body net is existed" << std::endl;
+                }
+                std::map<cldnn::primitive_id, cldnn::event::ptr> execPrim = body_net->get_executed_primitives();
+                std::cout << "Check exec primitives ......" << std::endl;
+                // std::cout << "ID: " << profiledID << ", COUNT: " << execPrim.size() << std::endl;
+            }
+        } catch (std::exception& e) {
+            std::cout << "Exception - " << profiledID << " for " << e.what() << std::endl;
+        }
+
         auto& perfCount = pcIter->second.second;
         // Change status if layer wasn't executed by cldnn engine
         if (execIter == executedPrimitives.end()) {
@@ -503,6 +522,7 @@ void CLDNNGraph::UpdatePerfStatistics() {
         auto event = execIter->second;
         executedPrimitives.erase(execIter);
 
+        std::cout << profiledID << std::endl;
         cldnn::instrumentation::profiling_info cldnnInfo{profiledID, event->get_profiling_info()};
 
         collectTimings(cldnnInfo, perfCount);

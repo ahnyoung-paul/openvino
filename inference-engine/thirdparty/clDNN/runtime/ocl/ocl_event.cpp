@@ -115,7 +115,10 @@ bool ocl_events::get_profiling_info_impl(std::list<instrumentation::profiling_in
     // the goal is to sum up all disjoint durations of its projection on the time axis
 
     std::map<instrumentation::profiling_stage, std::vector<std::pair<unsigned long long, unsigned long long>>> all_durations;
-
+    std::cout << "get_profiling_info_impl EVENTS: " << _events.size() << std::endl;
+    if (_events.size() > 10) {
+        std::cout << "This is the my test" << std::endl;
+    }
     for (size_t i = 0; i < _events.size(); i++) {
         auto be = downcast<ocl_event>(_events[i].get());
         if (!is_event_profiled(be->_event))

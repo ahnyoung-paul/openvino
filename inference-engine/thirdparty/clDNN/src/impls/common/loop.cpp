@@ -24,6 +24,16 @@ struct loop_impl : typed_primitive_impl<loop> {
     loop_impl(const loop_impl& other) : typed_primitive_impl<loop>(other), node(other.node) {}
     explicit loop_impl(const loop_node& node) : node(node) {}
 
+    event::ptr aggregate_events(const std::vector<event::ptr>& events, stream& stream, bool group = false, bool is_output = false) const {
+        if (events.size() == 1 && !is_output)
+            return events[0];
+
+        if (group && !is_output)
+            return stream.group_events(events);
+
+        return stream.enqueue_marker(events, is_output);
+    }
+
     event::ptr execute_impl(const std::vector<event::ptr>& events, loop_inst& instance) override {
         auto& outer_network = instance.get_network();
         auto& stream = outer_network.get_stream();
@@ -89,6 +99,7 @@ struct loop_impl : typed_primitive_impl<loop> {
             }
         }
 
+        std::vector<event::ptr> all_events;
         std::vector<event::ptr> loop_carried_dep(events.begin(), events.end());
         int64_t current_iteration_idx = 0;
         while (current_iteration_idx < trip_count && execution_condition) {
@@ -115,6 +126,10 @@ struct loop_impl : typed_primitive_impl<loop> {
 
             // execute body network
             body_network->execute(loop_carried_dep);
+            auto prim_list = body_network->get_executed_primitives();
+            for (auto prim : prim_list) {
+                all_events.push_back(prim.second);
+            }
 
             loop_carried_dep.clear();
             for (const auto& backedge : node.get_back_edges()) {
@@ -157,9 +172,13 @@ struct loop_impl : typed_primitive_impl<loop> {
             memory::ptr num_actual_iterations_mem = outer_network.get_primitive(num_iteration_id)->output_memory_ptr();
             loop_node::write_scalar_value(num_actual_iterations_mem, stream, actual_iterations);
         }
-
+#if 1
+        std::cout << "Number of all events: " << all_events.size() << std::endl;
+        return stream.group_events(all_events);
+#else
         ev->set();
         return ev;
+#endif
     }
 
     static primitive_impl* create(const loop_node& arg) { return new loop_impl(arg); }

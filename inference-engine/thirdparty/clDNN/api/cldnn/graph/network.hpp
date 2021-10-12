@@ -121,20 +121,27 @@ public:
 
     /// @brief Returns the list of @ref event for the primitives that were executed in network.
     std::map<primitive_id, event::ptr> get_executed_primitives() const {
+        std::cout << "get_executed_primitives [1/7]" << std::endl;
         auto primitive_ids = get_executed_primitive_ids();
+        std::cout << "get_executed_primitives [2/7]" << std::endl;
         auto all_primitive_ids = get_all_primitive_ids();
+        std::cout << "get_executed_primitives [3/7]" << std::endl;
         auto all_primitive_org_ids = get_all_primitive_org_ids();
+        std::cout << "get_executed_primitives [4/7]" << std::endl;
         // Get list of optimized prmitives
         std::vector<primitive_id> optimized_primitives;
+        std::cout << "get_executed_primitives [5/7]" << std::endl;
         for (decltype(all_primitive_org_ids.size()) i = 0; i < all_primitive_org_ids.size(); i++) {
             if (all_primitive_ids[i] == "_optimized_")
                 optimized_primitives.push_back(all_primitive_org_ids[i]);
         }
+        std::cout << "get_executed_primitives [6/7]" << std::endl;
         std::map<primitive_id, event::ptr> result;
         for (auto& id : primitive_ids) {
             if (std::find(optimized_primitives.begin(), optimized_primitives.end(), id) == optimized_primitives.end())
                 result.emplace(id, get_primitive_event(id));
         }
+        std::cout << "get_executed_primitives [7/7]" << std::endl;
         return result;
     }
 
