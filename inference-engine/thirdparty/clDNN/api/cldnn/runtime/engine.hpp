@@ -10,6 +10,7 @@
 #include "memory_caps.hpp"
 #include "memory_pool.hpp"
 #include "layout.hpp"
+#include <threading/ie_cpu_streams_executor.hpp>
 
 #include <memory>
 #include <set>
@@ -19,7 +20,6 @@
 
 #define CLDNN_THREADING_SEQ 0
 #define CLDNN_THREADING_TBB 1
-#define CLDNN_THREADING_THREADPOOL 2
 
 #ifdef ENABLE_ONEDNN_FOR_GPU
 #include <oneapi/dnnl/dnnl.hpp>
@@ -136,6 +136,8 @@ public:
     virtual dnnl::engine& get_onednn_engine() const = 0;
 #endif
 
+    CPUStreamsExecutor::Ptr get_cpu_stream_executor();
+
     /// Factory method which creates engine object with impl configured by @p engine_type
     /// @param engine_type requested engine type
     /// @param runtime_type requested execution runtime for the engine. @note some runtime/engine types configurations might be unsupported
@@ -158,6 +160,7 @@ public:
 protected:
     /// Create engine for given @p device and @p configuration
     engine(const device::ptr device, const engine_configuration& configuration);
+    const CPUStreamsExecutor::Ptr _task_executor;
     const device::ptr _device;
     engine_configuration _configuration;
     mutable std::mutex _mutex;

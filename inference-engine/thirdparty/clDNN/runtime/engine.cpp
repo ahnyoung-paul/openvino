@@ -21,7 +21,8 @@ namespace cldnn {
 
 engine::engine(const device::ptr device, const engine_configuration& configuration)
 : _device(device)
-, _configuration(configuration) {}
+, _configuration(configuration)
+, _task_executor(std::make_shared<InferenceEngine::CPUStreamsExecutor>(configuration.stream_exec_config)) {}
 
 device_info engine::get_device_info() const {
     return _device->get_info();
@@ -181,6 +182,10 @@ void engine::subtract_memory_used(size_t bytes, allocation_type type) {
     } else {
         throw std::runtime_error("Attempt to free unallocated memory");
     }
+}
+
+CPUStreamsExecutor::Ptr engine::get_cpu_stream_executor() {
+    return _task_executor;
 }
 
 std::shared_ptr<cldnn::engine> engine::create(engine_types engine_type,
