@@ -125,8 +125,10 @@ namespace {
             {{InferenceEngine::GPUConfigParams::KEY_GPU_NV12_TWO_INPUTS, InferenceEngine::PluginConfigParams::NO}},
             {{InferenceEngine::GPUConfigParams::KEY_GPU_PLUGIN_THROTTLE, "0"}},
             {{InferenceEngine::GPUConfigParams::KEY_GPU_PLUGIN_THROTTLE, "1"}},
-            {{InferenceEngine::GPUConfigParams::KEY_GPU_PLUGIN_PRIORITY, "0"}},
-            {{InferenceEngine::GPUConfigParams::KEY_GPU_PLUGIN_PRIORITY, "1"}},
+            {{InferenceEngine::GPUConfigParams::KEY_GPU_PLUGIN_PRIORITY, InferenceEngine::GPUConfigParams::GPU_QUEUE_PRIORITY_HIGH
+                                                        + std::string("|") + InferenceEngine::GPUConfigParams::GPU_HOST_TASK_PRIORITY_ANY}},
+            {{InferenceEngine::GPUConfigParams::KEY_GPU_PLUGIN_PRIORITY, InferenceEngine::GPUConfigParams::GPU_QUEUE_PRIORITY_LOW
+                                                        + std::string("|") + InferenceEngine::GPUConfigParams::GPU_HOST_TASK_PRIORITY_ANY}},
             {{InferenceEngine::GPUConfigParams::KEY_GPU_MAX_NUM_THREADS, "1"}},
             {{InferenceEngine::GPUConfigParams::KEY_GPU_MAX_NUM_THREADS, "4"}},
             {{InferenceEngine::GPUConfigParams::KEY_GPU_ENABLE_LOOP_UNROLLING, InferenceEngine::PluginConfigParams::YES}},
