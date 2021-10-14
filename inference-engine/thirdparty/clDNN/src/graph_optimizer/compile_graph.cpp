@@ -37,6 +37,14 @@ void compile_graph::run(program& p) {
     const auto n_threads = p.get_engine().get_device_info().supports_immad ? 1: p.get_engine().configuration().n_threads;
     const auto core_type = p.get_engine().configuration().cpu_core_type;
 
+    std::cout << "compile_graph: NUM_THREADS: " << n_threads << std::endl;
+    if (core_type == IStreamsExecutor::Config::PreferredCoreType::BIG) {
+        std::cout << "compile_graph: IStreamsExecutor::Config::PreferredCoreType::BIG" << std::endl;
+    } else if (core_type == IStreamsExecutor::Config::PreferredCoreType::LITTLE) {
+        std::cout << "compile_graph: IStreamsExecutor::Config::PreferredCoreType::LITTLE" << std::endl;
+    } else if (core_type == IStreamsExecutor::Config::PreferredCoreType::ANY) {
+        std::cout << "compile_graph: IStreamsExecutor::Config::PreferredCoreType::ANY" << std::endl;
+    }
     auto task_executor = std::unique_ptr<CPUStreamsExecutor>(new CPUStreamsExecutor(
             IStreamsExecutor::Config{
                 "CLDNNPlugin executor for compile graph on load network",   // name

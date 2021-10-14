@@ -114,42 +114,54 @@ void Config::UpdateFromMap(const std::map<std::string, std::string>& configMap) 
                     IE_THROW(ParameterMismatch) << "Unsupported queue priority value: " << uVal;
             }
         } else if (key.compare(GPUConfigParams::KEY_GPU_PLUGIN_PRIORITY) == 0) {
+            std::cout << "VAL:: " << val << std::endl;
             bool found_matched_value = false;
             if (val.find(GPUConfigParams::GPU_PLUGIN_PRIORITY_HIGH) != std::string::npos) {
                 queuePriority = cldnn::priority_mode_types::high;
                 cpu_core_type = IStreamsExecutor::Config::BIG;
                 found_matched_value = true;
+                std::cout << "GPU_PLUGIN_PRIORITY_HIGH" << std::endl;
             } else if (val.find(GPUConfigParams::GPU_PLUGIN_PRIORITY_LOW) != std::string::npos) {
                 queuePriority = cldnn::priority_mode_types::low;
                 cpu_core_type = IStreamsExecutor::Config::LITTLE;
                 found_matched_value = true;
+                std::cout << "GPU_PLUGIN_PRIORITY_LOW" << std::endl;
             } else {
                 if (val.find(GPUConfigParams::GPU_QUEUE_PRIORITY_HIGH) != std::string::npos) {
                     queuePriority = cldnn::priority_mode_types::high;
                     found_matched_value = true;
+                    std::cout << "GPU_QUEUE_PRIORITY_HIGH" << std::endl;
                 } else if (val.find(GPUConfigParams::GPU_QUEUE_PRIORITY_MED) != std::string::npos) {
                     queuePriority = cldnn::priority_mode_types::med;
                     found_matched_value = true;
+                    std::cout << "GPU_QUEUE_PRIORITY_MED" << std::endl;
                 } else if (val.find(GPUConfigParams::GPU_QUEUE_PRIORITY_LOW) != std::string::npos) {
                     queuePriority = cldnn::priority_mode_types::low;
                     found_matched_value = true;
+                    std::cout << "GPU_QUEUE_PRIORITY_LOW" << std::endl;
                 } else if (val.find(GPUConfigParams::GPU_QUEUE_PRIORITY_DISABLED) != std::string::npos) {
                     queuePriority = cldnn::priority_mode_types::disabled;
                     found_matched_value = true;
+                    std::cout << "GPU_QUEUE_PRIORITY_DISABLED" << std::endl;
                 } else { // default is disabled
                     queuePriority = cldnn::priority_mode_types::disabled;
+                    std::cout << "GPU_PLUGIN_PRIORITY DEFAULT(disabled)" << std::endl;
                 }
                 if (val.find(GPUConfigParams::GPU_HOST_TASK_PRIORITY_HIGH) != std::string::npos) {
                     cpu_core_type = IStreamsExecutor::Config::BIG;
                     found_matched_value = true;
+                    std::cout << "GPU_HOST_TASK_PRIORITY_HIGH" << std::endl;
                 } else if (val.find(GPUConfigParams::GPU_HOST_TASK_PRIORITY_LOW) != std::string::npos) {
                     cpu_core_type = IStreamsExecutor::Config::LITTLE;
                     found_matched_value = true;
+                    std::cout << "GPU_HOST_TASK_PRIORITY_LOW" << std::endl;
                 } else if (val.find(GPUConfigParams::GPU_HOST_TASK_PRIORITY_ANY) != std::string::npos) {
                     cpu_core_type = IStreamsExecutor::Config::ANY;
                     found_matched_value = true;
+                    std::cout << "GPU_HOST_TASK_PRIORITY_ANY" << std::endl;
                 } else { // default is any
                     cpu_core_type = IStreamsExecutor::Config::ANY;
+                    std::cout << "GPU_HOST_TASK_PRIORITY DEFAULT(ANY)" << std::endl;
                 }
             }
             if (!found_matched_value) {
@@ -164,10 +176,13 @@ void Config::UpdateFromMap(const std::map<std::string, std::string>& configMap) 
                 if (cpu_core_type == IStreamsExecutor::Config::BIG
                     || cpu_core_type == IStreamsExecutor::Config::LITTLE) {
                         n_threads = std::min(n_threads, static_cast<size_t>(getNumberOfCores(cpu_core_type)));
+                        std::cout << "NUM_THREAD is set to " << n_threads << std::endl;
                     }
             } else {
                 cpu_core_type = IStreamsExecutor::Config::ANY;
                 n_threads = std::min(n_threads, static_cast<size_t>(std::thread::hardware_concurrency()));
+                std::cout << "Core type is set to IStreamsExecutor::Config::ANY" << std::endl;
+                std::cout << "NUM_THREAD is set to " << n_threads << std::endl;
             }
 #endif
         } else if (key.compare(GPUConfigParams::KEY_GPU_PLUGIN_THROTTLE) == 0 ||
@@ -308,6 +323,7 @@ void Config::UpdateFromMap(const std::map<std::string, std::string>& configMap) 
                     val_i = max_threads;
                 }
                 n_threads = std::min(n_threads, static_cast<size_t>(val_i));
+                std::cout << "NUM_THREAD: " << val << " -> " << n_threads << std::endl;
             } catch (const std::exception&) {
                 IE_THROW() << "Wrong value for property key " << GPUConfigParams::KEY_GPU_MAX_NUM_THREADS << ": " << val
                                    << "\nSpecify the number of threads use for build as an integer."

@@ -413,6 +413,14 @@ void kernels_cache::build_all() {
 #if (CLDNN_THREADING == CLDNN_THREADING_TBB)
         const auto n_threads = _engine.configuration().n_threads;
         const auto core_type = _engine.configuration().cpu_core_type;
+        std::cout << "kernels_cache::build_all: NUM_THREADS: " << n_threads << std::endl;
+        if (core_type == IStreamsExecutor::Config::PreferredCoreType::BIG) {
+            std::cout << "kernels_cache::build_all: IStreamsExecutor::Config::PreferredCoreType::BIG" << std::endl;
+        } else if (core_type == IStreamsExecutor::Config::PreferredCoreType::LITTLE) {
+            std::cout << "kernels_cache::build_all: IStreamsExecutor::Config::PreferredCoreType::LITTLE" << std::endl;
+        } else if (core_type == IStreamsExecutor::Config::PreferredCoreType::ANY) {
+            std::cout << "kernels_cache::build_all: IStreamsExecutor::Config::PreferredCoreType::ANY" << std::endl;
+        }
         _task_executor = std::unique_ptr<CPUStreamsExecutor>(new CPUStreamsExecutor(
             IStreamsExecutor::Config{
                 "CLDNNPlugin executor for build kernels cache on load network", // name
