@@ -3,6 +3,7 @@
 //
 
 #include "ie_parallel_custom_arena.hpp"
+#include <iostream>
 
 #if IE_THREAD == IE_THREAD_TBB || IE_THREAD == IE_THREAD_TBB_AUTO
 
@@ -84,12 +85,19 @@ void initialize_system_topology() {
 
     std::call_once(is_topology_initialized, [&] {
         if (is_binding_environment_valid()) {
+            std::cout << "TBB : Init system topology" << std::endl;
             __TBB_internal_initialize_system_topology(get_processors_group_num(),
                                                       numa_nodes_count,
                                                       numa_nodes_indexes,
                                                       core_types_count,
                                                       core_types_indexes);
+            std::cout << "core_types_count: " << core_types_count << std::endl;
+            for (int i = 0; i < core_types_count; i++) {
+                std::cout << "core_type_index: " << core_types_indexes[i] << std::endl;
+            }
+
         } else {
+            std::cout << "TBB : Failt to init system topology" << std::endl;
             static int dummy_index = task_arena::automatic;
 
             numa_nodes_count = 1;
@@ -238,10 +246,13 @@ std::vector<core_type_id> core_types() {
     detail::initialize_system_topology();
     std::vector<numa_node_id> core_type_indexes(detail::core_types_count);
     std::memcpy(core_type_indexes.data(), detail::core_types_indexes, detail::core_types_count * sizeof(int));
+    std::cout << "USE_TBB_2_4: " << detail::core_types_count << std::endl;
     return core_type_indexes;
 #    elif TBB_HYBRID_CPUS_SUPPORT_PRESENT
+    std::cout << "HYBRID_CPU_SUPPORT_PRESENT" << std::endl;
     return tbb::info::core_types();
 #    else
+    std::cout << "NOT SUPPORT HYBRID_CPU_SUPPORT_PRESENT" << std::endl;
     return {tbb::task_arena::automatic};
 #    endif
 }
