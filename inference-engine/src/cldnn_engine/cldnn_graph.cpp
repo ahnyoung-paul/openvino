@@ -493,23 +493,6 @@ void CLDNNGraph::UpdatePerfStatistics() {
         if (pcIter == perfMap.end())  continue;
 
         auto execIter = executedPrimitives.find(profiledID);
-        try {
-            auto primitiveInst = GetNetwork()->get_primitive(profiledID);
-            if (primitiveInst->get_node().is_type<cldnn::loop>()) {
-                std::cout << "This is Loop primitive inst " << std::endl;
-                std::shared_ptr<cldnn::loop_inst> loopInst = std::dynamic_pointer_cast<cldnn::loop_inst>(primitiveInst);
-                auto body_net = loopInst->get_body_network();
-                if (body_net != nullptr) {
-                    std::cout << "Body net is existed" << std::endl;
-                }
-                std::map<cldnn::primitive_id, cldnn::event::ptr> execPrim = body_net->get_executed_primitives();
-                std::cout << "Check exec primitives ......" << std::endl;
-                // std::cout << "ID: " << profiledID << ", COUNT: " << execPrim.size() << std::endl;
-            }
-        } catch (std::exception& e) {
-            std::cout << "Exception - " << profiledID << " for " << e.what() << std::endl;
-        }
-
         auto& perfCount = pcIter->second.second;
         // Change status if layer wasn't executed by cldnn engine
         if (execIter == executedPrimitives.end()) {
@@ -522,11 +505,27 @@ void CLDNNGraph::UpdatePerfStatistics() {
         auto event = execIter->second;
         executedPrimitives.erase(execIter);
 
-        std::cout << profiledID << std::endl;
         cldnn::instrumentation::profiling_info cldnnInfo{profiledID, event->get_profiling_info()};
 
         collectTimings(cldnnInfo, perfCount);
         perfCount.num++;
+
+        try {
+            auto primitiveInst = GetNetwork()->get_primitive(profiledID);
+            if (primitiveInst->get_node().is_type<cldnn::loop>()) {
+                std::shared_ptr<cldnn::loop_inst> loopInst = std::dynamic_pointer_cast<cldnn::loop_inst>(primitiveInst);
+                auto inner_event_maps = loopInst->get_inner_events_map();
+                for (auto& ie : inner_event_maps) {
+                    std::cout << "MY TEST:: " << profiledID << " -00- " << ie.first << std::endl;
+                    cldnn::instrumentation::profiling_info cldnnInfo{"TI: " + ie.first, ie.second->get_profiling_info()};
+
+                    collectTimings(cldnnInfo, perfCount);
+                    perfCount.num++;
+                }
+            }
+        } catch (std::exception& e) {
+            // std::cout << "Exception - " << profiledID << " for " << e.what() << std::endl;
+        }
     }
 
     for (auto &executedID : executedPrimitives) {

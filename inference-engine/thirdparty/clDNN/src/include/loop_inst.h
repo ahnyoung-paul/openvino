@@ -557,6 +557,7 @@ private:
 public:
     typed_primitive_inst(network& network, const loop_node& node);
     network::ptr get_body_network() const { return body_network; }
+    std::map<primitive_id, event::ptr>& get_inner_events_map() { return inner_event_maps; }
     void preprocess_input_memory();
     void preprocess_output_memory();
     void preprocess_backedge_memory();
@@ -571,6 +572,7 @@ public:
 
 private:
     network::ptr body_network;
+    std::map<primitive_id, event::ptr> inner_event_maps;
     memory::ptr get_external_memory(const primitive_id& external_id) const;
     std::vector<memory::ptr> get_sliced_mem(const primitive_id& internal_id) const;
 };

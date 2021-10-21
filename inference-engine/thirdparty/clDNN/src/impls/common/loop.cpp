@@ -99,7 +99,7 @@ struct loop_impl : typed_primitive_impl<loop> {
             }
         }
 
-        std::vector<event::ptr> all_events;
+        std::map<primitive_id, std::vector<event::ptr>> inner_event_list;
         std::vector<event::ptr> loop_carried_dep(events.begin(), events.end());
         int64_t current_iteration_idx = 0;
         while (current_iteration_idx < trip_count && execution_condition) {
@@ -128,7 +128,11 @@ struct loop_impl : typed_primitive_impl<loop> {
             body_network->execute(loop_carried_dep);
             auto prim_list = body_network->get_executed_primitives();
             for (auto prim : prim_list) {
-                all_events.push_back(prim.second);
+                if (inner_event_list.find(prim.first) != inner_event_list.end()) {
+                    inner_event_list[prim.first].push_back(prim.second);
+                } else {
+                    inner_event_list[prim.first]={prim.second};
+                }
             }
 
             loop_carried_dep.clear();
@@ -172,13 +176,13 @@ struct loop_impl : typed_primitive_impl<loop> {
             memory::ptr num_actual_iterations_mem = outer_network.get_primitive(num_iteration_id)->output_memory_ptr();
             loop_node::write_scalar_value(num_actual_iterations_mem, stream, actual_iterations);
         }
-#if 1
-        std::cout << "Number of all events: " << all_events.size() << std::endl;
-        return stream.group_events(all_events);
-#else
+        auto& inner_event_maps = instance.get_inner_events_map();
+        for (auto& pe : inner_event_list) {
+            inner_event_maps[pe.first] = stream.group_events(pe.second);
+        }
+
         ev->set();
         return ev;
-#endif
     }
 
     static primitive_impl* create(const loop_node& arg) { return new loop_impl(arg); }
