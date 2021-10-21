@@ -486,6 +486,7 @@ void CLDNNGraph::UpdatePerfStatistics() {
     std::map<cldnn::primitive_id, cldnn::event::ptr> executedPrimitives = GetNetwork()->get_executed_primitives();
     auto allPrimitives = GetNetwork()->get_all_primitives();
 
+    std::vector<primitive_id> extra_id_vector;
     // Get profiling info for all layers
     for (auto &profiledID : profilingIDs) {
         auto pcIter = perfMap.find(profiledID);
@@ -517,15 +518,28 @@ void CLDNNGraph::UpdatePerfStatistics() {
                 auto inner_event_maps = loopInst->get_inner_events_map();
                 for (auto& ie : inner_event_maps) {
                     std::cout << "MY TEST:: " << profiledID << " -00- " << ie.first << std::endl;
-                    cldnn::instrumentation::profiling_info cldnnInfo{"TI: " + ie.first, ie.second->get_profiling_info()};
+                    auto ti_layer_name = "TI:" + ie.first;
+                    if (std::find(extra_id_vector.begin(), extra_id_vector.end(), ti_layer_name) == extra_id_vector.end()) {
+                        extra_id_vector.push_back(ti_layer_name);
+                    }
+                    perfMap[ti_layer_name].first = ti_layer_name;
+                    auto pcIter = perfMap.find(ti_layer_name);
+                    auto& perfCount2 = pcIter->second.second;
+                    cldnn::instrumentation::profiling_info cldnnInfo{ti_layer_name, ie.second->get_profiling_info()};
 
-                    collectTimings(cldnnInfo, perfCount);
-                    perfCount.num++;
+                    collectTimings(cldnnInfo, perfCount2);
+                    perfCount2.num++;
+
+
                 }
             }
         } catch (std::exception& e) {
             // std::cout << "Exception - " << profiledID << " for " << e.what() << std::endl;
         }
+    }
+
+    for (auto& id: extra_id_vector) {
+        profilingIDs.push_back(id);
     }
 
     for (auto &executedID : executedPrimitives) {
@@ -669,9 +683,15 @@ std::map<std::string, InferenceEngine::InferenceEngineProfileInfo> CLDNNGraph::G
         return true;
     };
 
+    int count = 0;
     // Step 1. Get all primitives in execution order which was added by clDNNPlugin
     for (auto& primId : profilingIDs) {
+        if (count > 113)
+        {
+            std::cout << "this point" << std::endl;
+        }
         getFromProfiling(primId);
+        count++;
     }
 
     // Step 2. Find all other primitives which was added while optimization process and executed after
