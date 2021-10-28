@@ -15,9 +15,7 @@
 #include <string>
 #include <set>
 
-#if (CLDNN_THREADING == CLDNN_THREADING_TBB)
 #include <threading/ie_cpu_streams_executor.hpp>
-#endif
 
 namespace cldnn {
 class kernels_cache {

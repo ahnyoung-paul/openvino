@@ -309,7 +309,7 @@ void Config::UpdateFromMap(const std::map<std::string, std::string>& configMap) 
                 if (val_i <= 0 || val_i > max_threads) {
                     val_i = max_threads;
                 }
-                stream_exec_config._threadsPerStream = std::min(stream_exec_config._threadsPerStream, val_i);
+                stream_exec_config._streams = std::min(stream_exec_config._streams, val_i);
             } catch (const std::exception&) {
                 IE_THROW() << "Wrong value for property key " << GPUConfigParams::KEY_GPU_MAX_NUM_THREADS << ": " << val
                                    << "\nSpecify the number of threads use for build as an integer."

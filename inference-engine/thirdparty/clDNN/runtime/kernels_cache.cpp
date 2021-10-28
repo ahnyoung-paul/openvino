@@ -17,10 +17,6 @@
 #include <utility>
 
 #include "cldnn_itt.hpp"
-#if (CLDNN_THREADING == CLDNN_THREADING_TBB)
-#include <tbb/parallel_for.h>
-#include <tbb/blocked_range.h>
-#endif
 #if defined(__unix__) && !defined(__ANDROID__)
 #include <malloc.h>
 #endif
@@ -44,13 +40,6 @@
 #include <Windows.h>
 #endif
 
-#if (CLDNN_THREADING == CLDNN_THREADING_TBB)
-using namespace InferenceEngine;
-#endif
-
-#if (CLDNN_THREADING != CLDNN_THREADING_SEQ)
-#define DEFAULT_NUM_THREADS 2
-#endif
 namespace {
 std::mutex cacheAccessMutex;
 
@@ -417,15 +406,16 @@ void kernels_cache::build_all() {
 
     std::unique_ptr<ocl::ocl_engine> _build_engine = nullptr;
     if (_engine.type() == engine_types::ocl) {
-        _build_engine = std::unique_ptr<ocl::ocl_engine>(new ocl::ocl_engine(_engine.get_device(), runtime_types::ocl, _engine.configuration()));
+        _build_engine = std::unique_ptr<ocl::ocl_engine>(new ocl::ocl_engine(_engine.get_device(), runtime_types::ocl,
+                                                                    _engine.configuration(), _engine.get_task_executor()));
     }
     std::vector<batch_program> batches;
     {
         std::lock_guard<std::mutex> lock(_mutex);
         get_program_source(_kernels_code, &batches);
     }
-#if (CLDNN_THREADING == CLDNN_THREADING_TBB)
-    auto _task_executor = _engine.get_cpu_stream_executor();
+
+    auto _task_executor = _engine.get_task_executor();
     std::exception_ptr exception;
     std::vector<InferenceEngine::Task> tasks;
     for (int idx = 0; idx < batches.size(); idx++) {
@@ -440,18 +430,11 @@ void kernels_cache::build_all() {
     }
     _task_executor->runAndWait(tasks);
     tasks.clear();
-#else
-    // no parallel build
-    for (const auto& batch : batches) {
-        build_batch(*_build_engine, batch);
-    }
-#endif
 
     {
         std::lock_guard<std::mutex> lock(_mutex);
         _kernels_code.clear();
         _pending_compilation = false;
-#if (CLDNN_THREADING == CLDNN_THREADING_TBB)
 #if defined(__unix__) && !defined(__ANDROID__)
     //  NOTE: In linux, without malloc_trim, an amount of the memory used by compilation is not being returned to system thought they are freed.
     //  (It is at least 500 MB when we perform parallel compilation)
@@ -459,7 +442,6 @@ void kernels_cache::build_all() {
     //  Also, this is not happening in Windows.
     //  So, added malloc_trim for linux build until we figure out a better solution.
         malloc_trim(0);
-#endif
 #endif
     }
 }

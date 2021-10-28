@@ -14,9 +14,7 @@
 #include <cmath>
 #include <iomanip>
 
-#if (CLDNN_THREADING == CLDNN_THREADING_TBB)
 #include <threading/ie_cpu_streams_executor.hpp>
-#endif
 
 using namespace cldnn;
 using namespace InferenceEngine;
@@ -31,7 +29,6 @@ void compile_graph::run(program& p) {
         }
     }
 
-#if (CLDNN_THREADING == CLDNN_THREADING_TBB)
     if (p.get_engine().get_device_info().supports_immad) {
         for (auto& node : p.get_processing_order()) {
             if (!node->is_type<data>() && !(node->is_type<mutable_data>() && node->get_dependencies().empty())) {
@@ -39,7 +36,7 @@ void compile_graph::run(program& p) {
             }
         }
     } else {
-        auto task_executor = p.get_engine().get_cpu_stream_executor();
+        auto task_executor = p.get_engine().get_task_executor();
         auto& proc_order = p.get_processing_order();
         std::vector<Task> tasks;
         std::exception_ptr exception;
@@ -59,11 +56,4 @@ void compile_graph::run(program& p) {
         task_executor->runAndWait(tasks);
         tasks.clear();
     }
-#else
-    for (auto& node : p.get_processing_order()) {
-        if (!node->is_type<data>() && !(node->is_type<mutable_data>() && node->get_dependencies().empty())) {
-            node->selected_impl = node->type()->choose_impl(*node);
-        }
-    }
-#endif
 }

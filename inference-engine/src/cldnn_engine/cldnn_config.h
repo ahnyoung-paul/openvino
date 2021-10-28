@@ -35,7 +35,7 @@ struct Config {
                                           graph_dumps_dir(""),
                                           sources_dumps_dir(""),
                                           kernels_cache_dir(""),
-                                          stream_exec_config({"CLDNNPlugin executor for load network",                  // name
+                                          stream_exec_config({"GPU plugin internal task executor",                      // name
                                                     std::max(1, static_cast<int>(std::thread::hardware_concurrency())), // # of streams
                                                     1,                                                                  // # of threads per streams
                                                     IStreamsExecutor::ThreadBindingType::HYBRID_AWARE,                  // thread binding type
