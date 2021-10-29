@@ -253,6 +253,24 @@ CLDNNExecutionContextImpl::CLDNNExecutionContextImpl(const std::shared_ptr<IInfe
 
 
         IStreamsExecutor::Ptr task_executor = std::make_shared<CPUStreamsExecutor>(m_config.stream_exec_config);
+        {
+            {
+                std::cout << "Create task executor ...." << std::endl;
+                switch (m_config.stream_exec_config._threadPreferredCoreType) {
+                    case IStreamsExecutor::Config::BIG:
+                        std::cout << "IStreamsExecutor::Config::BIG" << std::endl;
+                        break;
+                    case IStreamsExecutor::Config::LITTLE:
+                        std::cout << "IStreamsExecutor::Config::LITTLE" << std::endl;
+                        break;
+                    default:
+                    case IStreamsExecutor::Config::ANY:
+                        std::cout << "IStreamsExecutor::Config::ANY" << std::endl;
+                        break;
+                }
+                std::cout << "# of streams: " << m_config.stream_exec_config._streams << std::endl;
+            }
+        }
         bool use_unified_shared_memory = true;
         m_engine = cldnn::engine::create(engine_type, runtime_type, task_executor, dev,
                                                     cldnn::engine_configuration(enable_profiling,

@@ -160,6 +160,13 @@ void Config::UpdateFromMap(const std::map<std::string, std::string>& configMap) 
             }
 
 #if (IE_THREAD == IE_THREAD_TBB || IE_THREAD == IE_THREAD_TBB_AUTO)
+            {
+                auto core_types = getAvailableCoresTypes();
+                for (auto ct : core_types) {
+                    std::cout << "Core type idx : " << ct << std::endl;
+                }
+            }
+
             if (getAvailableCoresTypes().size() > 1) {
                 if (stream_exec_config._threadPreferredCoreType == IStreamsExecutor::Config::BIG
                     || stream_exec_config._threadPreferredCoreType == IStreamsExecutor::Config::LITTLE) {
@@ -170,6 +177,22 @@ void Config::UpdateFromMap(const std::map<std::string, std::string>& configMap) 
                 stream_exec_config._threadPreferredCoreType = IStreamsExecutor::Config::ANY;
                 stream_exec_config._streams = std::min(stream_exec_config._streams,
                                                         static_cast<int>(std::thread::hardware_concurrency()));
+            }
+
+            {
+                switch (stream_exec_config._threadPreferredCoreType) {
+                    case IStreamsExecutor::Config::BIG:
+                        std::cout << "IStreamsExecutor::Config::BIG" << std::endl;
+                        break;
+                    case IStreamsExecutor::Config::LITTLE:
+                        std::cout << "IStreamsExecutor::Config::LITTLE" << std::endl;
+                        break;
+                    default:
+                    case IStreamsExecutor::Config::ANY:
+                        std::cout << "IStreamsExecutor::Config::ANY" << std::endl;
+                        break;
+                }
+                std::cout << "# of streams: " << stream_exec_config._streams << std::endl;
             }
 #endif
         } else if (key.compare(GPUConfigParams::KEY_GPU_PLUGIN_THROTTLE) == 0 ||
