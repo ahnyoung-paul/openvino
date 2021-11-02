@@ -906,6 +906,15 @@ void prepare_primitive_fusing::fuse_simple_primitives(program &p) {
                 return;
 
             bool merge_allowed = true;
+            if (fused_node->id() == "convolution:Conv_795/WithoutBiases") {
+                std::cout << "Curent main node: " << node.id() << std::endl;
+                std::cout << "fused_node: " << fused_node->id() << std::endl;
+                std::cout << "peer_node: " << peer_node->id() << std::endl;
+                auto users = node.get_users();
+                for (auto u : users) {
+                    std::cout << "-- " << u->id() << std::endl;
+                }
+            }
             // If fused node is not convolution and fused node has multiple users,
             //  follow the legacy checking rule
             if (!supports_immad && fused_node->is_type<convolution>() && fused_node->get_users().size() > 1) {
@@ -926,17 +935,27 @@ void prepare_primitive_fusing::fuse_simple_primitives(program &p) {
                 std::vector<cldnn::program_node*> node_history;
                 node_queue.push_back(std::make_pair(fused_node, 0));
 
-                const uint8_t max_levels = 5;
+                if (fused_node->id() == "convolution:Conv_795/WithoutBiases") {
+                    std::cout << "Call fusing process" << std::endl;
+                }
+
+                const uint8_t max_levels = 10;
                 do {
                     // Pop the current node from node_queue
                     // Add the current node to the node_history to verfiy the trace of checking
                     auto current_node = node_queue.front();
+                    if (fused_node->id() == "convolution:Conv_795/WithoutBiases") {
+                        std::cout << "current_node is " << current_node.first->id() << std::endl;
+                    }
                     node_queue.pop_front();
                     if (std::find(node_history.begin(), node_history.end(), current_node.first) == node_history.end()) {
                         node_history.push_back(current_node.first);
                     }
 
                     if (current_node.second > max_levels) {
+                        if (fused_node->id() == "convolution:Conv_795/WithoutBiases") {
+                            std::cout << "Fail current_node.second > max_levels" << std::endl;
+                        }
                         return;
                     }
 
@@ -954,6 +973,11 @@ void prepare_primitive_fusing::fuse_simple_primitives(program &p) {
                     // If the any user node is not eltwise(mul / add mode) and activation,
                     // the current node will be considered as last node and put it back into the node_queue
                     auto curr_users = current_node.first->get_users();
+                    if (fused_node->id() == "convolution:Conv_795/WithoutBiases") {
+                        for (auto u : curr_users) {
+                            std::cout << current_node.first->id() << " --> child : " << u->id() << std::endl;
+                        }
+                    }
                     auto invalid_user_iter = std::find_if(curr_users.begin(), curr_users.end(), [&](cldnn::program_node* user) {
                         return (user->is_output() ||
                                     (!(user->is_type<eltwise>() && user->get_primitive()->input.size() == 2 &&
@@ -965,6 +989,23 @@ void prepare_primitive_fusing::fuse_simple_primitives(program &p) {
                     if (invalid_user_iter != curr_users.end()) {
                         // If fused_node(i.e. Conv1) have invalid user node(that is not activation and eltwise ndoe), it cannot be fused
                         if (fused_node->id() == current_node.first->id()) {
+                            if (fused_node->id() == "convolution:Conv_795/WithoutBiases") {
+                                std::cout << "Fail (fused_node->id() == current_node.first->id())" << std::endl;
+                                std::cout << "fused_node: " << fused_node->id() << std::endl;
+                                std::cout << "current_node.first: " << current_node.first->id() << std::endl;
+                                std::cout << "invalid user id: " << (*invalid_user_iter)->id() << std::endl;
+                                auto mode = ((*invalid_user_iter)->as<eltwise>()).get_primitive()->mode;
+                                if (mode == eltwise_mode::sum) {
+                                    std::cout << "invalid user mode: sum" << std::endl;
+                                } else if (mode == eltwise_mode::sub) {
+                                    std::cout << "invalid user mode: sub" << std::endl;
+                                } else if (mode == eltwise_mode::prod) {
+                                    std::cout << "invalid user mode: prod" << std::endl;
+                                } else {
+                                    std::cout << "invalid user mode: " << static_cast<int>(((*invalid_user_iter)->as<eltwise>()).get_primitive()->mode);
+                                    std::cout << std::endl;
+                                }
+                            }
                             return;
                         }
                         push_node_queue(current_node.first, (current_node.second+1));
@@ -981,6 +1022,12 @@ void prepare_primitive_fusing::fuse_simple_primitives(program &p) {
                 } while (node_queue.size() > 1);
             } else {
                 merge_allowed = fused_node->get_users().size() == 1;
+                if (fused_node->id() == "convolution:Conv_795/WithoutBiases") {
+                    std::cout << " Fail to fuse " << fused_node->id() << std::endl;
+                    std::cout << "supports_immad: " << (supports_immad? "True" : "False") << std::endl;
+                    std::cout << "fused_node->is_type<convolution>(): " << ((fused_node->is_type<convolution>())? "True" : "False") << std::endl;
+                    std::cout << "fused_node->get_users().size(): " << fused_node->get_users().size() << std::endl;
+                }
             }
 
             for (auto& parent : fused_node->get_dependencies())

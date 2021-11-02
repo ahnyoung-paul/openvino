@@ -482,6 +482,7 @@ void program::pre_optimize_graph(bool is_internal) {
 
     reorder_factory rf;
     if (options.get<build_option_type::optimize_data>()->enabled()) {
+        std::cout << "optimized is ON ..." << std::endl;
         apply_opt_pass<pre_replace_deconv>(lo);
 
         apply_opt_pass<prepare_primitive_fusing>(lo);

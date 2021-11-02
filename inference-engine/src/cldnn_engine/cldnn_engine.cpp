@@ -482,7 +482,6 @@ InferenceEngine::CNNNetwork clDNNEngine::CloneAndTransformNetwork(const Inferenc
             manager.run_passes(nGraphFunc);
         }
     }
-
     GPU_DEBUG_GET_INSTANCE(debug_config);
     GPU_DEBUG_IF(!debug_config->dump_graphs.empty()) {
         clonedNetwork.serialize(debug_config->dump_graphs + "/transformed_func.xml");

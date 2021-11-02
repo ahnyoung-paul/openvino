@@ -23,6 +23,9 @@
 #include "openvino/util/env_util.hpp"
 #include "perf_counters.hpp"
 
+#include <ngraph/pass/visualize_tree.hpp>
+#include <regex>
+
 using namespace std;
 
 namespace ov {
@@ -43,7 +46,7 @@ ov::pass::Manager::Manager()
 ov::pass::Manager::~Manager() = default;
 
 ov::pass::Manager::Manager(std::shared_ptr<ov::pass::PassConfig> pass_config) : m_pass_config(std::move(pass_config)) {}
-
+static size_t idx = 0;
 void ov::pass::Manager::run_passes(shared_ptr<ov::Function> func) {
     NGRAPH_SUPPRESS_DEPRECATED_START
     OV_ITT_SCOPED_TASK(ov::itt::domains::nGraph, "pass::Manager::run_passes");
@@ -94,6 +97,16 @@ void ov::pass::Manager::run_passes(shared_ptr<ov::Function> func) {
                 }
             } else {
                 function_changed = function_pass->run_on_function(func);
+                // std::string num_str;
+                // {
+                //     std::stringstream ss;
+                //     ss << std::setw(2) << std::setfill('0') << idx;
+                //     num_str = ss.str();
+                // }
+                // std::string file_name = "./" + num_str + "_" + function_pass->get_name() + ".svg";
+                // file_name = std::regex_replace(file_name, std::regex("::"), "_" );
+                // ngraph::pass::VisualizeTree(file_name).run_on_function(func);
+                idx++;
             }
         } else if (auto node_pass = dynamic_pointer_cast<ngraph::pass::NodePass>(pass)) {
             if (node_pass->get_property(PassProperty::REQUIRE_STATIC_SHAPE) && func->is_dynamic()) {
