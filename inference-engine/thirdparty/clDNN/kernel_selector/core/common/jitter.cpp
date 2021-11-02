@@ -1079,9 +1079,16 @@ JitConstants MakeActivationJitConstants(ActivationFunction activation_function,
             std::string type_suffix = out_dt == Datatype::F32 ? "f" : "h";
             const JitTerm three("3." + type_suffix);
             const JitTerm six("6." + type_suffix);
+#if 1
+            const JitTerm six_mul("0.16666666666666666" + type_suffix);
+            jitConstants.AddConstant(MakeJitConstant(
+                    macro_def,
+                    (six_mul * input * min_func(max_func(zero, input + three), six)).str()));
+#else
             jitConstants.AddConstant(MakeJitConstant(
                     macro_def,
                     (input * min_func(max_func(zero, input + three), six) / six).str()));
+#endif
             break;
         }
         case ActivationFunction::MISH: {
