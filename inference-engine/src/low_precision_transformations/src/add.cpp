@@ -60,6 +60,9 @@ std::shared_ptr<opset1::Subtract> replaceToSubtract(const std::shared_ptr<Node>&
         ngraph::op::TemporaryReplaceOutputType(constOutput, element::f32).get(),
         add->get_autob());
 
+    if (subtract->get_name() == "Subtract_17439") {
+        std::cout << "Replace from " << add->get_name() << " to " << subtract->get_name() << " ..................... " << std::endl;
+    }
     NetworkHelper::copyInfo(add, subtract);
 
     replace_node(add, subtract);

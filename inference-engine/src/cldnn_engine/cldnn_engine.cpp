@@ -487,11 +487,11 @@ InferenceEngine::CNNNetwork clDNNEngine::CloneAndTransformNetwork(const Inferenc
     GPU_DEBUG_IF(!debug_config->dump_graphs.empty()) {
         clonedNetwork.serialize(debug_config->dump_graphs + "/transformed_func.xml");
     }
-    {
-        auto nGraphFunc = clonedNetwork.getFunction();
-        std::string file_name = "999_final_ngraph.svg";
-        ngraph::pass::VisualizeTree(file_name).run_on_function(nGraphFunc);
-    }
+    // {
+    //     auto nGraphFunc = clonedNetwork.getFunction();
+    //     std::string file_name = "999_final_ngraph.svg";
+    //     ngraph::pass::VisualizeTree(file_name).run_on_function(nGraphFunc);
+    // }
     return clonedNetwork;
 }
 

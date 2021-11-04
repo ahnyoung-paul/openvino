@@ -72,12 +72,6 @@ void ov::pass::Manager::run_passes(shared_ptr<ov::Function> func) {
         pass_timer.start();
 
 
-        std::string num_str;
-        {
-            std::stringstream ss;
-            ss << std::setw(3) << std::setfill('0') << idx;
-            num_str = ss.str();
-        }
         std::string graph_changed_name = "___p_";
         // if (idx == 147) {
         //     std::cout << "Debug here" << graph_changed_name << std::endl;
@@ -93,7 +87,7 @@ void ov::pass::Manager::run_passes(shared_ptr<ov::Function> func) {
             // GraphRewrite is a temporary container for MatcherPass to make execution
             // on on entire ngraph::Function
             function_changed = GraphRewrite(matcher_pass).run_on_function(func);
-            graph_changed_name += "matcher_pass_" + matcher_pass->get_name();
+            graph_changed_name += "matcher_pass_GraphRewrite_" + matcher_pass->get_name();
         } else if (auto function_pass = dynamic_pointer_cast<FunctionPass>(pass)) {
             // This checks is to skip the graph transformation when the graph pass relies on
             // static shape but the function state is dynamic.
@@ -127,13 +121,16 @@ void ov::pass::Manager::run_passes(shared_ptr<ov::Function> func) {
             graph_changed_name += "node_pass_n_ops_" + std::to_string(func->get_ops().size()) + "_" + node_pass->get_name();
         }
         {
+            std::string num_str;
+            {
+                std::stringstream ss;
+                ss << std::setw(3) << std::setfill('0') << idx;
+                num_str = ss.str();
+            }
+
             std::string file_name = "./" + num_str+"__" + std::to_string(index) + graph_changed_name + ".svg";
             file_name = std::regex_replace(file_name, std::regex("::"), "_" );
-            // std::cout << file_name << std::endl;
             if (idx > 100 && idx < 153) {
-            //     if (idx == 137) {
-            //         std::cout << "How?? " << std::endl;
-            //     }
                 for (auto& node : func->get_ordered_ops()) {
                     if ( //node->get_name() == "Add_10817" || node->get_name() == "Add_17429" ||
                          node->get_name() == "Add_10818" || node->get_name() == "Subtract_17439") {
@@ -142,6 +139,8 @@ void ov::pass::Manager::run_passes(shared_ptr<ov::Function> func) {
                         std::cout << ", friend: " << node->get_friendly_name() << ", element_type: " << node->get_element_type() << std::endl;
                     }
                 }
+            // } else {
+            //     std::cout << file_name << std::endl;
             }
             // ngraph::pass::VisualizeTree(file_name).run_on_function(func);
         }

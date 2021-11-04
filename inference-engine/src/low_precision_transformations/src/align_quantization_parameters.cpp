@@ -19,7 +19,7 @@ bool ngraph::pass::low_precision::AlignQuantizationParameters::run_on_function(s
     ngraph::pass::Manager manager;
     manager.set_per_pass_validation(false);
     std::shared_ptr<ngraph::pass::GraphRewrite> propagation = manager.register_pass<ngraph::pass::GraphRewrite>();
-    propagation->add_matcher<low_precision::CreateAttribute<QuantizationAlignmentAttributePtr>>();
+    propagation->add_matcher<low_precision::CreateAttribute<QuantizationAlignmentAttributePtr>>();// it's the root cause
     propagation->add_matcher<low_precision::PropagateThroughPrecisionPreserved<QuantizationAlignmentAttribute>>();
     propagation->add_matcher<low_precision::UpdateSharedPrecisionPreserved<QuantizationAlignmentAttributePtr, PerTensorQuantizationAttribute>>();
     std::cout << "START run AlignQuantizationParameters ... " << std::endl;
