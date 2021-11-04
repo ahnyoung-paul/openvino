@@ -1599,6 +1599,9 @@ JitConstants FusedOpsCodeGenerator::MakeOpJitConstants(const FusedOpsConfigurati
             case kernel_selector::EltwiseMode::MUL:
                 op = "*";
                 break;
+            case kernel_selector::EltwiseMode::SUB:
+                op = "-";
+                break;
             default:
                 throw std::runtime_error("[clDNN] Eltwise mode is not supported in fused ops codegen");
             }

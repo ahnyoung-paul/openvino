@@ -815,7 +815,8 @@ void prepare_primitive_fusing::fuse_simple_primitives(program &p) {
             std::shared_ptr<const cldnn::eltwise> prim = node.get_primitive();
             const std::vector<eltwise_mode> supported_modes = {
                 eltwise_mode::sum,
-                eltwise_mode::prod
+                eltwise_mode::prod,
+                eltwise_mode::sub
             };
 
             if (node.is_output() || node.inputs_count() != 2 ||
