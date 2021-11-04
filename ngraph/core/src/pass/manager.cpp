@@ -59,6 +59,7 @@ void ov::pass::Manager::run_passes(shared_ptr<ov::Function> func) {
     overall_timer.start();
     bool function_changed = false;
     for (auto& pass : m_pass_list) {
+        idx++;
         if (m_pass_config->is_disabled(pass->get_type_info())) {
             NGRAPH_DEBUG << "Pass " << pass->get_name() << " is disabled";
             continue;
@@ -70,6 +71,17 @@ void ov::pass::Manager::run_passes(shared_ptr<ov::Function> func) {
 
         pass_timer.start();
 
+
+        std::string num_str;
+        {
+            std::stringstream ss;
+            ss << std::setw(3) << std::setfill('0') << idx;
+            num_str = ss.str();
+        }
+        std::string graph_changed_name = "___p_";
+        // if (idx == 147) {
+        //     std::cout << "Debug here" << graph_changed_name << std::endl;
+        // }
         if (auto matcher_pass = dynamic_pointer_cast<MatcherPass>(pass)) {
             // This checks is to skip the graph transformation when the graph pass relies on
             // static shape but the function state is dynamic.
@@ -81,6 +93,7 @@ void ov::pass::Manager::run_passes(shared_ptr<ov::Function> func) {
             // GraphRewrite is a temporary container for MatcherPass to make execution
             // on on entire ngraph::Function
             function_changed = GraphRewrite(matcher_pass).run_on_function(func);
+            graph_changed_name += "matcher_pass_" + matcher_pass->get_name();
         } else if (auto function_pass = dynamic_pointer_cast<FunctionPass>(pass)) {
             // This checks is to skip the graph transformation when the graph pass relies on
             // static shape but the function state is dynamic.
@@ -94,19 +107,13 @@ void ov::pass::Manager::run_passes(shared_ptr<ov::Function> func) {
                 if (function_changed) {
                     function_pass->run_on_function(func);
                     function_changed = false;
+                    graph_changed_name += "function_pass_" + function_pass->get_name();
+                } else {
+                    graph_changed_name += "function_pass_no_run_" + function_pass->get_name();
                 }
             } else {
                 function_changed = function_pass->run_on_function(func);
-                // std::string num_str;
-                // {
-                //     std::stringstream ss;
-                //     ss << std::setw(2) << std::setfill('0') << idx;
-                //     num_str = ss.str();
-                // }
-                // std::string file_name = "./" + num_str + "_" + function_pass->get_name() + ".svg";
-                // file_name = std::regex_replace(file_name, std::regex("::"), "_" );
-                // ngraph::pass::VisualizeTree(file_name).run_on_function(func);
-                idx++;
+                graph_changed_name += "function_pass_" + function_pass->get_name();
             }
         } else if (auto node_pass = dynamic_pointer_cast<ngraph::pass::NodePass>(pass)) {
             if (node_pass->get_property(PassProperty::REQUIRE_STATIC_SHAPE) && func->is_dynamic()) {
@@ -117,6 +124,26 @@ void ov::pass::Manager::run_passes(shared_ptr<ov::Function> func) {
             for (const shared_ptr<Node>& n : func->get_ops()) {
                 function_changed |= node_pass->run_on_node(n);
             }
+            graph_changed_name += "node_pass_n_ops_" + std::to_string(func->get_ops().size()) + "_" + node_pass->get_name();
+        }
+        {
+            std::string file_name = "./" + num_str+"__" + std::to_string(index) + graph_changed_name + ".svg";
+            file_name = std::regex_replace(file_name, std::regex("::"), "_" );
+            // std::cout << file_name << std::endl;
+            if (idx > 100 && idx < 153) {
+            //     if (idx == 137) {
+            //         std::cout << "How?? " << std::endl;
+            //     }
+                for (auto& node : func->get_ordered_ops()) {
+                    if ( //node->get_name() == "Add_10817" || node->get_name() == "Add_17429" ||
+                         node->get_name() == "Add_10818" || node->get_name() == "Subtract_17439") {
+                        std::cout << file_name << " has "  << node->get_name() << ", type : " << node->get_type_info().name;
+                        std::cout << ", version: " << node->get_version() << ", parent: " << node->get_type_info().parent->name;
+                        std::cout << ", friend: " << node->get_friendly_name() << ", element_type: " << node->get_element_type() << std::endl;
+                    }
+                }
+            }
+            // ngraph::pass::VisualizeTree(file_name).run_on_function(func);
         }
 
         if (m_visualize) {

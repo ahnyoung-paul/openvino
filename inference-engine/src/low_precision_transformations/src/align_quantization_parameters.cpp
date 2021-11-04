@@ -22,6 +22,8 @@ bool ngraph::pass::low_precision::AlignQuantizationParameters::run_on_function(s
     propagation->add_matcher<low_precision::CreateAttribute<QuantizationAlignmentAttributePtr>>();
     propagation->add_matcher<low_precision::PropagateThroughPrecisionPreserved<QuantizationAlignmentAttribute>>();
     propagation->add_matcher<low_precision::UpdateSharedPrecisionPreserved<QuantizationAlignmentAttributePtr, PerTensorQuantizationAttribute>>();
+    std::cout << "START run AlignQuantizationParameters ... " << std::endl;
     manager.run_passes(f);
+    std::cout << "END.. run AlignQuantizationParameters ... " << std::endl;
     return false;
 }

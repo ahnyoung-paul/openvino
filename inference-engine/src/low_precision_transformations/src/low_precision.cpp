@@ -184,7 +184,9 @@ bool ngraph::pass::low_precision::MarkupOptimizations::run_on_function(std::shar
         markup.register_pass<low_precision::AlignQuantizationIntervals>();
         markup.register_pass<low_precision::AlignQuantizationParameters>();
     }
+    std::cout << "START run MarkupOptimizations ... " << std::endl;
     markup.run_passes(f);
+    std::cout << "END.. run MarkupOptimizations ... " << std::endl;
     return false;
 }
 

@@ -24,6 +24,8 @@ bool ngraph::pass::low_precision::PropagatePrecisions::run_on_function(std::shar
     precisionsPropagation->add_matcher<low_precision::CreateAttribute<PrecisionsAttributePtr, opset1::FakeQuantize>>(AttributeSource::OutputPort);
     precisionsPropagation->add_matcher<low_precision::PropagateThroughPrecisionPreserved<PrecisionsAttribute>>();
     precisionsPropagation->add_matcher<low_precision::PropagateToInput<PrecisionsAttribute>>();
+    std::cout << "START run PropagatePrecisions ... " << std::endl;
     manager.run_passes(f);
+    std::cout << "END.. run PropagatePrecisions ... " << std::endl;
     return false;
 }
