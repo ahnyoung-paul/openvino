@@ -357,6 +357,76 @@ void prepare_primitive_fusing::fuse_simple_primitives(program &p) {
     std::map<primitive_id, std::vector<primitive_id>> fusing_history;
 
     const uint8_t supports_immad = p.get_engine().get_device_info().supports_immad;
+
+    auto has_the_name = [](const cldnn::program_node* p_node) {
+        const std::string& node_name = p_node->id();
+        std::vector<std::string> checking_node_names = {
+            "convolution:Conv_50/WithoutBiases",
+            "add:Conv_50",
+            "subtract:Add_52",
+            "multiply:Multiply_11385",
+            "multiply:Multiply_11393",
+            "clamp:Clip_55",
+            "multiply:Mul_56"};
+        auto iter = std::find_if(checking_node_names.begin(), checking_node_names.end(), [&node_name](const std::string& name) {
+            return (name == node_name);
+        });
+        return (iter != checking_node_names.end());
+    };
+
+    auto check_node = [&has_the_name](const std::string title, const cldnn::program_node* c_node) {
+        if (!has_the_name(c_node)) {
+            return;
+        }
+        auto deps = c_node->get_dependencies();
+        auto users = c_node->get_users();
+        auto fuses = c_node->get_fused_primitives();
+
+        std::cout << "*****************************************************" << std::endl;
+        std::cout << title;
+        std::cout << " Checking node " << c_node->id();
+        if (c_node->is_type<convolution>()) {
+            std::cout << " type: convolution" << std::endl;
+        } else if (c_node->is_type<eltwise>()) {
+            std::cout << " type: eltwise" << std::endl;
+        } else if (c_node->is_type<activation>()) {
+            std::cout << " type: activation" << std::endl;
+        } else if (c_node->is_type<quantize>()) {
+            std::cout << " type: quantize" << std::endl;
+        } else {
+            std::cout << std::endl;
+        }
+        std::cout << "- deps = {" << std::endl;
+        for (auto dep : deps) {
+            std::cout << "      " << dep->id() << ", " << std::endl;
+        }
+        std::cout << "};" << std::endl;
+        std::cout << "- users = {" << std::endl;
+        for (auto user : users) {
+            std::cout << "      " << user->id() << ", " << std::endl;
+        }
+        std::cout << "};" << std::endl;
+        if (fuses.size() > 0) {
+            std::cout << "- fused_primitives = {" << std::endl;
+            for (auto fuse : fuses) {
+                std::cout << "      " << fuse.node->id() << ", " << std::endl;
+            }
+            std::cout << "};" << std::endl;
+        }
+        std::cout << "*****************************************************" << std::endl;
+    };
+
+    for (auto& node : p.get_processing_order()) {
+        if (has_the_name(node)) {
+            std::cout << node->id() << std::endl;
+        }
+        if (node->id() == "convolution:Conv_50/WithoutBiases") {
+            check_node("Checking conv:: ", node);
+        }
+    }
+    std::cout << "<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<" << std::endl;
+    std::cout << "<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<" << std::endl;
+
     auto itr = p.get_processing_order().begin();
     while (itr != p.get_processing_order().end()) {
         auto node_itr = itr++;
@@ -580,12 +650,26 @@ void prepare_primitive_fusing::fuse_simple_primitives(program &p) {
         };
 
         auto fuse_activation_f = [&](activation_node& activation_node) {
-            auto& input_data = activation_node.get_dependency(0);
-            if (activation_node.get_dependencies().size() >= 3)
-                return;
+            if (has_the_name(&activation_node)) {
+                std::cout << "Start checking fuse activation " << activation_node.id() << std::endl;
+            }
 
-            if (!input_data_supports_fusings(input_data, activation_node.id()))
+            auto& input_data = activation_node.get_dependency(0);
+            if (activation_node.get_dependencies().size() >= 3) {
+                if (has_the_name(&activation_node)) {
+                    std::cout << "Fail to fuse " << activation_node.id();
+                    std::cout << " activation_node.get_dependencies().size()=" << activation_node.get_dependencies().size() << std::endl;
+                }
                 return;
+            }
+
+            if (!input_data_supports_fusings(input_data, activation_node.id())) {
+                if (has_the_name(&activation_node)) {
+                    std::cout << "Fail to fuse " << activation_node.id();
+                    std::cout << "!input_data_supports_fusings(input_data, activation_node.id())" << std::endl;
+                }
+                return;
+            }
 
             bool should_fuse = input_data.is_type<binary_convolution>();
 
@@ -642,10 +726,16 @@ void prepare_primitive_fusing::fuse_simple_primitives(program &p) {
             // without handling any fused ops
             should_fuse |= input_data.is_type<eltwise>() && eltwise_supports_fusings(input_data.as<eltwise>()) && input_data.has_fused_primitives();
 
-            if (!should_fuse)
+            if (!should_fuse) {
+                if (has_the_name(&activation_node)) {
+                    std::cout << "Fail to fuse " << activation_node.id() << " should_fuse = false" << std::endl;
+                }
                 return;
-
+            }
+            check_node("Before activation_fuse(fused_node) ", &input_data);
+            check_node("Before activation_fuse(peer_node) ", &activation_node);
             p.fuse_nodes(input_data, activation_node, &fusing_history);
+            check_node("After_ activation_fuse(fused_node) ", &input_data);
         };
 
         auto fuse_scale_f = [&](scale_node& scale_node) {
@@ -812,6 +902,10 @@ void prepare_primitive_fusing::fuse_simple_primitives(program &p) {
         };
 
         auto fuse_eltwise_f = [&](eltwise_node& node) {
+            if (has_the_name(&node)) {
+                std::cout << "Start eltwise fusing: " << node.id() << std::endl;
+            }
+
             std::shared_ptr<const cldnn::eltwise> prim = node.get_primitive();
             const std::vector<eltwise_mode> supported_modes = {
                 eltwise_mode::sum,
@@ -821,8 +915,12 @@ void prepare_primitive_fusing::fuse_simple_primitives(program &p) {
 
             if (node.is_output() || node.inputs_count() != 2 ||
                 std::find(supported_modes.begin(), supported_modes.end(), prim->mode) == supported_modes.end() ||
-                !prim->stride.empty())
+                !prim->stride.empty()) {
+                    if (has_the_name(&node)) {
+                        std::cout << "Fail to fuse " << node.id() << " node checking is failed " << std::endl;
+                    }
                 return;
+            }
 
             std::vector<cldnn::program_node*> parents = node.get_dependencies();
             std::list<cldnn::program_node*> users = node.get_users();
@@ -864,19 +962,32 @@ void prepare_primitive_fusing::fuse_simple_primitives(program &p) {
             auto p2_raw_size = parent2->get_output_layout().size.sizes();
             for (unsigned k = 0; k < p1_raw_size.size(); k++) {
                 if (p1_raw_size[k] < p2_raw_size[k]) {
-                    if (p1_raw_size[k] != 1)
+                    if (p1_raw_size[k] != 1) {
+                        if (has_the_name(&node)) {
+                            std::cout << "Fail to fuse : " << node.id() << " (p1_raw_size[k] != 1) " << std::endl;
+                        }
                         return;
+                    }
                     can_fuse_parents[0] = false;
                 } else if (p2_raw_size[k] < p1_raw_size[k]) {
-                    if (p2_raw_size[k] != 1)
+                    if (p2_raw_size[k] != 1) {
+                        if (has_the_name(&node)) {
+                            std::cout << "Fail to fuse : " << node.id() << " (p2_raw_size[k] != 1) " << std::endl;
+                        }
                         return;
+                    }
                     can_fuse_parents[1] = false;
                 }
             }
 
             // We should have at least one node to fuse
-            if (!can_fuse_parents[0] && !can_fuse_parents[1])
+            if (!can_fuse_parents[0] && !can_fuse_parents[1]) {
+                if (has_the_name(&node)) {
+                    std::cout << "Fail to fuse : " << node.id() << "can_fuse_parents[0] ("<< can_fuse_parents[0] <<")";
+                    std::cout << "can_fuse_parents[1] (" << can_fuse_parents[1] << ")" << std::endl;
+                }
                 return;
+            }
 
             // Choose node to fuse
             size_t fused_idx = can_fuse_parents[0] ? 0 : 1;
@@ -900,11 +1011,21 @@ void prepare_primitive_fusing::fuse_simple_primitives(program &p) {
             auto fused_node = parents[fused_idx];
             auto peer_node = parents[peer_idx];
 
-            if (parent1->is_type<convolution>() && !conv_supports_fusings(parent1->as<convolution>()))
+            if (parent1->is_type<convolution>() && !conv_supports_fusings(parent1->as<convolution>())) {
+                if (has_the_name(&node)) {
+                    std::cout << "Fail to fuse : " << node.id() << "(parent1->is_type<convolution>() ";
+                    std::cout << "&& !conv_supports_fusings(parent1->as<convolution>()))" <<  std::endl;
+                }
                 return;
+            }
 
-            if (parent2->is_type<convolution>() && !conv_supports_fusings(parent2->as<convolution>()))
+            if (parent2->is_type<convolution>() && !conv_supports_fusings(parent2->as<convolution>())) {
+                if (has_the_name(&node)) {
+                    std::cout << "Fail to fuse : " << node.id() << "(parent2->is_type<convolution>() ";
+                    std::cout << "&& !conv_supports_fusings(parent2->as<convolution>()))" <<  std::endl;
+                }
                 return;
+            }
 
             bool merge_allowed = true;
             // If fused node is not convolution and fused node has multiple users,
@@ -938,6 +1059,10 @@ void prepare_primitive_fusing::fuse_simple_primitives(program &p) {
                     }
 
                     if (current_node.second > max_levels) {
+                        if (has_the_name(&node)) {
+                            std::cout << "Fail to fuse : " << node.id() << "current_node.second(" << current_node.second;
+                            std::cout << ") > max_levels(" << max_levels << ")" << std::endl;
+                        }
                         return;
                     }
 
@@ -966,6 +1091,10 @@ void prepare_primitive_fusing::fuse_simple_primitives(program &p) {
                     if (invalid_user_iter != curr_users.end()) {
                         // If fused_node(i.e. Conv1) have invalid user node(that is not activation and eltwise ndoe), it cannot be fused
                         if (fused_node->id() == current_node.first->id()) {
+                            if (has_the_name(&node)) {
+                                std::cout << "Fail to fuse : " << node.id() << "(fused_node->id(" << fused_node->id() << ") == current_node.first->id(";
+                                std::cout << current_node.first->id() << "))" << std::endl;
+                            }
                             return;
                         }
                         push_node_queue(current_node.first, (current_node.second+1));
@@ -985,11 +1114,22 @@ void prepare_primitive_fusing::fuse_simple_primitives(program &p) {
             }
 
             for (auto& parent : fused_node->get_dependencies())
-                if (parent->id() == peer_node->id())
+                if ((parent->id() == peer_node->id()) && (!parent->is_constant())) {
                     merge_allowed = false;
+                    break;
+                }
 
-            if (!merge_allowed)
+            if (!merge_allowed) {
+                if (has_the_name(&node)) {
+                    std::cout << "Fail to fuse (merge_allowed is false): " << node.id();
+                    std::cout << " fused_node->get_users().size() : " << fused_node->get_users().size() << std::endl;
+                    std::cout << "Fused node is " << fused_node->id() << std::endl;
+                    std::cout << "Peer node is " << peer_node->id() << std::endl;
+                    check_node("Checking failed current node: ", &node);
+                    check_node("Checking failed fused   node: ", fused_node);
+                }
                 return;
+            }
 
             if (p.get_processing_order().get_processing_number(fused_node) <
                 p.get_processing_order().get_processing_number(peer_node))
@@ -1001,7 +1141,10 @@ void prepare_primitive_fusing::fuse_simple_primitives(program &p) {
                 recalc_processing_order = true;
             }
 
+            check_node("Before eltwise_fuse(fused_node) ", fused_node);
+            check_node("Before eltwise_fuse(peer_node) ", &node);
             p.fuse_nodes(*fused_node, node, &fusing_history);
+            check_node("After_ eltwise_fuse(fused_node) ", fused_node);
         };
 
         program_helpers::do_for_types<activation, scale, quantize, eltwise>(*node,
@@ -1011,6 +1154,7 @@ void prepare_primitive_fusing::fuse_simple_primitives(program &p) {
                 fuse_eltwise_f);
     }
 
+    throw std::invalid_argument("Fail to here!!");
     // Need to update processing order to handle cases when peer node processing number is greater
     // than fused node one
     if (recalc_processing_order)
