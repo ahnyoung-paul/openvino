@@ -1550,10 +1550,17 @@ JitConstants FusedOpsCodeGenerator::MakeOpJitConstants(const FusedOpsConfigurati
         auto input_type = in_type;
         if (index > 0) {
             size_t input_idx = index - 1;
+#if 1
+            size_t fused_op_ids_len = fused_op_ids.size();
+            input_name = (input_idx < fused_op_ids_len)? GetOutputVarName(in_var, fused_op_ids[input_idx].first)
+                                                    : GetInputVarName((input_idx - fused_op_ids_len), is_shuffled, shuffle_var);
+            input_type = (input_idx < fused_op_ids_len)? fused_op_ids[input_idx].second : desc.tensors[(input_idx - fused_op_ids_len)].GetDType();
+#else
             size_t tensors_len = desc.tensors.size();
             input_name = (input_idx < tensors_len)? GetInputVarName(input_idx, is_shuffled, shuffle_var)
                                                     : GetOutputVarName(in_var, fused_op_ids[input_idx - tensors_len].first);
             input_type = (input_idx < tensors_len)? desc.tensors[input_idx].GetDType() : fused_op_ids[input_idx - tensors_len].second;
+#endif
         }
         auto acc_t = get_acc_t();
 
@@ -1573,6 +1580,12 @@ JitConstants FusedOpsCodeGenerator::MakeOpJitConstants(const FusedOpsConfigurati
         input_vars.push_back(get_input(i));
     }
 
+    // if (desc.tensors.empty()) {
+    //     auto var = input_vars[0];
+    //     input_vars[0] = input_vars[1];
+    //     input_vars[1] = var;
+    // }
+
     switch (desc.GetType()) {
         case KernelType::SCALE: {
             auto tmp_var = out_var + "_tmp";
@@ -1591,6 +1604,7 @@ JitConstants FusedOpsCodeGenerator::MakeOpJitConstants(const FusedOpsConfigurati
             if (!p)
                 throw std::runtime_error("[clDNN] Eltwise fuse params can't be nullptr");
 
+            // bool is_show = false;
             std::string op = "";
             switch (p->mode) {
             case kernel_selector::EltwiseMode::ADD:
@@ -1599,6 +1613,14 @@ JitConstants FusedOpsCodeGenerator::MakeOpJitConstants(const FusedOpsConfigurati
             case kernel_selector::EltwiseMode::MUL:
                 op = "*";
                 break;
+            case kernel_selector::EltwiseMode::SUB:
+                op = "-";
+                // is_show = true;
+                break;
+            case kernel_selector::EltwiseMode::DIV:
+                op = "/";
+                // is_show = true;
+                break;
             default:
                 throw std::runtime_error("[clDNN] Eltwise mode is not supported in fused ops codegen");
             }
@@ -1606,6 +1628,12 @@ JitConstants FusedOpsCodeGenerator::MakeOpJitConstants(const FusedOpsConfigurati
             auto tmp_var = out_var + "_tmp";
             op_decls += "\\\n\t" + GetType(get_acc_t(), vec_size) + " " + tmp_var + " = " + input_vars[0] + op + input_vars[1] + ";";
             op_decls += "\\\n\t" + GetOutputType(vec_size) + " " + out_var + " = " + ConvertToOutputType(tmp_var, vec_size) + ";";
+
+            // if (is_show) {
+            //     std::cout << "<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<" << std::endl;
+            //     std::cout << op_decls << std::endl;
+            //     std::cout << "<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<" << std::endl;
+            // }
             break;
         }
         case KernelType::QUANTIZE: {
