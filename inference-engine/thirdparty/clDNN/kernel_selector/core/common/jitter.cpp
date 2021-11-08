@@ -1498,7 +1498,7 @@ JitConstants FusedOpsCodeGenerator::MakeLoadJitConstants(const FusedOpsConfigura
 
     return jit;
 }
-
+#define USE_ORDERED_DATA
 JitConstants FusedOpsCodeGenerator::MakeOpJitConstants(const FusedOpsConfiguration& conf,
                                                        const std::string in_var, const Datatype in_type,
                                                        std::string& out_var) const {
@@ -1509,7 +1509,21 @@ JitConstants FusedOpsCodeGenerator::MakeOpJitConstants(const FusedOpsConfigurati
     auto idx = conf.bfzyx_idx_order;
     std::string shuffle_var = conf.shuffle_var_name;
     bool is_shuffled = false;
+#ifdef USE_ORDERED_DATA
+    auto& deps_desc_list = desc.deps_data;
+    int first_fused_ops_idx = -1;
+    size_t dep_idx = 0;
+    for (auto dep : deps_desc_list) {
+        if (dep.deps_type == kernel_selector::Depstype::FUSED_OPS) {
+            first_fused_ops_idx = static_cast<int>(dep_idx);
+            break;
+        }
+        dep_idx++;
+    }
+#else
     auto& fused_op_ids = desc.fused_op_ids;
+#endif
+
     std::vector<std::string> input_vars;
 
     out_var = GetOutputVarName(in_var, desc.op_id);
@@ -1531,6 +1545,11 @@ JitConstants FusedOpsCodeGenerator::MakeOpJitConstants(const FusedOpsConfigurati
 
     auto get_acc_t = [&]() -> Datatype {
         std::vector<Datatype> input_types = {desc.output_tensor.GetDType()};
+#ifdef USE_ORDERED_DATA
+        for (auto& deps_desc : deps_desc_list) {
+            input_types.push_back(deps_desc.tensor.GetDType());
+        }
+#else
         for (auto& in : desc.tensors) {
             input_types.push_back(in.GetDType());
         }
@@ -1538,6 +1557,7 @@ JitConstants FusedOpsCodeGenerator::MakeOpJitConstants(const FusedOpsConfigurati
         for (auto& in : fused_op_ids) {
             input_types.push_back(in.second);
         }
+#endif
 
         std::vector<Datatype> types_prioritized = { Datatype::F32, Datatype::F16 };
 
@@ -1551,6 +1571,13 @@ JitConstants FusedOpsCodeGenerator::MakeOpJitConstants(const FusedOpsConfigurati
     };
 
     auto get_input = [&](size_t index) -> std::string {
+#ifdef USE_ORDERED_DATA
+        const auto dep_desc = deps_desc_list[index];
+        auto input_name = (dep_desc.deps_type == kernel_selector::Depstype::DST)? in_var :
+                            (dep_desc.deps_type == kernel_selector::Depstype::FUSED_OPS)? GetOutputVarName(in_var, dep_desc.op_id)
+                                : GetInputVarName(dep_desc.op_id, is_shuffled, shuffle_var);
+        auto input_type = (dep_desc.deps_type == kernel_selector::Depstype::DST)? in_type : dep_desc.tensor.GetDType();
+#else
         auto input_name = in_var;
         auto input_type = in_type;
         if (index > 0) {
@@ -1560,6 +1587,7 @@ JitConstants FusedOpsCodeGenerator::MakeOpJitConstants(const FusedOpsConfigurati
                                                     : GetOutputVarName(in_var, fused_op_ids[input_idx - tensors_len].first);
             input_type = (input_idx < tensors_len)? desc.tensors[input_idx].GetDType() : fused_op_ids[input_idx - tensors_len].second;
         }
+#endif
         auto acc_t = get_acc_t();
 
         if (input_type != acc_t)
@@ -1568,6 +1596,11 @@ JitConstants FusedOpsCodeGenerator::MakeOpJitConstants(const FusedOpsConfigurati
             return input_name;
     };
 
+#ifdef USE_ORDERED_DATA
+    for (size_t i = 0; i < deps_desc_list.size(); i++) {
+        input_vars.push_back(get_input(i));
+    }
+#else
     // Generate input variable list: dst + tensor inputs + fused ops input
     // If the input_vars_length are larger than max_num_input_vars, do not add dst to input variable list.
     // because dst is not used, when Fused op has both tensor and fused input.
@@ -1577,6 +1610,7 @@ JitConstants FusedOpsCodeGenerator::MakeOpJitConstants(const FusedOpsConfigurati
     for (size_t i = start_idx; i < input_vars_length; i++) {
         input_vars.push_back(get_input(i));
     }
+#endif
 
     switch (desc.GetType()) {
         case KernelType::SCALE: {
@@ -1595,7 +1629,6 @@ JitConstants FusedOpsCodeGenerator::MakeOpJitConstants(const FusedOpsConfigurati
             auto p = desc.GetOpParams<eltwise_fuse_params>();
             if (!p)
                 throw std::runtime_error("[clDNN] Eltwise fuse params can't be nullptr");
-
             std::string op = "";
             switch (p->mode) {
             case kernel_selector::EltwiseMode::ADD:
@@ -1603,6 +1636,12 @@ JitConstants FusedOpsCodeGenerator::MakeOpJitConstants(const FusedOpsConfigurati
                 break;
             case kernel_selector::EltwiseMode::MUL:
                 op = "*";
+                break;
+            case kernel_selector::EltwiseMode::SUB:
+                op = "-";
+                break;
+            case kernel_selector::EltwiseMode::DIV:
+                op = "/";
                 break;
             default:
                 throw std::runtime_error("[clDNN] Eltwise mode is not supported in fused ops codegen");
@@ -1617,9 +1656,13 @@ JitConstants FusedOpsCodeGenerator::MakeOpJitConstants(const FusedOpsConfigurati
             auto p = desc.GetOpParams<quantize_fuse_params>();
             if (!p)
                 throw std::runtime_error("[clDNN] Quantize fuse params can't be nullptr");
-
+#ifdef USE_ORDERED_DATA
+            std::string in_converted = (first_fused_ops_idx < 0) ? in_var : GetOutputVarName(in_var, deps_desc_list[first_fused_ops_idx].op_id);
+            Datatype input_type = (first_fused_ops_idx < 0) ? in_type : deps_desc_list[first_fused_ops_idx].tensor.GetDType();
+#else
             std::string in_converted = (fused_op_ids.empty()) ? in_var : GetOutputVarName(in_var, fused_op_ids[0].first);
             Datatype input_type = (fused_op_ids.empty()) ? in_type : fused_op_ids[0].second;
+#endif
             Datatype tmp_type = Datatype::F32;
             std::string tmp_type_str = GetType(tmp_type, vec_size);
             std::string tmp_var = out_var + "_tmp";
@@ -1722,8 +1765,11 @@ JitConstants FusedOpsCodeGenerator::MakeOpJitConstants(const FusedOpsConfigurati
         case KernelType::ACTIVATION: {
             auto p = desc.GetOpParams<activation_fuse_params>();
             base_activation_params activation_p = p->param;
-
+#ifdef USE_ORDERED_DATA
+            std::string new_in_var = (first_fused_ops_idx < 0) ? in_var : GetOutputVarName(in_var, deps_desc_list[first_fused_ops_idx].op_id);
+#else
             std::string new_in_var = (fused_op_ids.empty()) ? in_var : GetOutputVarName(in_var, fused_op_ids[0].first);
+#endif
             op_decls += "\\\n\t" + GetOutputType(vec_size) + " " + out_var + " = " + ConvertToOutputType(new_in_var, vec_size) + ";";
             if (activation_p.function != ActivationFunction::NONE) {
                 auto suffix = "_FUSED_OP"+toCodeString(desc.op_id) + conf.suffix;

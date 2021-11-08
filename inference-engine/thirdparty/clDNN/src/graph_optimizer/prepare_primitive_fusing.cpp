@@ -185,7 +185,7 @@ void prepare_primitive_fusing::fuse_reorders(program &p) {
 
 void prepare_primitive_fusing::fuse_activations(program &p) {
     bool is_debug = p.get_options().get<build_option_type::debug>()->enabled();
-    std::map<primitive_id, std::vector<primitive_id>> fusing_history;
+    std::map<primitive_id, std::map<primitive_id, size_t>> fusing_history;
     bool use_onednn_impls = false;
 
 #ifdef ENABLE_ONEDNN_FOR_GPU
@@ -457,7 +457,7 @@ void prepare_primitive_fusing::fuse_bias(program &p) {
 
 void prepare_primitive_fusing::fuse_simple_primitives(program &p) {
     bool recalc_processing_order = false;
-    std::map<primitive_id, std::vector<primitive_id>> fusing_history;
+    std::map<primitive_id, std::map<primitive_id, size_t>> fusing_history;
 
     const uint8_t supports_immad = p.get_engine().get_device_info().supports_immad;
     auto itr = p.get_processing_order().begin();
@@ -631,12 +631,12 @@ void prepare_primitive_fusing::fuse_simple_primitives(program &p) {
             return true;
         };
 
-        auto get_users_from_fusing_history = [&](primitive_id id) {
+        auto get_users_from_fusing_history = [&](const primitive_id& id) {
             std::vector<primitive_id> users;
             for (auto deps_data : fusing_history) {
                 auto key = deps_data.first;
                 auto deps_vec = deps_data.second;
-                auto iter = std::find(deps_vec.begin(), deps_vec.end(), id);
+                auto iter = deps_vec.find(id);
                 if (iter != deps_vec.end()) {
                     users.push_back(key);
                 }
@@ -660,7 +660,7 @@ void prepare_primitive_fusing::fuse_simple_primitives(program &p) {
                             auto& fused_descs = input_data.get_fused_primitives();
                             auto origin_input_iter = std::find_if(fused_descs.begin(), fused_descs.end(),
                                                                     [&](cldnn::fused_primitive_desc& desc) {
-                                return (desc.node->id() == prim_id);
+                                return (desc.node->id() == prim_id.first);
                             });
                             if (origin_input_iter != fused_descs.end()) {
                                 auto users = get_users_from_fusing_history(origin_input_iter->node->id());
@@ -922,7 +922,9 @@ void prepare_primitive_fusing::fuse_simple_primitives(program &p) {
             std::shared_ptr<const cldnn::eltwise> prim = node.get_primitive();
             const std::vector<eltwise_mode> supported_modes = {
                 eltwise_mode::sum,
-                eltwise_mode::prod
+                eltwise_mode::prod,
+                eltwise_mode::sub,
+                eltwise_mode::div
             };
 
             if (node.is_output() || node.inputs_count() != 2 ||
@@ -1099,8 +1101,10 @@ void prepare_primitive_fusing::fuse_simple_primitives(program &p) {
             }
 
             for (auto& parent : fused_node->get_dependencies())
-                if (parent->id() == peer_node->id())
+                if ((parent->id() == peer_node->id()) && (!parent->is_constant())) {
                     merge_allowed = false;
+                    break;
+                }
 
             if (!merge_allowed)
                 return;
@@ -1150,13 +1154,10 @@ void prepare_primitive_fusing::optimize_fused_ops(program& p) {
                 if (desc.node->id() == prim.node->id()) {
                     continue;
                 }
-
-                auto rm_iter = std::find_if(prim.fused_deps.begin(), prim.fused_deps.end(), [&](primitive_id& dep_id){
-                    return (desc.node->id() == dep_id);
-                });
+                auto rm_iter = prim.fused_deps.find(desc.node->id());
                 if (rm_iter != prim.fused_deps.end()) {
                     prim.fused_deps.erase(rm_iter);
-                    prim.fused_deps.insert(prim.fused_deps.end(), desc.fused_deps.begin(), desc.fused_deps.end());
+                    prim.fused_deps.insert(desc.fused_deps.begin(), desc.fused_deps.end());
                 }
             }
         };
