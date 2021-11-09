@@ -83,6 +83,7 @@
 #include <utility>
 #include <vector>
 #include <stdexcept>
+#include <utility>
 
 program::program(engine& engine_ref,
                  topology const& topology,
@@ -990,7 +991,7 @@ bool program::extract_and_remove(program_node& node) {
     return true;
 }
 
-void program::fuse_nodes(program_node &fused_node, program_node &peer_node, std::map<primitive_id, std::vector<primitive_id>>* fusing_history) {
+void program::fuse_nodes(program_node &fused_node, program_node &peer_node, std::map<primitive_id, std::map<primitive_id, size_t>>* fusing_history) {
     auto peer_layout = peer_node.get_output_layout();
     fused_primitive_desc local_desc;
     local_desc.node = get_node_ptr(peer_node.id());
@@ -1011,7 +1012,7 @@ void program::fuse_nodes(program_node &fused_node, program_node &peer_node, std:
     auto history_iter = fusing_history->find(peer_node.id());
     if (history_iter != fusing_history->end()) {
         for (auto& id : history_iter->second) {
-            local_desc.fused_deps.push_back(id);
+            local_desc.fused_deps.push_back(id.first);
         }
     }
 
@@ -1055,7 +1056,13 @@ void program::fuse_nodes(program_node &fused_node, program_node &peer_node, std:
     add_optimized_primitive_info(peer_node.id(), { fused_node.id() });
 
     for (auto& user : peer_node.users) {
-        (*fusing_history)[user->id()].push_back(peer_node.id());
+        size_t dep_idx = 0;
+        for (auto& dep : user->dependencies) {
+            if (dep->id() == peer_node.id())
+                break;
+            dep_idx++;
+        }
+        (*fusing_history)[user->id()].emplace(peer_node.id(), dep_idx);
     }
 
     // Remove all edges connected with peer node

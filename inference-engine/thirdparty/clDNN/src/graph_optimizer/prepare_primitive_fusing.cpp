@@ -166,7 +166,9 @@ void prepare_primitive_fusing::fuse_reorders(program &p) {
 
 void prepare_primitive_fusing::fuse_activations(program &p) {
     bool is_debug = p.get_options().get<build_option_type::debug>()->enabled();
-    std::map<primitive_id, std::vector<primitive_id>> fusing_history;
+
+    std::map<primitive_id, std::map<primitive_id, size_t>> fusing_history;
+
     auto itr = p.get_processing_order().begin();
     while (itr != p.get_processing_order().end()) {
         auto node_itr = itr++;
@@ -354,7 +356,7 @@ void prepare_primitive_fusing::fuse_bias(program &p) {
 
 void prepare_primitive_fusing::fuse_simple_primitives(program &p) {
     bool recalc_processing_order = false;
-    std::map<primitive_id, std::vector<primitive_id>> fusing_history;
+    std::map<primitive_id, std::map<primitive_id, size_t>> fusing_history;
 
     const uint8_t supports_immad = p.get_engine().get_device_info().supports_immad;
     auto itr = p.get_processing_order().begin();
@@ -528,12 +530,14 @@ void prepare_primitive_fusing::fuse_simple_primitives(program &p) {
             return true;
         };
 
-        auto get_users_from_fusing_history = [&](primitive_id id) {
+        auto get_users_from_fusing_history = [&](const primitive_id& id) {
             std::vector<primitive_id> users;
             for (auto deps_data : fusing_history) {
                 auto key = deps_data.first;
                 auto deps_vec = deps_data.second;
-                auto iter = std::find(deps_vec.begin(), deps_vec.end(), id);
+                auto iter = std::find_if(deps_vec.begin(), deps_vec.end(), [id](const std::pair<primitive_id, size_t>& dep){
+                    return (dep.first == id);
+                });
                 if (iter != deps_vec.end()) {
                     users.push_back(key);
                 }
@@ -557,7 +561,7 @@ void prepare_primitive_fusing::fuse_simple_primitives(program &p) {
                             auto& fused_descs = input_data.get_fused_primitives();
                             auto origin_input_iter = std::find_if(fused_descs.begin(), fused_descs.end(),
                                                                     [&](cldnn::fused_primitive_desc& desc) {
-                                return (desc.node->id() == prim_id);
+                                return (desc.node->id() == prim_id.first);
                             });
                             if (origin_input_iter != fused_descs.end()) {
                                 auto users = get_users_from_fusing_history(origin_input_iter->node->id());

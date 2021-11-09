@@ -1009,7 +1009,111 @@ INSTANTIATE_TEST_SUITE_P(fusings_gpu, conv_fp32_multi_eltwise_4_clamp,
 #ifdef ADD_OPS
 
 class conv_fp32_additional_eltwise_fusing : public ConvFusingTest {};
-TEST_P(conv_fp32_additional_eltwise_fusing, subtract_pattern01) {
+// TEST_P(conv_fp32_additional_eltwise_fusing, subtract_pattern01) {
+//     if (engine.get_device_info().supports_immad) {
+//         return;
+//     }
+
+//     auto p = GetParam();
+//     create_topologies(input_layout("input", get_input_layout(p)),
+//         data("eltwise_data1", get_mem(get_output_layout(p))),
+//         data("eltwise_data2", get_mem(get_output_layout(p))),
+//         data("eltwise_data4", get_mem(get_output_layout(p))),
+//         data("bias", get_mem(get_bias_layout(p))),
+//         data("weights", get_mem(get_weights_layout(p))),
+//         convolution("conv_prim", "input", { "weights" }, {"bias"}, p.groups, p.stride, p.pad, p.dilation),
+//         eltwise("eltwise1_sum", "conv_prim", "eltwise_data1", eltwise_mode::sum),
+//         eltwise("eltwise2_sub", "conv_prim", "eltwise_data2", eltwise_mode::sub),
+//         eltwise("eltwise3_prod", "eltwise1_sum", "eltwise2_sub", eltwise_mode::prod),
+//         eltwise("eltwise4_sum", "eltwise3_prod", "eltwise_data4", eltwise_mode::sum),
+//         reorder("reorder_bfyx", "eltwise4_sum", p.default_format, data_types::f32)
+//     );
+//     implementation_desc conv_impl = { format::b_fs_yx_fsv16, ""};
+//     bo_fused.set_option(build_option::force_implementations({ {"conv_prim", conv_impl} }));
+
+//     tolerance = 1e-5f;
+//     execute(p);
+// }
+
+// TEST_P(conv_fp32_additional_eltwise_fusing, subtract_pattern02) {
+//     if (engine.get_device_info().supports_immad) {
+//         return;
+//     }
+
+//     auto p = GetParam();
+//     create_topologies(input_layout("input", get_input_layout(p)),
+//         data("eltwise_data1", get_mem(get_output_layout(p))),
+//         data("eltwise_data2", get_mem(get_output_layout(p))),
+//         data("eltwise_data4", get_mem(get_output_layout(p))),
+//         data("bias", get_mem(get_bias_layout(p))),
+//         data("weights", get_mem(get_weights_layout(p))),
+//         convolution("conv_prim", "input", { "weights" }, {"bias"}, p.groups, p.stride, p.pad, p.dilation),
+//         eltwise("eltwise1_sum", "conv_prim", "eltwise_data1", eltwise_mode::sum),
+//         eltwise("eltwise2_sum", "conv_prim", "eltwise_data2", eltwise_mode::sum),
+//         eltwise("eltwise3_prod", "eltwise1_sum", "eltwise2_sum", eltwise_mode::prod),
+//         eltwise("eltwise4_sub", "eltwise3_prod", "eltwise_data4", eltwise_mode::sub),
+//         reorder("reorder_bfyx", "eltwise4_sub", p.default_format, data_types::f32)
+//     );
+//     implementation_desc conv_impl = { format::b_fs_yx_fsv16, ""};
+//     bo_fused.set_option(build_option::force_implementations({ {"conv_prim", conv_impl} }));
+
+//     tolerance = 1e-5f;
+//     execute(p);
+// }
+
+// TEST_P(conv_fp32_additional_eltwise_fusing, subtract_pattern03) {
+//     if (engine.get_device_info().supports_immad) {
+//         return;
+//     }
+
+//     auto p = GetParam();
+//     create_topologies(input_layout("input", get_input_layout(p)),
+//         data("eltwise_data1", get_mem(get_output_layout(p))),
+//         data("eltwise_data2", get_mem(get_output_layout(p))),
+//         data("eltwise_data4", get_mem(get_output_layout(p))),
+//         data("bias", get_mem(get_bias_layout(p))),
+//         data("weights", get_mem(get_weights_layout(p))),
+//         convolution("conv_prim", "input", { "weights" }, {"bias"}, p.groups, p.stride, p.pad, p.dilation),
+//         eltwise("eltwise1_sum", "conv_prim", "eltwise_data1", eltwise_mode::sum),
+//         eltwise("eltwise2_sum", "conv_prim", "eltwise_data2", eltwise_mode::sum),
+//         eltwise("eltwise3_sub", "eltwise2_sum", "eltwise1_sum", eltwise_mode::sub),
+//         eltwise("eltwise4_sum", "eltwise3_sub", "eltwise_data4", eltwise_mode::sum),
+//         reorder("reorder_bfyx", "eltwise4_sum", p.default_format, data_types::f32)
+//     );
+//     implementation_desc conv_impl = { format::b_fs_yx_fsv16, ""};
+//     bo_fused.set_option(build_option::force_implementations({ {"conv_prim", conv_impl} }));
+
+//     tolerance = 1e-5f;
+//     execute(p);
+// }
+
+// TEST_P(conv_fp32_additional_eltwise_fusing, subtract_pattern04) {
+//     if (engine.get_device_info().supports_immad) {
+//         return;
+//     }
+
+//     auto p = GetParam();
+//     create_topologies(input_layout("input", get_input_layout(p)),
+//         data("eltwise_data1", get_mem(get_output_layout(p))),
+//         data("eltwise_data2", get_mem(get_output_layout(p))),
+//         data("eltwise_data4", get_mem(get_output_layout(p))),
+//         data("bias", get_mem(get_bias_layout(p))),
+//         data("weights", get_mem(get_weights_layout(p))),
+//         convolution("conv_prim", "input", { "weights" }, {"bias"}, p.groups, p.stride, p.pad, p.dilation),
+//         eltwise("eltwise1_sum", "conv_prim", "eltwise_data1", eltwise_mode::sum),
+//         eltwise("eltwise2_sub", "conv_prim", "eltwise1_sum", eltwise_mode::sub),
+//         eltwise("eltwise3_prod", "eltwise2_sub", "eltwise_data2", eltwise_mode::prod),
+//         eltwise("eltwise4_sum", "eltwise3_prod", "eltwise_data4", eltwise_mode::sum),
+//         reorder("reorder_bfyx", "eltwise4_sum", p.default_format, data_types::f32)
+//     );
+//     implementation_desc conv_impl = { format::b_fs_yx_fsv16, ""};
+//     bo_fused.set_option(build_option::force_implementations({ {"conv_prim", conv_impl} }));
+
+//     tolerance = 1e-5f;
+//     execute(p);
+// }
+
+TEST_P(conv_fp32_additional_eltwise_fusing, subtract_pattern05) {
     if (engine.get_device_info().supports_immad) {
         return;
     }
@@ -1018,93 +1122,17 @@ TEST_P(conv_fp32_additional_eltwise_fusing, subtract_pattern01) {
     create_topologies(input_layout("input", get_input_layout(p)),
         data("eltwise_data1", get_mem(get_output_layout(p))),
         data("eltwise_data2", get_mem(get_output_layout(p))),
-        data("eltwise_data4", get_mem(get_output_layout(p))),
+        data("scale_data", get_mem(get_per_channel_layout(p), 1.0f/p.kernel.count()/255)),
+        data("scale_bias", get_mem(get_bias_layout(p))),
         data("bias", get_mem(get_bias_layout(p))),
         data("weights", get_mem(get_weights_layout(p))),
         convolution("conv_prim", "input", { "weights" }, {"bias"}, p.groups, p.stride, p.pad, p.dilation),
         eltwise("eltwise1_sum", "conv_prim", "eltwise_data1", eltwise_mode::sum),
-        eltwise("eltwise2_sub", "conv_prim", "eltwise_data2", eltwise_mode::sub),
-        eltwise("eltwise3_prod", "eltwise1_sum", "eltwise2_sub", eltwise_mode::prod),
-        eltwise("eltwise4_sum", "eltwise3_prod", "eltwise_data4", eltwise_mode::sum),
-        reorder("reorder_bfyx", "eltwise4_sum", p.default_format, data_types::f32)
-    );
-    implementation_desc conv_impl = { format::b_fs_yx_fsv16, ""};
-    bo_fused.set_option(build_option::force_implementations({ {"conv_prim", conv_impl} }));
-
-    tolerance = 1e-5f;
-    execute(p);
-}
-
-TEST_P(conv_fp32_additional_eltwise_fusing, subtract_pattern02) {
-    if (engine.get_device_info().supports_immad) {
-        return;
-    }
-
-    auto p = GetParam();
-    create_topologies(input_layout("input", get_input_layout(p)),
-        data("eltwise_data1", get_mem(get_output_layout(p))),
-        data("eltwise_data2", get_mem(get_output_layout(p))),
-        data("eltwise_data4", get_mem(get_output_layout(p))),
-        data("bias", get_mem(get_bias_layout(p))),
-        data("weights", get_mem(get_weights_layout(p))),
-        convolution("conv_prim", "input", { "weights" }, {"bias"}, p.groups, p.stride, p.pad, p.dilation),
-        eltwise("eltwise1_sum", "conv_prim", "eltwise_data1", eltwise_mode::sum),
-        eltwise("eltwise2_sum", "conv_prim", "eltwise_data2", eltwise_mode::sum),
-        eltwise("eltwise3_prod", "eltwise1_sum", "eltwise2_sum", eltwise_mode::prod),
-        eltwise("eltwise4_sub", "eltwise3_prod", "eltwise_data4", eltwise_mode::sub),
-        reorder("reorder_bfyx", "eltwise4_sub", p.default_format, data_types::f32)
-    );
-    implementation_desc conv_impl = { format::b_fs_yx_fsv16, ""};
-    bo_fused.set_option(build_option::force_implementations({ {"conv_prim", conv_impl} }));
-
-    tolerance = 1e-5f;
-    execute(p);
-}
-
-TEST_P(conv_fp32_additional_eltwise_fusing, subtract_pattern03) {
-    if (engine.get_device_info().supports_immad) {
-        return;
-    }
-
-    auto p = GetParam();
-    create_topologies(input_layout("input", get_input_layout(p)),
-        data("eltwise_data1", get_mem(get_output_layout(p))),
-        data("eltwise_data2", get_mem(get_output_layout(p))),
-        data("eltwise_data4", get_mem(get_output_layout(p))),
-        data("bias", get_mem(get_bias_layout(p))),
-        data("weights", get_mem(get_weights_layout(p))),
-        convolution("conv_prim", "input", { "weights" }, {"bias"}, p.groups, p.stride, p.pad, p.dilation),
-        eltwise("eltwise1_sum", "conv_prim", "eltwise_data1", eltwise_mode::sum),
-        eltwise("eltwise2_sum", "conv_prim", "eltwise_data2", eltwise_mode::sum),
-        eltwise("eltwise3_sub", "eltwise2_sum", "eltwise1_sum", eltwise_mode::sub),
-        eltwise("eltwise4_sum", "eltwise3_sub", "eltwise_data4", eltwise_mode::sum),
-        reorder("reorder_bfyx", "eltwise4_sum", p.default_format, data_types::f32)
-    );
-    implementation_desc conv_impl = { format::b_fs_yx_fsv16, ""};
-    bo_fused.set_option(build_option::force_implementations({ {"conv_prim", conv_impl} }));
-
-    tolerance = 1e-5f;
-    execute(p);
-}
-
-TEST_P(conv_fp32_additional_eltwise_fusing, subtract_pattern04) {
-    if (engine.get_device_info().supports_immad) {
-        return;
-    }
-
-    auto p = GetParam();
-    create_topologies(input_layout("input", get_input_layout(p)),
-        data("eltwise_data1", get_mem(get_output_layout(p))),
-        data("eltwise_data2", get_mem(get_output_layout(p))),
-        data("eltwise_data4", get_mem(get_output_layout(p))),
-        data("bias", get_mem(get_bias_layout(p))),
-        data("weights", get_mem(get_weights_layout(p))),
-        convolution("conv_prim", "input", { "weights" }, {"bias"}, p.groups, p.stride, p.pad, p.dilation),
-        eltwise("eltwise1_sum", "conv_prim", "eltwise_data1", eltwise_mode::sum),
-        eltwise("eltwise2_sub", "conv_prim", "eltwise1_sum", eltwise_mode::sub),
+        eltwise("eltwise2_sub", "eltwise1_sum", "conv_prim", eltwise_mode::sub),
         eltwise("eltwise3_prod", "eltwise2_sub", "eltwise_data2", eltwise_mode::prod),
-        eltwise("eltwise4_sum", "eltwise3_prod", "eltwise_data4", eltwise_mode::sum),
-        reorder("reorder_bfyx", "eltwise4_sum", p.default_format, data_types::f32)
+        eltwise("eltwise4_sum", "eltwise3_prod", "eltwise1_sum", eltwise_mode::sum),
+        scale("scale", "eltwise4_sum", "scale_data", "scale_bias"),
+        reorder("reorder_bfyx", "scale", p.default_format, data_types::f32)
     );
     implementation_desc conv_impl = { format::b_fs_yx_fsv16, ""};
     bo_fused.set_option(build_option::force_implementations({ {"conv_prim", conv_impl} }));
@@ -1112,7 +1140,6 @@ TEST_P(conv_fp32_additional_eltwise_fusing, subtract_pattern04) {
     tolerance = 1e-5f;
     execute(p);
 }
-
 
 // TEST_P(conv_fp32_additional_eltwise_fusing, div_pattern01) {
 //     if (engine.get_device_info().supports_immad) {
