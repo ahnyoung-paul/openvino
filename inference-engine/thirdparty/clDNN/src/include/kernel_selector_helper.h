@@ -175,7 +175,7 @@ inline params_t get_default_params(const arg_t& arg, uint32_t split = 1) {
         desc.output_tensor = convert_data_tensor(fused_prim.output_layout);
         prim_op_id_map[fused_prim.node->id()] = std::make_pair(desc.op_id, desc.output_tensor.GetDType());
         for (auto& dep : fused_prim.fused_deps) {
-            auto iter = prim_op_id_map.find(dep);
+            auto iter = prim_op_id_map.find(dep.first);
             if (iter != prim_op_id_map.end()) {
                 desc.fused_op_ids.push_back(iter->second);
             }

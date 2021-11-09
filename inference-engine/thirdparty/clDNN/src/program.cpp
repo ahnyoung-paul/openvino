@@ -996,6 +996,7 @@ void program::fuse_nodes(program_node &fused_node, program_node &peer_node, std:
     fused_primitive_desc local_desc;
     local_desc.node = get_node_ptr(peer_node.id());
     local_desc.dep_start_idx = fused_node.get_dependencies().size();
+    local_desc.total_num_deps = peer_node.get_dependencies().size();
     local_desc.output_layout = peer_layout;
     local_desc.activation = activation_func::none;
     if (!peer_node.get_fused_activations_funcs().empty()) {
@@ -1012,7 +1013,7 @@ void program::fuse_nodes(program_node &fused_node, program_node &peer_node, std:
     auto history_iter = fusing_history->find(peer_node.id());
     if (history_iter != fusing_history->end()) {
         for (auto& id : history_iter->second) {
-            local_desc.fused_deps.push_back(id.first);
+            local_desc.fused_deps.emplace(id.first, id.second);
         }
     }
 
@@ -1046,6 +1047,7 @@ void program::fuse_nodes(program_node &fused_node, program_node &peer_node, std:
         }
         fused_node.dependencies.push_back(&dep);
         local_desc.deps.push_back(dep.id());
+        local_desc.ordered_deps.emplace(dep.id(), i);
         dep.users.push_back(&fused_node);
     }
     fused_node.add_fused_primitive(local_desc);

@@ -535,9 +535,7 @@ void prepare_primitive_fusing::fuse_simple_primitives(program &p) {
             for (auto deps_data : fusing_history) {
                 auto key = deps_data.first;
                 auto deps_vec = deps_data.second;
-                auto iter = std::find_if(deps_vec.begin(), deps_vec.end(), [id](const std::pair<primitive_id, size_t>& dep){
-                    return (dep.first == id);
-                });
+                auto iter = deps_vec.find(key);
                 if (iter != deps_vec.end()) {
                     users.push_back(key);
                 }
@@ -1042,13 +1040,10 @@ void prepare_primitive_fusing::optimize_fused_ops(program& p) {
                 if (desc.node->id() == prim.node->id()) {
                     continue;
                 }
-
-                auto rm_iter = std::find_if(prim.fused_deps.begin(), prim.fused_deps.end(), [&](primitive_id& dep_id){
-                    return (desc.node->id() == dep_id);
-                });
+                auto rm_iter = prim.fused_deps.find(desc.node->id());
                 if (rm_iter != prim.fused_deps.end()) {
                     prim.fused_deps.erase(rm_iter);
-                    prim.fused_deps.insert(prim.fused_deps.end(), desc.fused_deps.begin(), desc.fused_deps.end());
+                    prim.fused_deps.insert(desc.fused_deps.begin(), desc.fused_deps.end());
                 }
             }
         };
