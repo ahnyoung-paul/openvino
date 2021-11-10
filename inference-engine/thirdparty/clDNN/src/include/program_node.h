@@ -40,7 +40,7 @@ struct fused_primitive_desc {
     std::vector<primitive_id> deps;
     std::map<primitive_id, size_t> fused_deps;
     std::map<primitive_id, size_t> ordered_deps;
-    size_t total_num_deps;
+    size_t total_num_deps = 0;
     activation_func activation;
     activation_additional_params activation_params;
     layout input_layout = layout(data_types::f32, format::bfyx, tensor());

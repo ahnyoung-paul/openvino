@@ -512,6 +512,21 @@ struct FusedOpsConfiguration {
     bool IsPostReorderFused(void) const { return orig_output_layout != DataLayout::DataLayoutCount; }
 };
 
+enum class Depstype {
+    UNDEFINED   = -1,
+    DST         = 0,
+    TENSOR      = 1,
+    FUSED_OPS   = 2
+};
+
+struct deps_desc {
+    Depstype    deps_type = Depstype::UNDEFINED;
+    size_t      op_id;
+    DataTensor  tensor;
+    std::string pid;
+    size_t      idx;
+};
+
 // Instance of fused_operation_desc is added to fused_ops vector if a node has been fused to current one using program::fuse_nodes
 // method. In order to process fused ops following modifications should be done in a kernel:
 // option 1 - using common generator:
@@ -565,6 +580,7 @@ struct fused_operation_desc {
     DataTensor output_tensor;
     size_t op_id;
     std::vector<std::pair<size_t, Datatype>> fused_op_ids;
+    std::vector<deps_desc> deps_data;
 
     // Helper functions for operation generation
     KernelType GetType() const { return op_params->GetType(); }
