@@ -73,6 +73,7 @@
 #include <transformations/convert_precision.hpp>
 #include <transformations/init_node_info.hpp>
 #include <transformations/rt_info/fused_names_attribute.hpp>
+#include "transformations/common_optimizations/hswish_fusion.hpp"
 
 #include <transformations/low_precision/disable_convert_constant_folding_on_const_path.hpp>
 #include <low_precision/pull_reshape_through_dequantization.hpp>
@@ -313,6 +314,7 @@ void TransformationsPipeline::apply(std::shared_ptr<ov::Function> func) {
         pass_config->disable<ngraph::pass::WeightsDequantizeToFakeQuantize>();
         pass_config->disable<ngraph::pass::SimplifyCTCGreedyDecoderSeqLen>();
         pass_config->enable<ngraph::pass::ConvertGather8ToGather7>();
+        pass_config->disable<ngraph::pass::HSwishFusionWithClamp>();
 
         if (!config.enable_loop_unrolling) {
             pass_config->disable<ngraph::pass::ConvertTensorIteratorToRNNSequence>();
