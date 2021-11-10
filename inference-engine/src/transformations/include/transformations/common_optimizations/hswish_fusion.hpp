@@ -75,6 +75,6 @@ public:
         add_matcher<ngraph::pass::HSwishFusionWithReluDiv>();
         add_matcher<ngraph::pass::HSwishFusionWithReluMul>();
         add_matcher<ngraph::pass::HSwishFusionWithHSigmoid>();
-        add_matcher<ngraph::pass::HSwishFusionWithClamp>();
+        // add_matcher<ngraph::pass::HSwishFusionWithClamp>();
     }
 };
