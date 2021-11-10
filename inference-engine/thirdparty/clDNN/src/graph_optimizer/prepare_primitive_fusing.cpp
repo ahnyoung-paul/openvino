@@ -818,7 +818,8 @@ void prepare_primitive_fusing::fuse_simple_primitives(program &p) {
             const std::vector<eltwise_mode> supported_modes = {
                 eltwise_mode::sum,
                 eltwise_mode::prod,
-                eltwise_mode::sub
+                eltwise_mode::sub,
+                eltwise_mode::div
             };
 
             if (node.is_output() || node.inputs_count() != 2 ||
@@ -1079,7 +1080,7 @@ void prepare_primitive_fusing::optimize_fused_ops(program& p) {
 }
 
 void prepare_conv_eltw_fusing::fuse_conv_depth_to_space(program& p, program_node* node) {
-    std::map<primitive_id, std::vector<primitive_id>> fusing_history;
+    std::map<primitive_id, std::map<primitive_id, size_t>> fusing_history;
     // make sure this convolution have only 1 user and it's depth_to_space
     // make sure convolution is not an output
     if (node->get_users().size() != 1 || node->is_output())

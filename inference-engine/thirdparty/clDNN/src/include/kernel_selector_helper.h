@@ -170,6 +170,7 @@ inline params_t get_default_params(const arg_t& arg, uint32_t split = 1) {
             CLDNN_ERROR_MESSAGE(arg.id(), "Invalid fused operation (" + fused_prim.node->id() + ") of type " +
                                            fused_prim.node->get_primitive()->type_string() );
         }
+        desc.p_id = fused_prim.node->id();
         desc.dep_idx_start = fused_prim.dep_start_idx;
         desc.dep_size = fused_prim.deps.size();
         desc.op_id = op_id++;
@@ -188,31 +189,31 @@ inline params_t get_default_params(const arg_t& arg, uint32_t split = 1) {
         }
 
         {
-            std::cout << "fused_prim: " << fused_prim.node->id() << std::endl;
-            std::cout << "  # op_id                 : " << desc.op_id << std::endl;
-            std::cout << "  # of fused_deps         : " << fused_prim.fused_deps.size() << std::endl;
-            std::cout << "  # of deps               : " << fused_prim.deps.size() << std::endl;
-            std::cout << "  # of all dependencies   : " << fused_prim.total_num_deps << std::endl;
-            std::cout << "  # fused_deps = {";
-            for (auto& dep : fused_prim.fused_deps) {
-                std::cout << "(" << dep.first << ":" << dep.second << "), ";
-            }
-            std::cout << "};" << std::endl;
-            std::cout << "  # ordered_deps = {";
-            for (auto& dep : fused_prim.ordered_deps) {
-                std::cout << "(" << dep.first << ":" << dep.second << "), ";
-            }
-            std::cout << "};" << std::endl;
+            // std::cout << "fused_prim: " << fused_prim.node->id() << std::endl;
+            // std::cout << "  # op_id                 : " << desc.op_id << std::endl;
+            // std::cout << "  # of fused_deps         : " << fused_prim.fused_deps.size() << std::endl;
+            // std::cout << "  # of deps               : " << fused_prim.deps.size() << std::endl;
+            // std::cout << "  # of all dependencies   : " << fused_prim.total_num_deps << std::endl;
+            // std::cout << "  # fused_deps = {";
+            // for (auto& dep : fused_prim.fused_deps) {
+            //     std::cout << "(" << dep.first << ":" << dep.second << "), ";
+            // }
+            // std::cout << "};" << std::endl;
+            // std::cout << "  # ordered_deps = {";
+            // for (auto& dep : fused_prim.ordered_deps) {
+            //     std::cout << "(" << dep.first << ":" << dep.second << "), ";
+            // }
+            // std::cout << "};" << std::endl;
 
             if (fused_prim.total_num_deps > 0) {
                 desc.deps_data.resize(fused_prim.total_num_deps);
-                std::cout << "desc.deps_data.size(): " << desc.deps_data.size() << std::endl;
-                std::cout << "fused_prim.total_num_deps: " << fused_prim.total_num_deps << std::endl;
+                // std::cout << "desc.deps_data.size(): " << desc.deps_data.size() << std::endl;
+                // std::cout << "fused_prim.total_num_deps: " << fused_prim.total_num_deps << std::endl;
                 for (auto& dep : fused_prim.fused_deps) {
                     auto iter = prim_id_type_map.find(dep.first);
                     if (iter != prim_id_type_map.end()) {
                         auto& op_data = iter->second;
-                        std::cout << "dep.second : " << dep.first << " - " << op_data.first << std::endl;
+                        // std::cout << "dep.second : " << dep.first << " - " << op_data.first << std::endl;
                         desc.deps_data[dep.second].deps_type    = kernel_selector::Depstype::FUSED_OPS;
                         desc.deps_data[dep.second].op_id        = op_data.first;
                         desc.deps_data[dep.second].tensor       = op_data.second;
@@ -244,29 +245,29 @@ inline params_t get_default_params(const arg_t& arg, uint32_t split = 1) {
                 }
             }
 
-            auto show_desc = [](const kernel_selector::deps_desc& d) {
-                std::cout << "  - deps_desc: " << d.pid << ", ";
-                switch (d.deps_type) {
-                    case kernel_selector::Depstype::DST:
-                        std::cout << " DST, ";
-                        break;
-                    case kernel_selector::Depstype::UNDEFINED:
-                        std::cout << " UNDEFINED, ";
-                        break;
-                    case kernel_selector::Depstype::TENSOR:
-                        std::cout << " TENSOR, ";
-                        break;
-                    case kernel_selector::Depstype::FUSED_OPS:
-                        std::cout << " FUSED_OPS, ";
-                        break;
-                }
-                std::cout << "OP_ID(" << d.op_id << ") IDX(" << d.idx << ")" << std::endl;
-            };
+            // auto show_desc = [](const kernel_selector::deps_desc& d) {
+            //     std::cout << "  - deps_desc: " << d.pid << ", ";
+            //     switch (d.deps_type) {
+            //         case kernel_selector::Depstype::DST:
+            //             std::cout << " DST, ";
+            //             break;
+            //         case kernel_selector::Depstype::UNDEFINED:
+            //             std::cout << " UNDEFINED, ";
+            //             break;
+            //         case kernel_selector::Depstype::TENSOR:
+            //             std::cout << " TENSOR, ";
+            //             break;
+            //         case kernel_selector::Depstype::FUSED_OPS:
+            //             std::cout << " FUSED_OPS, ";
+            //             break;
+            //     }
+            //     std::cout << "OP_ID(" << d.op_id << ") IDX(" << d.idx << ")" << std::endl;
+            // };
 
-            std::cout << "Checking deps_data: " << desc.deps_data.size() << std::endl;
-            for (auto& dep : desc.deps_data) {
-                show_desc(dep);
-            }
+            // std::cout << "Checking deps_data: " << desc.deps_data.size() << std::endl;
+            // for (auto& dep : desc.deps_data) {
+            //     show_desc(dep);
+            // }
         }
         params.fused_ops.push_back(desc);
     }

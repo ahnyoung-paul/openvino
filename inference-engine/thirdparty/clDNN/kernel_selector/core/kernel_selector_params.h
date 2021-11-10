@@ -581,6 +581,7 @@ struct fused_operation_desc {
     size_t op_id;
     std::vector<std::pair<size_t, Datatype>> fused_op_ids;
     std::vector<deps_desc> deps_data;
+    std::string p_id;
 
     // Helper functions for operation generation
     KernelType GetType() const { return op_params->GetType(); }
