@@ -100,6 +100,7 @@ KernelsData kernel_selector_base::GetNaiveBestKernel(const Params& params,
             }
         } catch (std::runtime_error&) {
             // we have to handle it in order to avoid exception in KernelSelector as much we can
+            // TODO: Show the error log why kernel selection is failed at VERBOSE 3 level.
         }
     }
 

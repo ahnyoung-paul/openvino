@@ -75,6 +75,7 @@ public:
         add_matcher<ngraph::pass::HSwishFusionWithReluDiv>();
         add_matcher<ngraph::pass::HSwishFusionWithReluMul>();
         add_matcher<ngraph::pass::HSwishFusionWithHSigmoid>();
+        // TODO: Disable HSwishFusionWithClamp for GPU plugin
         // add_matcher<ngraph::pass::HSwishFusionWithClamp>();
     }
 };

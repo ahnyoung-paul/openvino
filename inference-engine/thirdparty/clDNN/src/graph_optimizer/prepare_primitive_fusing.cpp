@@ -1100,6 +1100,7 @@ void prepare_primitive_fusing::fuse_simple_primitives(program &p) {
                 merge_allowed = fused_node->get_users().size() == 1;
             }
 
+            // TODO: Need to check this codition code is necessary now
             for (auto& parent : fused_node->get_dependencies())
                 if ((parent->id() == peer_node->id()) && (!parent->is_constant())) {
                     merge_allowed = false;
