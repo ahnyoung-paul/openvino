@@ -617,6 +617,7 @@ std::map<primitive_id, network_output> network::execute(const std::vector<event:
     return result;
 }
 
+static size_t iter_idx = 0;
 void network::execute_impl(const std::vector<event::ptr>& events) {
     OV_ITT_SCOPED_TASK(itt::domains::CLDNN, "NetworkImpl::Execute");
     // Wait for previous execution completion
@@ -636,8 +637,12 @@ void network::execute_impl(const std::vector<event::ptr>& events) {
 
     auto surf_lock = surfaces_lock::create(get_engine().type(), in_out_mem, get_stream());
 
-    set_arguments();
+    GPU_DEBUG_IF(debug_config->dump_layers_path.length() > 0) {
+        if (_exec_order.size() > 0)
+            iter_idx++;
+    }
 
+    set_arguments();
     for (auto& inst : _exec_order) {
         GPU_DEBUG_IF(debug_config->dump_layers_path.length() > 0) {
             auto& node = _program->get_node(inst->id());
@@ -645,14 +650,41 @@ void network::execute_impl(const std::vector<event::ptr>& events) {
             GPU_DEBUG_IF(debug_config->verbose >= 2) {
                 std::cerr << get_primitive_info(inst->id()) << std::endl;
             }
-
+#if 0
             GPU_DEBUG_IF(debug_config->dump_layers_dst_only == 0 &&
                             (debug_config->dump_layers.length() == 0 ||
                             (debug_config->dump_layers.length() != 0 && debug_config->dump_layers.find(" " + layer_name + " ") != std::string::npos))) {
-                std::cout << "Dump " << layer_name << " layer src" << std::endl;
-                for (size_t i = 0; i < get_primitive(inst->id())->dependencies().size(); i++) {
-                    log_memory_to_file(get_primitive(inst->id())->dep_memory_ptr(i), get_stream(),
-                                    layer_name + "_src_" + std::to_string(i));
+                {
+#else
+            GPU_DEBUG_IF(debug_config->dump_layers_dst_only == 0) {
+                auto has_layer_name = [&debug_config](std::string str) -> bool {
+                    if (debug_config->dump_layers.length() == 0)
+                        return true;
+                    cldnn::primitive::primitive_id_arr dump_layers;
+                    std::stringstream ss(debug_config->dump_layers);
+                    std::string word;
+                    while (ss >> word) {
+                        dump_layers.push_back(word);
+                    }
+
+                    bool found = false;
+                    for (auto& dl : dump_layers) {
+                        if (str.find(dl) != std::string::npos) {
+                            found = true;
+                            break;
+                        }
+                    }
+
+                    return found;
+                };
+
+                if (has_layer_name(layer_name)) {
+#endif
+                    std::cout << "Dump " << layer_name << " layer src - " << iter_idx << " th iteration" << std::endl;
+                    for (size_t i = 0; i < get_primitive(inst->id())->dependencies().size(); i++) {
+                        log_memory_to_file(get_primitive(inst->id())->dep_memory_ptr(i), get_stream(),
+                                        "gold___" + layer_name + "_src_" + std::to_string(i) + "_" + std::to_string(iter_idx));
+                    }
                 }
             }
         }
