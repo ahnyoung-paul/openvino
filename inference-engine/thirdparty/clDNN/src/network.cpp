@@ -168,13 +168,14 @@ void dump<uint32_t>(memory::ptr mem, stream& stream, std::ofstream& file_stream)
 }
 
 static void log_memory_to_file(memory::ptr mem, stream& stream, std::string layerName) {
+    std::cout << "Dump " << layerName << std::endl;
     GPU_DEBUG_GET_INSTANCE(debug_config);
     std::string filename = layerName;
     std::replace(filename.begin(), filename.end(), '\\', '_');
     std::replace(filename.begin(), filename.end(), '/', '_');
     std::replace(filename.begin(), filename.end(), ' ', '_');
     std::replace(filename.begin(), filename.end(), ':', '_');
-        filename = debug_config->dump_layers_path + filename + ".txt";
+    filename = debug_config->dump_layers_path + filename + ".txt";
 
     std::ofstream file_stream(filename);
     auto mem_dt = mem->get_layout().data_type;
@@ -198,6 +199,28 @@ static void log_memory_to_file(memory::ptr mem, stream& stream, std::string laye
     (void)layerName;
 }
 #endif
+
+static bool is_dumped_layer(std::vector<std::string>& dump_layers, const primitive_id id) {
+    if (dump_layers.empty()) return true;
+    auto iter = std::find_if(dump_layers.begin(), dump_layers.end(), [&](const std::string& dl){
+        return (id.find(dl) != std::string::npos);
+    });
+    return (iter != dump_layers.end());
+}
+
+static std::vector<std::string> get_dump_layers(const std::string& str_dump_layers) {
+    std::vector<std::string> dump_layers;
+    std::stringstream ss(str_dump_layers);
+    std::string layer;
+    while (ss >> layer) {
+        dump_layers.push_back(layer);
+    }
+    return dump_layers;
+}
+
+static size_t iter_idx = 0;
+static std::vector<std::string> dump_layers;
+
 /*
 Network will always have net_id = 0 when it will be cldnn internal micronetwork (created i.e by propagate_constants
 opt pass).
@@ -617,6 +640,7 @@ std::map<primitive_id, network_output> network::execute(const std::vector<event:
     return result;
 }
 
+
 void network::execute_impl(const std::vector<event::ptr>& events) {
     OV_ITT_SCOPED_TASK(itt::domains::CLDNN, "NetworkImpl::Execute");
     // Wait for previous execution completion
@@ -624,6 +648,12 @@ void network::execute_impl(const std::vector<event::ptr>& events) {
     GPU_DEBUG_GET_INSTANCE(debug_config);
     GPU_DEBUG_IF(debug_config->verbose >= 1)
         GPU_DEBUG_COUT << "----------------------------------------------" << std::endl;
+
+    GPU_DEBUG_IF(debug_config->dump_layers_path.length() > 0) {
+        iter_idx++;
+        dump_layers.clear();
+        dump_layers = get_dump_layers(debug_config->dump_layers);
+    }
 
     std::vector<memory::ptr> in_out_mem;
     for (auto& inst : _inputs) {
@@ -637,7 +667,6 @@ void network::execute_impl(const std::vector<event::ptr>& events) {
     auto surf_lock = surfaces_lock::create(get_engine().type(), in_out_mem, get_stream());
 
     set_arguments();
-
     for (auto& inst : _exec_order) {
         GPU_DEBUG_IF(debug_config->dump_layers_path.length() > 0) {
             auto& node = _program->get_node(inst->id());
@@ -647,12 +676,10 @@ void network::execute_impl(const std::vector<event::ptr>& events) {
             }
 
             GPU_DEBUG_IF(debug_config->dump_layers_dst_only == 0 &&
-                            (debug_config->dump_layers.length() == 0 ||
-                            (debug_config->dump_layers.length() != 0 && debug_config->dump_layers.find(" " + layer_name + " ") != std::string::npos))) {
-                std::cout << "Dump " << layer_name << " layer src" << std::endl;
+                            is_dumped_layer(dump_layers, layer_name)) {
                 for (size_t i = 0; i < get_primitive(inst->id())->dependencies().size(); i++) {
                     log_memory_to_file(get_primitive(inst->id())->dep_memory_ptr(i), get_stream(),
-                                    layer_name + "_src_" + std::to_string(i));
+                                    layer_name + "_src_" + std::to_string(i) + "_" + std::to_string(iter_idx));
                 }
             }
         }
@@ -673,10 +700,8 @@ void network::execute_impl(const std::vector<event::ptr>& events) {
             get_stream().finish();
             auto& node = _program->get_node(inst->id());
             std::string layer_name = node.id();
-            GPU_DEBUG_IF(debug_config->dump_layers.length() == 0 ||
-                        (debug_config->dump_layers.length() != 0 && debug_config->dump_layers.find(" " + layer_name + " ") != std::string::npos)) {
-                std::cout << "Dump " << layer_name << " layer dst" << std::endl;
-                log_memory_to_file(get_primitive(inst->id())->output_memory_ptr(), get_stream(), layer_name + "_dst_0");
+            GPU_DEBUG_IF(is_dumped_layer(dump_layers, layer_name)) {
+                log_memory_to_file(get_primitive(inst->id())->output_memory_ptr(), get_stream(), layer_name + "_dst_0_" + std::to_string(iter_idx));
             }
         }
     }
