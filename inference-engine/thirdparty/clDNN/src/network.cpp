@@ -210,27 +210,6 @@ static void log_memory_to_file(memory::ptr mem, stream& stream, std::string laye
 }
 #endif
 
-static bool is_dumped_layer(std::vector<std::string>& dump_layers, const primitive_id id) {
-    if (dump_layers.empty()) return true;
-    auto iter = std::find_if(dump_layers.begin(), dump_layers.end(), [&](const std::string& dl){
-        return (id.find(dl) != std::string::npos);
-    });
-    return (iter != dump_layers.end());
-}
-
-static std::vector<std::string> get_dump_layers(const std::string& str_dump_layers) {
-    std::vector<std::string> dump_layers;
-    std::stringstream ss(str_dump_layers);
-    std::string layer;
-    while (ss >> layer) {
-        dump_layers.push_back(layer);
-    }
-    return dump_layers;
-}
-
-static size_t iter_idx = 0;
-static std::vector<std::string> dump_layers;
-
 /*
 Network will always have net_id = 0 when it will be cldnn internal micronetwork (created i.e by propagate_constants
 opt pass).
@@ -241,7 +220,8 @@ network::network(program::ptr program, stream::ptr stream, bool is_internal, boo
     , _memory_pool(new memory_pool(program->get_engine()))
     , _internal(is_internal)
     , _is_primary_stream(is_primary_stream)
-    , _reset_arguments(true) {
+    , _reset_arguments(true)
+    , _num_executions(0) {
     static std::atomic<uint32_t> id_gen{0};
     if (!_internal) {
         net_id = ++id_gen;
@@ -660,9 +640,9 @@ void network::execute_impl(const std::vector<event::ptr>& events) {
         GPU_DEBUG_COUT << "----------------------------------------------" << std::endl;
 
     GPU_DEBUG_IF(debug_config->dump_layers_path.length() > 0) {
-        iter_idx++;
-        dump_layers.clear();
-        dump_layers = get_dump_layers(debug_config->dump_layers);
+        // To prevent overwriting dump file for video sequence input,
+        // this num is added to the end of dump file name
+        _num_executions++;
     }
 
     std::vector<memory::ptr> in_out_mem;
@@ -680,16 +660,16 @@ void network::execute_impl(const std::vector<event::ptr>& events) {
     for (auto& inst : _exec_order) {
         GPU_DEBUG_IF(debug_config->dump_layers_path.length() > 0) {
             auto& node = _program->get_node(inst->id());
-            std::string layer_name = node.id();
+            const std::string layer_name = node.id();
             GPU_DEBUG_IF(debug_config->verbose >= 2) {
                 std::cerr << get_primitive_info(inst->id()) << std::endl;
             }
 
             GPU_DEBUG_IF(debug_config->dump_layers_dst_only == 0 &&
-                            is_dumped_layer(dump_layers, layer_name)) {
+                            debug_config->is_dumped_layer(layer_name)) {
                 for (size_t i = 0; i < get_primitive(inst->id())->dependencies().size(); i++) {
                     log_memory_to_file(get_primitive(inst->id())->dep_memory_ptr(i), get_stream(),
-                                    layer_name + "_src_" + std::to_string(i) + "_" + std::to_string(iter_idx));
+                                    layer_name + "_src_" + std::to_string(i) + "_" + std::to_string(_num_executions));
                 }
             }
         }
@@ -709,9 +689,9 @@ void network::execute_impl(const std::vector<event::ptr>& events) {
         GPU_DEBUG_IF(debug_config->dump_layers_path.length() > 0) {
             get_stream().finish();
             auto& node = _program->get_node(inst->id());
-            std::string layer_name = node.id();
-            GPU_DEBUG_IF(is_dumped_layer(dump_layers, layer_name)) {
-                log_memory_to_file(get_primitive(inst->id())->output_memory_ptr(), get_stream(), layer_name + "_dst_0_" + std::to_string(iter_idx));
+            const std::string layer_name = node.id();
+            GPU_DEBUG_IF(debug_config->is_dumped_layer(layer_name)) {
+                log_memory_to_file(get_primitive(inst->id())->output_memory_ptr(), get_stream(), layer_name + "_dst_0_" + std::to_string(_num_executions));
             }
         }
     }

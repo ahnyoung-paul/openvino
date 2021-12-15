@@ -196,6 +196,7 @@ private:
     bool _internal;
     bool _is_primary_stream;
     bool _reset_arguments;
+    size_t _num_executions;  // num of calling execute_impl
 
     std::map<primitive_id, std::shared_ptr<primitive_inst>> _primitives;
     std::vector<std::shared_ptr<primitive_inst>> _inputs;
