@@ -15,6 +15,7 @@
 #include <set>
 #include <iostream>
 #include "intel_gpu/runtime/debug_configuration.hpp"
+#include <mutex>
 
 // #define ENABLE_ENV
 // #define ENABLE_ENV_PRINT
@@ -26,6 +27,8 @@
 #endif  // ENABLE_ENV_PRINT
 
 #define ENABLE_OFFLINE_TUNING_CACHE 1
+
+std::mutex m_mutex;
 
 namespace kernel_selector {
 
@@ -251,6 +254,7 @@ KernelsData kernel_selector_base::GetAutoTuneBestKernel(const Params& params,
     return kernelsData;
 }
 
+static bool is_printed = true;
 KernelList kernel_selector_base::GetAllImplementations(const Params& params, const optional_params& options, KernelType kType) const {
     using PriorityPair = std::pair<KernelsPriority, std::shared_ptr<KernelBase>>;
     auto comparePriority = [](const PriorityPair& firstImpl, const PriorityPair& secondImpl) {
@@ -260,13 +264,48 @@ KernelList kernel_selector_base::GetAllImplementations(const Params& params, con
     std::multiset<PriorityPair, decltype(comparePriority)> sortedImpls(comparePriority);
     KernelList result;
 
+    std::lock_guard<std::mutex> guard(m_mutex);
+    const std::string specified_name = "MatMul_1276";
+
     if (params.GetType() == kType && options.GetType() == kType) {
+        if (params.layerID.find(specified_name) !=std::string::npos) {
+            std::cout << "**************************************************" << std::endl;
+            std::cout << "Before params kernel params : " << params.layerID << " - " << typeid(params).name() << std::endl;
+            {
+                const kernel_selector::base_params& bp = static_cast<const kernel_selector::base_params&>(params);
+                std::cout << bp.GetParamsKey_v2().to_string() << std::endl;
+            }
+            // std::cout << params.GetParamsKey().to_string() << std::endl;
+            std::cout << "**************************************************" << std::endl;
+
+            std::cout << "**************************************************" << std::endl;
+            std::cout << "Before options.GetSupportedKey() kernel params : " << params.layerID << std::endl;
+            std::cout << options.GetSupportedKey().to_string() << std::endl;
+            std::cout << "**************************************************" << std::endl;
+        }
         ParamsKey requireKey = params.GetParamsKey().Merge(options.GetSupportedKey());
+        if (params.layerID.find(specified_name) !=std::string::npos) {
+            std::cout << "**************************************************" << std::endl;
+            std::cout << "After requireKey kernel params : " << params.layerID << std::endl;
+            std::cout << requireKey.to_string() << std::endl;
+            std::cout << "**************************************************" << std::endl;
+        }
         bool forceImplementation = !params.forceImplementation.empty();
         for (auto& impl : implementations) {
             const ParamsKey implKey = impl->GetSupportedKey();
-            if (!implKey.Support(requireKey))
-                continue;
+            if (params.layerID.find(specified_name) !=std::string::npos) {
+                std::cout << "**************************************************" << std::endl;
+                std::cout << " Checking Key kernel params : " << impl->GetName() << std::endl;
+                std::cout << implKey.to_string() << std::endl;
+                std::cout << "**************************************************" << std::endl;
+                if (!implKey.Support_v2(requireKey)) {
+                    std::cout << "Fail to check !!" << std::endl;
+                    continue;
+                }
+            } else {
+                if (!implKey.Support(requireKey))
+                    continue;
+            }
             if (forceImplementation && params.forceImplementation != impl->GetName())
                 continue;
             sortedImpls.emplace(impl->GetKernelsPriority(params, options), impl);
@@ -279,6 +318,15 @@ KernelList kernel_selector_base::GetAllImplementations(const Params& params, con
             [](const PriorityPair& impl) {
                 return std::move(impl.second);
             });
+    }
+
+    if (params.layerID.find(specified_name) !=std::string::npos) {
+        is_printed = false;
+        std::cout << "<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<" << std::endl;
+        for (auto& r : result) {
+            std::cout << " * " << r->GetName() << std::endl;
+        }
+        std::cout << "<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<" << std::endl;
     }
 
     return result;

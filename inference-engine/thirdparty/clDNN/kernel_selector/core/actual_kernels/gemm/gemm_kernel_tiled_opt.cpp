@@ -11,8 +11,6 @@ ParamsKey GemmKernelTiledOpt::GetSupportedKey() const {
 
     k.EnableInputDataType(Datatype::F16);
     k.EnableInputDataType(Datatype::F32);
-    k.EnableInputDataType(Datatype::INT32);
-    k.EnableInputDataType(Datatype::UINT32);
     k.EnableOutputDataType(Datatype::F16);
     k.EnableOutputDataType(Datatype::F32);
     k.EnableOutputDataType(Datatype::INT8);
@@ -169,6 +167,7 @@ JitConstants GemmKernelTiledOpt::GetJitConstants(const gemm_params& params) cons
         jit.Merge(MakeFusedOpsJitConstants(params, { conf_vec, conf_scalar }));
     }
 
+    std::cout << "Success to create Jit" << std::endl;
     return jit;
 }
 

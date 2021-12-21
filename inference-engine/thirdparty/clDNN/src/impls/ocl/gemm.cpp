@@ -27,7 +27,13 @@ public:
         auto gemm_params = get_default_params<kernel_selector::gemm_params>(arg, 1);
         auto gemm_optional_params =
             get_default_optional_params<kernel_selector::gemm_optional_params>(arg.get_program());
-
+        const std::string specified_name = "MatMul_1276";
+        if (gemm_params.layerID.find(specified_name) !=std::string::npos) {
+            std::cout <<  "GEMM creation : " << arg.inputs_count() << std::endl;
+            for (size_t i = 0; i < arg.inputs_count(); i++) {
+                std::cout << " - " << arg.input(i).id() << " data_type: " << data_type_traits::name(arg.input(i).get_output_layout().data_type) << std::endl;
+            }
+        }
         for (size_t i = 1; i < arg.inputs_count(); i++) {
             gemm_params.inputs.push_back(convert_data_tensor(arg.input(i).get_output_layout()));
         }

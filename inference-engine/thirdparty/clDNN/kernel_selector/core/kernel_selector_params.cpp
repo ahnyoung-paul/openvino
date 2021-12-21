@@ -7,6 +7,7 @@
 #include <sstream>
 #include <string>
 
+
 #include <activation/activation_kernel_base.h>
 #include "jitter.h"
 
@@ -428,6 +429,58 @@ bool ParamsKey::Support(const ParamsKey& k) const {
     return true;
 }
 
+std::string to_string_input_type(const ParamsKey::Key::DataTypesKey& v) {
+    std::stringstream ss;
+    ss << "[BIN, F16, F32, I16, I32, I64, I8, UI16, UI32, UI8], ";
+    ss << "[" << int(v.val.binary) << ",";
+    ss << int(v.val.F16) << ",";
+    ss << int(v.val.F32) << ",";
+    ss << int(v.val.int16) << ",";
+    ss << int(v.val.int32) << ",";
+    ss << int(v.val.int64) << ",";
+    ss << int(v.val.int8) << ",";
+    ss << int(v.val.uint16) << ",";
+    ss << int(v.val.uint32) << ",";
+    ss << int(v.val.uint8) << "]";
+    return ss.str();
+}
+
+bool ParamsKey::Support_v2(const ParamsKey& k) const {
+    if (!((key.restrict.raw & k.key.restrict.raw) == k.key.restrict.raw))  // check if this kernel supports this params
+        return false;
+    if (!((key.machineInfo.raw & k.key.machineInfo.raw) ==
+          key.machineInfo.raw))  // check if machine supports this kernel
+        return false;
+    if (!((key.inputType.raw & k.key.inputType.raw) == k.key.inputType.raw)) {
+        std::cout << "FALSE: key.input.raw         : (" <<  key.inputType.raw  << "), " << to_string_input_type(key.inputType) << std::endl;
+        std::cout << "FALSE: k.key.inputType.raw   : (" <<  k.key.inputType.raw  << "), " <<  to_string_input_type(k.key.inputType) << std::endl;
+        std::cout << "FALSE: (key.inputType.raw & k.key.inputType.raw) : " << std::hex << "0x" << (key.inputType.raw & k.key.inputType.raw) << std::endl;
+        return false;
+    } else {
+        std::cout << "TRUE: key.input.raw         : (" <<  key.inputType.raw  << "), " << to_string_input_type(key.inputType) << std::endl;
+        std::cout << "TRUE: k.key.inputType.raw   : (" <<  k.key.inputType.raw  << "), " <<  to_string_input_type(k.key.inputType) << std::endl;
+        std::cout << "TRUE: (key.inputType.raw & k.key.inputType.raw) : " << std::hex << "0x" << (key.inputType.raw & k.key.inputType.raw) << std::endl;
+    }
+    if (!((key.outputType.raw & k.key.outputType.raw) == k.key.outputType.raw))
+        return false;
+    if (!((key.inputWeightsType.raw & k.key.inputWeightsType.raw) == k.key.inputWeightsType.raw))
+        return false;
+    if (!((key.outputWeightsType.raw & k.key.outputWeightsType.raw) == k.key.outputWeightsType.raw))
+        return false;
+    if (!((key.inputLayout & k.key.inputLayout) != 0 || key.inputLayout == k.key.inputLayout))
+        return false;
+    if (!((key.outputLayout & k.key.outputLayout) != 0 || key.outputLayout == k.key.outputLayout))
+        return false;
+    if (!((key.weightsInputLayout & k.key.weightsInputLayout) != 0 ||
+          key.weightsInputLayout == k.key.weightsInputLayout))
+        return false;
+    if (!((key.weightsOutputLayout & k.key.weightsOutputLayout) != 0 ||
+          key.weightsOutputLayout == k.key.weightsOutputLayout))
+        return false;
+
+    return true;
+}
+
 ParamsKey ParamsKey::Merge(const ParamsKey& k) const {
     ParamsKey ret;
     ret.key.restrict.raw = key.restrict.raw | k.key.restrict.raw;
@@ -442,6 +495,22 @@ ParamsKey ParamsKey::Merge(const ParamsKey& k) const {
     ret.key.weightsOutputLayout = key.weightsOutputLayout | k.key.weightsOutputLayout;
     return ret;
 }
+
+std::string ParamsKey::to_string() const {
+    std::stringstream ss;
+    ss << "* restrict             : " << key.restrict.raw << ", \n";
+    ss << "* machineInfo          : " << key.machineInfo.raw << ", \n";
+    ss << "* inputType            : " << key.inputType.raw << " " << to_string_input_type(key.inputType) << ", \n";
+    ss << "* outputType           : " << key.outputType.raw << " " << to_string_input_type(key.outputType) << ", \n";
+    ss << "* inputWeightsType     : " << key.inputWeightsType.raw << ", \n";
+    ss << "* outputWeightsType    : " << key.outputWeightsType.raw << ", \n";
+    ss << "* inputLayout          : " << key.inputLayout << ", \n";
+    ss << "* outputLayout         : " << key.outputLayout << ", \n";
+    ss << "* weightsInputLayout   : " << key.weightsInputLayout << ", \n";
+    ss << "* weightsOutputLayout  : " << key.weightsOutputLayout << ", \n";
+    return ss.str();
+}
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Params
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -540,6 +609,90 @@ ParamsKey base_params::GetParamsKey() const {
     return k;
 }
 
+ParamsKey base_params::GetParamsKey_v2() const {
+    ParamsKey k = Params::GetParamsKey();
+
+    bool bBatching = false;
+    bool bPitches = false;
+    bool bOffests = false;
+    bool bDifferentTypes = false;
+    bool bFP16Used = (output.GetDType() == Datatype::F16);
+
+    std::cout << "# of inputs: " << inputs.size() << std::endl;
+    for (const auto& i : inputs) {
+        {
+            switch (i.GetDType()) {
+                case Datatype::INT8:
+                    std::cout << "INT8 type" << std::endl;
+                    break;
+                case Datatype::UINT8:
+                    std::cout << "UINT8 type" << std::endl;
+                    break;
+                case Datatype::INT16:
+                    std::cout << "INT16 type" << std::endl;
+                    break;
+                case Datatype::UINT16:
+                    std::cout << "UINT16 type" << std::endl;
+                    break;
+                case Datatype::INT32:
+                    std::cout << "INT32 type" << std::endl;
+                    break;
+                case Datatype::UINT32:
+                    std::cout << "UINT32 type" << std::endl;
+                    break;
+                case Datatype::INT64:
+                    std::cout << "INT64 type" << std::endl;
+                    break;
+                case Datatype::F16:
+                    std::cout << "F16 type" << std::endl;
+                    break;
+                case Datatype::F32:
+                    std::cout << "F32 type" << std::endl;
+                    break;
+                case Datatype::BINARY:
+                    std::cout << "BINARY type" << std::endl;
+                    break;
+                default:
+                    break;
+            }
+        }
+        k.EnableInputDataType(i.GetDType());
+        k.EnableInputLayout(i.GetLayout());
+
+        bBatching |= (i.Batch().v > 1);
+        bPitches |= (i.PitchesDifferFromLogicalDims());
+        bOffests |= (i.GetFirstElementOffset() != 0);
+        bDifferentTypes |= (i.GetDType() != output.GetDType());
+        bFP16Used |= (i.GetDType() == Datatype::F16);
+    }
+
+    k.EnableOutputDataType(output.GetDType());
+    k.EnableOutputLayout(output.GetLayout());
+
+    if (bBatching) {
+        k.EnableBatching();
+    }
+
+    if (bPitches || output.PitchesDifferFromLogicalDims()) {
+        k.EnableTensorPitches();
+    }
+
+    if (bDifferentTypes) {
+        k.EnableDifferentTypes();
+    }
+
+    if (bOffests || output.GetFirstElementOffset() != 0) {
+        k.EnableTensorOffset();
+    }
+
+    if (!engineInfo.bFP16Support && bFP16Used) {
+        // I'm not sure it's the best idea, but we can live with it right now
+        k.EnableFP16Emulation();
+    }
+
+    return k;
+}
+
 std::string base_activation_params::to_string() const {
     std::stringstream s;
     s << "m" << m << "_n" << n << "_" << toString(function);
@@ -591,5 +744,7 @@ std::string base_params::to_cache_string_v2() const {
 
     return s.str();
 }
+
+
 
 }  // namespace kernel_selector

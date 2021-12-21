@@ -157,7 +157,11 @@ inline params_t get_default_params(const arg_t& arg, uint32_t split = 1) {
     params.inputs[0] = convert_data_tensor(input_layout, split);
     params.output = convert_data_tensor(output_layout, split);
 
+    const std::string specified_name = "MatMul_1276";
     params.layerID = arg.id();
+    if (params.layerID.find(specified_name) !=std::string::npos) {
+        std::cout << "In get_default_params, # inputs[1]: " << params.inputs.size() << std::endl;
+    }
 
     convert_fused_activation_func_params(arg, params.activations);
     std::map<primitive_id, std::pair<size_t, kernel_selector::Datatype>> prim_id_type_map;
@@ -207,6 +211,51 @@ inline params_t get_default_params(const arg_t& arg, uint32_t split = 1) {
             }
         }
         params.fused_ops.push_back(desc);
+    }
+    if (params.layerID.find(specified_name) !=std::string::npos) {
+        std::cout << "In get_default_params, # inputs[1]: " << params.inputs.size() << std::endl;
+
+        for (auto& desc : params.fused_ops) {
+            std::cout << "************************" << std::endl;
+            std::cout << "fused type : " << std::endl;
+            for (auto& dd : desc.dep_data) {
+                switch (dd.data_type) {
+                    case kernel_selector::Datatype::INT8:
+                        std::cout << "INT8 type" << std::endl;
+                        break;
+                    case kernel_selector::Datatype::UINT8:
+                        std::cout << "UINT8 type" << std::endl;
+                        break;
+                    case kernel_selector::Datatype::INT16:
+                        std::cout << "INT16 type" << std::endl;
+                        break;
+                    case kernel_selector::Datatype::UINT16:
+                        std::cout << "UINT16 type" << std::endl;
+                        break;
+                    case kernel_selector::Datatype::INT32:
+                        std::cout << "INT32 type" << std::endl;
+                        break;
+                    case kernel_selector::Datatype::UINT32:
+                        std::cout << "UINT32 type" << std::endl;
+                        break;
+                    case kernel_selector::Datatype::INT64:
+                        std::cout << "INT64 type" << std::endl;
+                        break;
+                    case kernel_selector::Datatype::F16:
+                        std::cout << "F16 type" << std::endl;
+                        break;
+                    case kernel_selector::Datatype::F32:
+                        std::cout << "F32 type" << std::endl;
+                        break;
+                    case kernel_selector::Datatype::BINARY:
+                        std::cout << "BINARY type" << std::endl;
+                        break;
+                    default:
+                        break;
+                }
+            }
+            std::cout << "************************" << std::endl;
+        }
     }
 
     return params;
