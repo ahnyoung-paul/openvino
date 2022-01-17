@@ -1223,11 +1223,24 @@ program::primitives_info program::get_current_stage_info() const {
     return info;
 }
 
+#if 0
 void program::save_pass_info(std::string pass_name) {
     // TODO: Directory path here can be probably changed to some bool flag
     if (!options.get<build_option_type::graph_dumps_dir>()->directory_path.empty())
         optimizer_passes_info.emplace_back(pass_name, get_current_stage_info());
 }
+#else
+void program::save_pass_info(std::string pass_name) {
+    // TODO: Directory path here can be probably changed to some bool flag
+    if (!options.get<build_option_type::graph_dumps_dir>()->directory_path.empty()) {
+        for (auto& node : this->get_processing_order()) {
+            if (!node->is_type<data>())
+                node->get_output_layout();
+        }
+        optimizer_passes_info.emplace_back(pass_name, get_current_stage_info());
+    }
+}
+#endif
 
 void program::add_optimized_primitive_info(primitive_id optimized_primitive_id,
                                            std::vector<primitive_id> replaced_with_ids) {

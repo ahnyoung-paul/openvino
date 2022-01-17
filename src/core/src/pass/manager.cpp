@@ -48,20 +48,30 @@ void ov::pass::Manager::set_per_pass_validation(bool new_state) {
     m_per_pass_validation = new_state;
 }
 
+static size_t g_index=0;
 void ov::pass::Manager::run_passes(shared_ptr<ov::Model> func) {
     NGRAPH_SUPPRESS_DEPRECATED_START
     OV_ITT_SCOPED_TASK(ov::itt::domains::nGraph, "pass::Manager::run_passes");
 
-    static bool profile_enabled = ov::util::getenv_bool("NGRAPH_PROFILE_PASS_ENABLE");
+    auto print_debug = [&](const std::string title, std::shared_ptr<ov::pass::PassBase> pass) {
+        // const size_t num_digits_in_pass_index = 3;
+        // std::string index_str = std::to_string(g_index);
+        // index_str = std::string(num_digits_in_pass_index - index_str.length(), '0') + index_str;
+        // auto base_filename = func->get_name() + std::string("_") + index_str + std::string("_") + pass->get_name();
+        // std::cout << base_filename << " : " << title << std::endl;
+    };
 
-    size_t index = 0;
+    static bool profile_enabled = ov::util::getenv_bool("NGRAPH_PROFILE_PASS_ENABLE");
+    // m_visualize = true;
     ngraph::stopwatch pass_timer;
     ngraph::stopwatch overall_timer;
     overall_timer.start();
     bool function_changed = false;
     for (auto& pass : m_pass_list) {
+        g_index++;
         if (m_pass_config->is_disabled(pass->get_type_info())) {
             NGRAPH_DEBUG << "Pass " << pass->get_name() << " is disabled";
+            print_debug("Pass is disabled", pass);
             continue;
         }
 
@@ -75,6 +85,8 @@ void ov::pass::Manager::run_passes(shared_ptr<ov::Model> func) {
             if (matcher_pass->get_property(PassProperty::REQUIRE_STATIC_SHAPE) && func->is_dynamic()) {
                 NGRAPH_DEBUG << "Pass " << pass->get_name() << " requires static shape but the "
                              << "function is dynamic. Skipping this transformation";
+                print_debug("Matcher pass requires static shape but the function is dynamic."
+                    " Skipping this transformation", matcher_pass);
                 continue;
             }
             // GraphRewrite is a temporary container for MatcherPass to make execution
@@ -86,6 +98,8 @@ void ov::pass::Manager::run_passes(shared_ptr<ov::Model> func) {
             if (function_pass->get_property(PassProperty::REQUIRE_STATIC_SHAPE) && func->is_dynamic()) {
                 NGRAPH_DEBUG << "Pass " << pass->get_name() << " requires static shape but the "
                              << "function is dynamic. Skipping this transformation";
+                print_debug("Function pass requires static shape but the function is dynamic."
+                    " Skipping this transformation", function_pass);
                 continue;
             }
 
@@ -101,6 +115,8 @@ void ov::pass::Manager::run_passes(shared_ptr<ov::Model> func) {
             if (node_pass->get_property(PassProperty::REQUIRE_STATIC_SHAPE) && func->is_dynamic()) {
                 NGRAPH_DEBUG << "Pass " << pass->get_name() << " requires static shape but the "
                              << "function is dynamic. Skipping this transformation";
+                print_debug("Node pass requires static shape but the function is dynamic."
+                    " Skipping this transformation", node_pass);
                 continue;
             }
             for (const shared_ptr<Node>& n : func->get_ops()) {
@@ -111,7 +127,7 @@ void ov::pass::Manager::run_passes(shared_ptr<ov::Model> func) {
         if (m_visualize) {
             // visualizations and serializations will be named after the outermost function
             const size_t num_digits_in_pass_index = 3;
-            std::string index_str = std::to_string(index);
+            std::string index_str = std::to_string(g_index);
             index_str = std::string(num_digits_in_pass_index - index_str.length(), '0') + index_str;
             auto base_filename = func->get_name() + std::string("_") + index_str + std::string("_") + pass->get_name();
 
@@ -119,10 +135,16 @@ void ov::pass::Manager::run_passes(shared_ptr<ov::Model> func) {
                 static const string format = ov::util::getenv_string("NGRAPH_VISUALIZE_TRACING_FORMAT");
                 auto file_ext = format.empty() ? "svg" : format;
                 pass::VisualizeTree vt(base_filename + std::string(".") + file_ext);
+                std::cout << "Dump " << base_filename << std::endl;
                 vt.run_on_model(func);
             }
         }
-        index++;
+        print_debug("Running pass ", pass);
+        // for (auto n : func->get_ordered_ops()) {
+        //     if (n->get_friendly_name() == "Multiply_26858") {
+        //         std::cout << "[[[[[[[[[[[[[[[[[[[[[[ " << pass->get_name() << " ] has Multiply_26858 ..... ***********************" << std::endl;
+        //     }
+        // }
         pass_timer.stop();
         if (profile_enabled) {
             cout << setw(7) << pass_timer.get_milliseconds() << "ms " << pass->get_name() << "\n";

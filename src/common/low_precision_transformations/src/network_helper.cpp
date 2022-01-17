@@ -1602,6 +1602,10 @@ NetworkHelper::InsertDequantizationResult NetworkHelper::moveDequantizationAfter
     // we must have dequantization multiply
     assert(dequantization.multiply != nullptr);
 
+    if (operation->get_friendly_name() == "GlobalAveragePool_201/reduce") {
+        std::cout << "Move dequantization after [" << operation->get_friendly_name() << "] ********************************************** " << std::endl;
+    }
+
     OutputVector inputs = operation->input_values();
     const size_t dequantizationIndex = getChildInputIndex(dequantization.multiply, operation);
     inputs[dequantizationIndex] = (!moveSubtract && dequantization.subtract != nullptr) ?
@@ -1663,6 +1667,18 @@ NetworkHelper::InsertDequantizationResult NetworkHelper::moveDequantizationAfter
             opset1::Multiply(parent, foldConvert(dequantization.multiplyConstant, parentPrecision)),
             dequantization.multiply->get_output_element_type(0));
         ngraph::copy_runtime_info({ newOperation, parent }, parent);
+    }
+
+    if (operation->get_friendly_name() == "GlobalAveragePool_201/reduce") {
+        std::cout << "Move dequantization after [" << operation->get_friendly_name() << "] ********************************************** " << std::endl;
+        std::cout << "shouldConvert             : " << (shouldConvert? "True" : "False") << std::endl;
+        std::cout << "dequantization.multiply   : " << (dequantization.multiply != nullptr ? "not null" : "null") << std::endl;
+        std::cout << "moveSubtract              : " << (moveSubtract? "True" : "False") << std::endl;
+        std::cout << "dequantization.subtract   : " << (dequantization.subtract != nullptr ? "not null" : "null") << std::endl;
+
+        std::cout << "operation     : " << operation->get_friendly_name() << std::endl;
+        std::cout << "parent        : " << parent->get_friendly_name() << std::endl;
+        std::cout << "newOperation  : " << newOperation->get_friendly_name() << std::endl;
     }
 
     insertDequantizationAfter(operation, parent, newOperation);

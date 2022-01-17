@@ -14,12 +14,25 @@ namespace low_precision {
 ReduceBaseTransformation::ReduceBaseTransformation(const Params& params) : LayerTransformation(params) {}
 
 bool ReduceBaseTransformation::transform(TransformationContext& context, ngraph::pattern::Matcher& m) {
+    auto op = m.get_match_root();
+    if (op->get_friendly_name() == "GlobalAveragePool_201/reduce") {
+        std::cout << "[ReduceMeanTransformation][" << op->get_friendly_name()  << "] Transform Checking canBeTransformed " << std::endl;
+    }
     if (!canBeTransformed(context, m.get_match_root())) {
+        if (op->get_friendly_name() == "GlobalAveragePool_201/reduce") {
+            std::cout << "[ReduceMeanTransformation][" << op->get_friendly_name()  << "] Transform Checking canBeTransformed is failed  " << std::endl;
+        }
         return false;
     }
-
+    if (op->get_friendly_name() == "GlobalAveragePool_201/reduce") {
+        std::cout << "[ReduceMeanTransformation][" << op->get_friendly_name()  << "] Transform Checking canBeTransformed is succeeed  " << std::endl;
+    }
     const auto reduce = NetworkHelper::separateInStandaloneBranch(m.get_match_root());
     auto dequantization = NetworkHelper::normalizeDequantization(NetworkHelper::getDequantization(reduce));
+    if (op->get_friendly_name() == "GlobalAveragePool_201/reduce") {
+        std::cout << "[ReduceMeanTransformation][" << op->get_friendly_name()  << "] Transform Checking canBeTransformed is succeeed  " << std::endl;
+        std::cout << "Checking reduce : " << reduce->get_friendly_name() << std::endl;
+    }
 
     // prepare dequantization to propagate
     changeDequantizationValues(reduce, dequantization);
@@ -27,6 +40,10 @@ bool ReduceBaseTransformation::transform(TransformationContext& context, ngraph:
     // updatePrecision depends on type and parameters of the reduce
     const bool updatePrecision = getUpdatePrecision(reduce);
     moveDequantizationAfter(context, reduce, dequantization, updatePrecision);
+    if (op->get_friendly_name() == "GlobalAveragePool_201/reduce") {
+        std::cout << "[ReduceMeanTransformation][" << op->get_friendly_name();
+        std::cout << "] Transform Checking output : " << reduce->get_output_tensor(0).get_any_name() << std::endl;
+    }
     return true;
 }
 
@@ -101,6 +118,7 @@ void ReduceBaseTransformation::changeDequantizationValues(
     const auto newMulConstant = NetworkHelper::foldDequantizationConstant(dequantization.multiplyConstant, reduce);
     replace_node(dequantization.multiplyConstant, newMulConstant);
     dequantization.multiplyConstant = newMulConstant;
+    std::cout << newMulConstant->get_friendly_name() << " is added " << std::endl;
 }
 
 bool ReduceBaseTransformation::getUpdatePrecision(const std::shared_ptr<Node>& reduce) const {

@@ -90,6 +90,10 @@ void prepare_primitive_fusing::fuse_sigmoid_mul_to_swish(program &p) {
         if (node->is_output())
             continue;
 
+        if (node->id().find("Sigmoid_13") != std::string::npos) {
+            std::cout << "Checking ... Sigmoid_13 >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>" << std::endl;
+        }
+
         program_helpers::do_for_types<eltwise>(*node, [&p](eltwise_node& node) {
             if (node.get_dependencies().size() != 2)
                 return;
@@ -114,6 +118,11 @@ void prepare_primitive_fusing::fuse_sigmoid_mul_to_swish(program &p) {
                 return;
 
             auto& sigmoid = activation_input->as<activation>();
+            bool is_debug = false;
+            if (sigmoid.id().find("Sigmoid_13") != std::string::npos) {
+                is_debug = true;
+                std::cout << "Parent node is Sigmoid_13 ......................................................" << std::endl;
+            }
 
             if (sigmoid.is_output() || sigmoid.get_users().size() != 1)
                 return;
@@ -142,6 +151,7 @@ void prepare_primitive_fusing::fuse_sigmoid_mul_to_swish(program &p) {
             p.get_processing_order().insert_next(&input, &swish);
 
             swish.calc_output_layout();
+            std::cout << "Sigmoid_13 is fused to " << swish.id() << std::endl;
         });
     }
 }
@@ -198,10 +208,17 @@ void prepare_primitive_fusing::fuse_activations(program &p) {
     while (itr != p.get_processing_order().end()) {
         auto node_itr = itr++;
         auto& node = (*node_itr);
-
+        if (node->id().find("Sigmoid_13") != std::string::npos) {
+            std::cout << node->id() << " is try to fuse >>>>>>>>>>>>>>>>>>>>>>>>>>>>> in fuse_activations" << std::endl;
+        }
         program_helpers::do_for_types<activation>(*node, [&p, &is_debug, &fusing_history, &use_onednn_impls](activation_node& node) {
             auto& input = node.input();
             auto id = node.id();
+            bool is_debug = false;
+            if (id.find("Sigmoid_13") != std::string::npos) {
+                is_debug = true;
+                std::cout << id << " is try to fuse >>>>>>>>>>>>>>>>>>>>>>>>>>>>>" << std::endl;
+            }
             // Restrictions:
             // - inputs cannot be padded
             // - primitives input cannot be output
@@ -468,6 +485,12 @@ void prepare_primitive_fusing::fuse_simple_primitives(program &p) {
         if (node->is_output() || node->is_constant())
             continue;
 
+        bool is_debug = false;
+        if (node->id() == "sigmoid:Sigmoid_13") {
+            std::cout << node->id() << " is try to fuse >>>>>>>>>>>>>>>>>>>>>>>>>>>>> in fuse_simple_primitives" << std::endl;
+            is_debug = true;
+        }
+
         auto is_grouped_conv = [](convolution_node& node) -> bool {
             auto in_size = node.get_dependency(0).get_output_layout().size;
             return (node.get_split() > 1 && node.get_split() != in_size.feature[0]) ||
@@ -475,8 +498,62 @@ void prepare_primitive_fusing::fuse_simple_primitives(program &p) {
         };
 
         auto conv_supports_fusings = [&](convolution_node& node) -> bool {
-            if (_lo.get_optimization_attributes().use_onednn_impls == 1)
+            bool is_debug = false;
+            if (node.id() == "convolution:Conv_12/WithoutBiases") {
+                is_debug = true;
+                std::cout << "[" << node.id() << "] :" << std::endl;
+                auto show_format = [&](cldnn::format format) {
+                    std::cout << " - format = ";
+                    switch (format) {
+                        case format::bfyx:
+                            std::cout << "bfyx" << std::endl;
+                            break;
+                        case format::b_fs_yx_fsv16:
+                            std::cout << "b_fs_yx_fsv16" << std::endl;
+                            break;
+                        case format::bfzyx:
+                            std::cout << "bfzyx" << std::endl;
+                            break;
+                        case format::fs_b_yx_fsv32:
+                            std::cout << "fs_b_yx_fsv32" << std::endl;
+                            break;
+                        case format::b_fs_zyx_fsv16:
+                            std::cout << "b_fs_zyx_fsv16" << std::endl;
+                            break;
+                        case format::bs_fs_yx_bsv16_fsv16:
+                            std::cout << "bs_fs_yx_bsv16_fsv16" << std::endl;
+                            break;
+                        case format::bs_fs_yx_bsv32_fsv32:
+                            std::cout << "bs_fs_yx_bsv32_fsv32" << std::endl;
+                            break;
+                        case format::bs_fs_yx_bsv32_fsv16:
+                            std::cout << "bs_fs_yx_bsv32_fsv16" << std::endl;
+                            break;
+                        default:
+                            std::cout << node.get_output_layout().format << std::endl;
+                            break;
+                    }
+                };
+                show_format(node.get_output_layout().format);
+                auto in_dt = node.get_dependency(0).get_output_layout().data_type;
+                std::cout << " - input  data type : " << data_type_traits::name(in_dt) << std::endl;
+                auto out_dt = node.get_output_layout().data_type;
+                std::cout << " - output data type : " << data_type_traits::name(out_dt) << std::endl;
+
+                for (auto& user_node : node.get_users()) {
+                    std::cout << "user: " << user_node->id() << std::endl;
+                    show_format(user_node->get_output_layout().format);
+                    auto in_dt = user_node->get_dependency(0).get_output_layout().data_type;
+                    std::cout << " - input data type : " << data_type_traits::name(in_dt) << std::endl;
+                }
+            }
+
+            if (_lo.get_optimization_attributes().use_onednn_impls == 1) {
+                if (is_debug) {
+                    std::cout << "[conv_supports_fusings] Success : _lo.get_optimization_attributes().use_onednn_impls == 1" << std::endl;
+                }
                 return true;
+            }
 
             // Since reorder inputs is called after this pass
             // we have to check that blocked formats can be used in the network and layer is optimized for it.
@@ -517,6 +594,9 @@ void prepare_primitive_fusing::fuse_simple_primitives(program &p) {
             if (in_dt == data_types::u8 || in_dt == data_types::i8)
                 return true;
 
+            if (is_debug) {
+                std::cout << "[conv_supports_fusings] Fail" << std::endl;
+            }
             return false;
         };
 
@@ -689,11 +769,20 @@ void prepare_primitive_fusing::fuse_simple_primitives(program &p) {
 
         auto fuse_activation_f = [&](activation_node& activation_node) {
             auto& input_data = activation_node.get_dependency(0);
-            if (activation_node.get_dependencies().size() >= 3)
+            if (activation_node.get_dependencies().size() >= 3) {
+                if (is_debug) {
+                    std::cout << "Fail to fuse activation_node.get_dependencies().size() >= 3 ";
+                    std::cout << input_data.id() << " <= " << activation_node.id() << std::endl;
+                }
                 return;
+            }
 
-            if (!input_data_supports_fusings(input_data, activation_node.id()))
+            if (!input_data_supports_fusings(input_data, activation_node.id())) {
+                if (is_debug) {
+                    std::cout << "Fail to fuse input_data_supports_fusings " << input_data.id() << " <= " << activation_node.id() << std::endl;
+                }
                 return;
+            }
 
             bool should_fuse = input_data.is_type<binary_convolution>();
 
@@ -750,8 +839,17 @@ void prepare_primitive_fusing::fuse_simple_primitives(program &p) {
             // without handling any fused ops
             should_fuse |= input_data.is_type<eltwise>() && eltwise_supports_fusings(input_data.as<eltwise>()) && input_data.has_fused_primitives();
 
-            if (!should_fuse)
+            if (!should_fuse) {
+                if (is_debug) {
+                    std::cout << "Fail to fuse should_fuse is failed input: " << input_data.id() << ", activation: " << activation_node.id() << std::endl;
+                }
                 return;
+            }
+
+            if (is_debug) {
+                std::cout << "{}}}}}}}}}}}}}}}}}}}}}}}}} " << activation_node.id() << " should_fuse : " << (should_fuse? "True" : "False") << std::endl;
+                std::cout << "input_data: " << input_data.id() << std::endl;
+            }
 
             p.fuse_nodes(input_data, activation_node, &fusing_history);
         };

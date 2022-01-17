@@ -20,10 +20,21 @@ ReduceMeanTransformation::ReduceMeanTransformation(const Params& params) : Reduc
 
     ngraph::graph_rewrite_callback callback = [this](pattern::Matcher& m) {
         auto op = m.get_match_root();
+        if (op->get_friendly_name() == "GlobalAveragePool_201/reduce") {
+            std::cout << "[ReduceMeanTransformation] Checking callback ....... for  " << op->get_friendly_name() << std::endl;
+        }
         if (transformation_callback(op)) {
             return false;
         }
-        return transform(*context, m);
+        if (op->get_friendly_name() == "GlobalAveragePool_201/reduce") {
+            std::cout << "[ReduceMeanTransformation] Transform ....... for  " << op->get_friendly_name() << std::endl;
+        }
+        auto ret = transform(*context, m);
+        if (op->get_friendly_name() == "GlobalAveragePool_201/reduce") {
+            std::cout << "[ReduceMeanTransformation] Transform ....... for  ";
+            std::cout << op->get_friendly_name()  << " Transform is " << (ret? "succeed" : "failed") << std::endl;
+        }
+        return ret;
     };
 
     auto m = std::make_shared<ngraph::pattern::Matcher>(matcher, "ReduceMeanTransformation");

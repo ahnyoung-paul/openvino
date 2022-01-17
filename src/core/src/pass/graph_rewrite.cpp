@@ -17,6 +17,7 @@
 #include "ngraph/log.hpp"
 #include "ngraph/op/util/sub_graph_base.hpp"
 #include "perf_counters.hpp"
+#include "ngraph/pass/visualize_tree.hpp"
 
 /* GraphRewrite algorithm:
  * GraphRewrite processes an input graph in an topological order(i.e. args before users)
@@ -79,12 +80,22 @@ bool ov::pass::GraphRewrite::run_on_model(const std::shared_ptr<ov::Model>& f) {
     return apply_matcher_passes(f, std::move(nodes_to_run));
 }
 
+// static size_t g_index = 0;
 bool ov::pass::GraphRewrite::apply_matcher_passes(std::shared_ptr<Model> f,
                                                   std::deque<std::weak_ptr<Node>> nodes_to_run) {
     OV_ITT_SCOPED_TASK(ov::itt::domains::nGraph, "pass::GraphRewrite::run_on_function");
 
     bool rewritten = false;
     const auto& pass_config = get_pass_config();
+    std::vector<std::string> key_array;
+    key_array.push_back("Multiply_26858");
+    key_array.push_back("Multiply_29378");
+    key_array.push_back("GlobalAveragePool_201/reduce");
+    key_array.push_back("Conv_202/WithoutBiases/fq_input_0");
+
+    std::vector<std::string> find_key;
+    find_key.push_back("Multiply_26858");
+    find_key.push_back("Multiply_29378");
 
     // Check that all Matchers in MatcherPasses has type bases root node
     bool all_roots_has_type = true;
@@ -128,6 +139,92 @@ bool ov::pass::GraphRewrite::apply_matcher_passes(std::shared_ptr<Model> f,
         // including ones triggered by parent type info.
     }
 
+    auto find_node = [&](std::shared_ptr<MatcherPass> m_pass, std::shared_ptr<Node> node, std::string title) -> bool {
+        // {
+        //     for (auto key : find_key) {
+        //         if (node->get_friendly_name() == key) {
+        //             std::cout << title << "] Found " << key << " in pass: " << m_pass->get_name() << std::endl;
+        //             return true;
+        //         }
+        //     }
+        // }
+
+        // if (node->get_friendly_name() == "GlobalAveragePool_201/reduce") {
+        //     for (auto n : f->get_ordered_ops()) {
+        //         for (auto key : find_key) {
+        //             if (n->get_friendly_name() == key) {
+        //                 std::cout << title << "] Found " << key << " in pass: " << m_pass->get_name() << std::endl;
+        //                 return true;
+        //             }
+        //         }
+        //     }
+        // }
+        return false;
+    };
+
+    auto find_node_simple = [&](std::shared_ptr<MatcherPass> m_pass, bool is_tracking, std::string title) -> bool {
+        // if (is_tracking) {
+        //     for (auto n : f->get_ordered_ops()) {
+        //         for (auto key : find_key) {
+        //             if (n->get_friendly_name() == key) {
+        //                 // std::cout << title << "] Found " << key << " in pass: " << m_pass->get_name() << std::endl;
+        //                 return true;
+        //             }
+        //         }
+        //     }
+        //     // std::cout << title << "] No Found in pass: " << m_pass->get_name() << std::endl;
+        // }
+        return false;
+    };
+
+    auto find_qt = [&](std::shared_ptr<MatcherPass> m_pass) -> bool {
+        // for (auto n : f->get_ordered_ops()) {
+        //     if (n->get_friendly_name() == "Conv_202/WithoutBiases/fq_input_0") {
+        //         return true;
+        //     }
+        // }
+        return false;
+    };
+
+    auto dump_matcher = [&](std::shared_ptr<MatcherPass> m_pass, std::shared_ptr<Node> node, std::string title) {
+        // std::vector<std::string> dump_array;
+        // dump_array.push_back("GlobalAveragePool_201/reduce");
+        // dump_array.push_back("Conv_202/WithoutBiases/fq_input_0");
+        // bool is_found = false;
+        // for (auto key_node : dump_array) {
+        //     if (node->get_friendly_name() == key_node) {
+        //         is_found = true;
+        //         break;
+        //     }
+        // }
+        // // FakeQuantizeTransformation][Conv_202/WithoutBiases/fq_input_0
+        // std::vector<std::string> pass_key_array ={
+        //     "ReduceMeanTransformation",
+        //     "FakeQuantizeTransformation"
+        // };
+
+        // bool is_found_pass = false;
+        // for (auto key_pass_name : pass_key_array) {
+        //     if (m_pass->get_name() == key_pass_name) {
+        //         is_found_pass = true;
+        //         break;
+        //     }
+        // }
+
+        // if (is_found && is_found_pass) {
+        //     const size_t num_digits_in_pass_index = 3;
+        //     std::string index_str = std::to_string(g_index++);
+        //     index_str = std::string(num_digits_in_pass_index - index_str.length(), '0') + index_str;
+        //     auto name_str = std::regex_replace(node->get_friendly_name(), std::regex("/"), "_");
+        //     auto base_filename = name_str + std::string("_") + index_str + std::string("_");
+        //     base_filename += title  + std::string("_") + m_pass->get_name() + std::string(".svg");
+        //     ov::pass::VisualizeTree vt(base_filename);
+        //     // vt.run_on_model(f);
+        //     std::cout << "Dump matcher : " << base_filename << std::endl;
+        // }
+    };
+
+
     // This lambda preforms execution of particular MatcherPass on given node.
     // It automatically handles nodes registered by MatcherPass during transformation and set
     // transformation callback.
@@ -144,7 +241,16 @@ bool ov::pass::GraphRewrite::apply_matcher_passes(std::shared_ptr<Model> f,
 
         // Apply MatcherPass. In case if it returns true no other MatcherPasses will apply
         // to this node
+        bool is_found = find_node(m_pass, node, "before pass is applied");
+        dump_matcher(m_pass, node, "before");
         bool status = m_pass->apply(node);
+        dump_matcher(m_pass, node, "after");
+        if (is_found != find_node(m_pass, node, "after pass is applied")) {
+            if (is_found)
+                std::cout << m_pass->get_name() << " removed Multiply_* <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<" << std::endl;
+            else
+                std::cout << m_pass->get_name() << " created Multiply_* <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<" << std::endl;
+        }
 
         // In case if MatcherPass registered nodes they will be added to the beginning of execution
         // queue
@@ -157,12 +263,14 @@ bool ov::pass::GraphRewrite::apply_matcher_passes(std::shared_ptr<Model> f,
             }
             m_pass->clear_new_nodes();
         }
+        find_node(m_pass, node, "final checking ");
         return status;
     };
 
     // list of matchers to run for a node; define here to keep memory allocated
     std::vector<size_t> matcher_passes_to_run;
 
+    bool is_tracking = false;
     while (!nodes_to_run.empty()) {
         auto weak_node = nodes_to_run.front();
         nodes_to_run.pop_front();
@@ -170,6 +278,15 @@ bool ov::pass::GraphRewrite::apply_matcher_passes(std::shared_ptr<Model> f,
         auto node = weak_node.lock();
         if (!node)
             continue;
+        {
+            is_tracking = false;
+            for (auto key : key_array) {
+                if (node->get_friendly_name() == key) {
+                    is_tracking = true;
+                    break;
+                }
+            }
+        }
 
         // Recursive apply Matchers for sub-graph based nodes
         if (auto sub_graph_node = std::dynamic_pointer_cast<ngraph::op::util::MultiSubGraphOp>(node)) {
@@ -207,6 +324,9 @@ bool ov::pass::GraphRewrite::apply_matcher_passes(std::shared_ptr<Model> f,
             // fast processing at the next time when node with the same type will be processed
 
             for (size_t matcher_index : matcher_passes_to_run) {
+                if ("GlobalAveragePool_201/reduce" == node->get_friendly_name()) {
+                    std::cout << "Call matcher case01 : " << m_matchers[matcher_index]->get_name() << std::endl;
+                }
                 if (run_matcher_pass(m_matchers[matcher_index], node)) {
                     rewritten = true;
                     break;
@@ -220,9 +340,49 @@ bool ov::pass::GraphRewrite::apply_matcher_passes(std::shared_ptr<Model> f,
                 if (pass_config->is_disabled(m_pass->get_type_info()))
                     continue;
 
+                // if (is_tracking) {
+                //     std::cout << " [[" << node->get_friendly_name() << "]] Before call matcher case02 : " << m_pass->get_name() << std::endl;
+                // }
+                bool ret = find_node_simple(m_pass, is_tracking, "before matcher ");
+                bool is_found = find_qt(m_pass);
                 if (run_matcher_pass(m_pass, node)) {
                     rewritten = true;
+                    // if (is_tracking) {
+                    //     std::cout << " [[" << node->get_friendly_name() << "]] After call matcher case02 return true and break : " << m_pass->get_name() << std::endl;
+                    // }
+                    if (ret != find_node_simple(m_pass, is_tracking, "after matcher and breaking ")) {
+                        if (ret) {
+                            std::cout << "[" << m_pass->get_name() << "][" << node->get_friendly_name() << "] Mul is removed after matcher is running and break" << std::endl;
+                        } else {
+                            std::cout << "[" << m_pass->get_name() << "][" << node->get_friendly_name() << "] Mul is created after matcher is running and break" << std::endl;
+                        }
+                    }
+                    if (is_found != find_qt(m_pass)) {
+                        if (ret) {
+                            std::cout << "[" << m_pass->get_name() << "][" << node->get_friendly_name() << "] Conv_202/WithoutBiases/fq_input_0 is removed after matcher is running and break" << std::endl;
+                        } else {
+                            std::cout << "[" << m_pass->get_name() << "][" << node->get_friendly_name() << "] Conv_202/WithoutBiases/fq_input_0 is created after matcher is running and break" << std::endl;
+                        }
+                    }
                     break;
+                }
+                // if (is_tracking) {
+                //     std::cout << " [[" << node->get_friendly_name() << "]]  After call matcher and continue loop : " << m_pass->get_name() << std::endl;
+                // }
+                // find_node_simple(m_pass, is_tracking, "after matcher ");
+                if (ret != find_node_simple(m_pass, is_tracking, "after matcher")) {
+                    if (ret) {
+                        std::cout << "[" << m_pass->get_name() << "][" << node->get_friendly_name() << "] Mul is removed after matcher is running " << std::endl;
+                    } else {
+                        std::cout << "[" << m_pass->get_name() << "][" << node->get_friendly_name() << "] Mul is created after matcher is running" << std::endl;
+                    }
+                }
+                if (is_found != find_qt(m_pass)) {
+                    if (ret) {
+                        std::cout << "[" << m_pass->get_name() << "][" << node->get_friendly_name() << "] Conv_202/WithoutBiases/fq_input_0 is removed after matcher is running" << std::endl;
+                    } else {
+                        std::cout << "[" << m_pass->get_name() << "][" << node->get_friendly_name() << "] Conv_202/WithoutBiases/fq_input_0 is created after matcher is running" << std::endl;
+                    }
                 }
             }
         }
