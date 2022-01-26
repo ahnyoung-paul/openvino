@@ -592,4 +592,239 @@ std::string base_params::to_cache_string_v2() const {
     return s.str();
 }
 
+
+//// My debug tests
+std::string to_string_input_type(const ParamsKey::Key::DataTypesKey& v) {
+    std::stringstream ss;
+    ss << "[BIN, F16, F32, I16, I32, I64, I8, UI16, UI32, UI8], ";
+    ss << "[" << int(v.val.binary) << ",";
+    ss << int(v.val.F16) << ",";
+    ss << int(v.val.F32) << ",";
+    ss << int(v.val.int16) << ",";
+    ss << int(v.val.int32) << ",";
+    ss << int(v.val.int64) << ",";
+    ss << int(v.val.int8) << ",";
+    ss << int(v.val.uint16) << ",";
+    ss << int(v.val.uint32) << ",";
+    ss << int(v.val.uint8) << "]";
+    return ss.str();
+}
+
+std::string to_string_restrict(const kernel_selector::ParamsKey::Key::restrict_t& v, const std::string title) {
+    std::stringstream ss;
+    ss << "{ " << title << "\n";
+    ss << "* activationAdditionalParamsAsInput          : " << v.val.activationAdditionalParamsAsInput << ", \n";
+    ss << "* asym_d_quantization                        : " << v.val.asym_d_quantization << ", \n";
+    ss << "* asym_w_quantization                        : " << v.val.asym_w_quantization << ", \n";
+    ss << "* batching                                   : " << v.val.batching << ", \n";
+    ss << "* biasPerFeatureMap                          : " << v.val.biasPerFeatureMap << ", \n";
+    ss << "* biasPerOutput                              : " << v.val.biasPerOutput << ", \n";
+    ss << "* different_input_weights_types              : " << v.val.different_input_weights_types << ", \n";
+    ss << "* different_types                            : " << v.val.different_types << ", \n";
+    ss << "* FP16Emulation                              : " << v.val.FP16Emulation << ", \n";
+    ss << "* momentum                                   : " << v.val.momentum << ", \n";
+    ss << "* nonBias                                    : " << v.val.nonBias << ", \n";
+    ss << "* offset                                     : " << v.val.offset << ", \n";
+    ss << "* pitches                                    : " << v.val.pitches << ", \n";
+    ss << "* quantization                               : " << v.val.quantization << ", \n";
+    ss << "* sym_quantization                           : " << v.val.sym_quantization << ", \n";
+    ss << "* dedicated.conv.bilinear_interpolation_pad  : " << v.val.dedicated.conv.bilinear_interpolation_pad << ", \n";
+    ss << "* dedicated.conv.deformable                  : " << v.val.dedicated.conv.deformable << ", \n";
+    ss << "* dedicated.conv.deformable_mask_enabled     : " << v.val.dedicated.conv.deformable_mask_enabled << ", \n";
+    ss << "* dedicated.conv.depthwise_separable_opt     : " << v.val.dedicated.conv.depthwise_separable_opt << ", \n";
+    ss << "* dedicated.conv.dilation                    : " << v.val.dedicated.conv.dilation << ", \n";
+    ss << "* dedicated.conv.grouped                     : " << v.val.dedicated.conv.grouped << ", \n";
+    ss << "* dedicated.conv.split                       : " << v.val.dedicated.conv.split << ", \n";
+
+    ss <<"}\n";
+
+    return ss.str();
+}
+
+bool ParamsKey::Support_v2(const ParamsKey& k) const {
+    if (!((key.restrict.raw & k.key.restrict.raw) == k.key.restrict.raw)) { // check if this kernel supports this params
+        std::cout << "Checking restrict : false" << std::endl;
+        auto ret = to_string_restrict(key.restrict, "key.restrict");
+        std::cout << ret << std::endl;
+        ret = to_string_restrict(k.key.restrict, "k.key.restrict");
+        std::cout << ret << std::endl;
+        return false;
+    } else {
+        std::cout << "Checking restrict : true" << std::endl;
+    }
+    if (!((key.machineInfo.raw & k.key.machineInfo.raw) ==
+          key.machineInfo.raw)) { // check if machine supports this kernel
+            std::cout << "Checking machineInfo : false" << std::endl;
+        return false;
+          } else {
+              std::cout << "Checking machineInfo : true" << std::endl;
+          }
+    if (!((key.inputType.raw & k.key.inputType.raw) == k.key.inputType.raw)) {
+        std::cout << "FALSE: key.input.raw         : (" <<  key.inputType.raw  << "), " << to_string_input_type(key.inputType) << std::endl;
+        std::cout << "FALSE: k.key.inputType.raw   : (" <<  k.key.inputType.raw  << "), " <<  to_string_input_type(k.key.inputType) << std::endl;
+        std::cout << "FALSE: (key.inputType.raw & k.key.inputType.raw) : " << std::hex << "0x" << (key.inputType.raw & k.key.inputType.raw) << std::endl;
+        return false;
+    } else {
+        std::cout << "TRUE: key.input.raw         : (" <<  key.inputType.raw  << "), " << to_string_input_type(key.inputType) << std::endl;
+        std::cout << "TRUE: k.key.inputType.raw   : (" <<  k.key.inputType.raw  << "), " <<  to_string_input_type(k.key.inputType) << std::endl;
+        std::cout << "TRUE: (key.inputType.raw & k.key.inputType.raw) : " << std::hex << "0x" << (key.inputType.raw & k.key.inputType.raw) << std::endl;
+    }
+    if (!((key.outputType.raw & k.key.outputType.raw) == k.key.outputType.raw)) {
+        std::cout << "Checking outputType : false" << std::endl;
+        return false;
+    } else {
+        std::cout << "Checking outputType : true" << std::endl;
+    }
+    if (!((key.inputWeightsType.raw & k.key.inputWeightsType.raw) == k.key.inputWeightsType.raw)) {
+        std::cout << "FALSE: key.inputWeightsType.raw         : (" <<  key.inputWeightsType.raw;
+        std::cout << "), " << to_string_input_type(key.inputWeightsType) << std::endl;
+        std::cout << "FALSE: k.key.inputWeightsType.raw   : (" <<  k.key.inputWeightsType.raw;
+        std::cout << "), " <<  to_string_input_type(k.key.inputWeightsType) << std::endl;
+        std::cout << "FALSE: (key.inputWeightsType.raw & k.key.inputWeightsType.raw) : ";
+        std::cout << std::hex << "0x" << (key.inputWeightsType.raw & k.key.inputWeightsType.raw) << std::endl;
+        return false;
+    } else {
+        std::cout << "TRUE: key.inputWeightsType.raw         : (" <<  key.inputWeightsType.raw;
+        std::cout << "), " << to_string_input_type(key.inputWeightsType) << std::endl;
+        std::cout << "TRUE: k.key.inputWeightsType.raw   : (" <<  k.key.inputWeightsType.raw;
+        std::cout << "), " <<  to_string_input_type(k.key.inputWeightsType) << std::endl;
+        std::cout << "TRUE: (key.inputWeightsType.raw & k.key.inputType.raw) : ";
+        std::cout << std::hex << "0x" << (key.inputWeightsType.raw & k.key.inputWeightsType.raw) << std::endl;
+    }
+    if (!((key.outputWeightsType.raw & k.key.outputWeightsType.raw) == k.key.outputWeightsType.raw)) {
+        std::cout << "Checking outputWeightsType : false" << std::endl;
+        return false;
+    } else {
+        std::cout << "Checking outputWeightsType : true" << std::endl;
+    }
+    if (!((key.inputLayout & k.key.inputLayout) != 0 || key.inputLayout == k.key.inputLayout)) {
+        std::cout << "Checking inputLayout : false" << std::endl;
+        return false;
+    } else {
+        std::cout << "Checking inputLayout : true" << std::endl;
+    }
+    if (!((key.outputLayout & k.key.outputLayout) != 0 || key.outputLayout == k.key.outputLayout)) {
+        std::cout << "Checking outputLayout : false" << std::endl;
+        return false;
+    } else {
+        std::cout << "Checking outputLayout : true" << std::endl;
+    }
+    if (!((key.weightsInputLayout & k.key.weightsInputLayout) != 0 ||
+          key.weightsInputLayout == k.key.weightsInputLayout)) {
+              std::cout << "Checking weightsInputLayout : false" << std::endl;
+        return false;
+          } else {
+              std::cout << "Checking weightsInputLayout : true" << std::endl;
+          }
+    if (!((key.weightsOutputLayout & k.key.weightsOutputLayout) != 0 ||
+          key.weightsOutputLayout == k.key.weightsOutputLayout)) {
+            std::cout << "Checking weightsOutputLayout : false" << std::endl;
+        return false;
+          } else {
+              std::cout << "Checking weightsOutputLayout : true" << std::endl;
+          }
+
+    return true;
+}
+
+std::string ParamsKey::to_string() const {
+    std::stringstream ss;
+    ss << "* restrict             : " << key.restrict.raw << ", \n";
+    ss << "* machineInfo          : " << key.machineInfo.raw << ", \n";
+    ss << "* inputType            : " << key.inputType.raw << " " << to_string_input_type(key.inputType) << ", \n";
+    ss << "* outputType           : " << key.outputType.raw << " " << to_string_input_type(key.outputType) << ", \n";
+    ss << "* inputWeightsType     : " << key.inputWeightsType.raw << " " << to_string_input_type(key.inputWeightsType) << ", \n";
+    ss << "* outputWeightsType    : " << key.outputWeightsType.raw << " " << to_string_input_type(key.outputWeightsType) << ", \n";
+    ss << "* inputLayout          : " << key.inputLayout << ", \n";
+    ss << "* outputLayout         : " << key.outputLayout << ", \n";
+    ss << "* weightsInputLayout   : " << key.weightsInputLayout << ", \n";
+    ss << "* weightsOutputLayout  : " << key.weightsOutputLayout << ", \n";
+    return ss.str();
+}
+
+ParamsKey base_params::GetParamsKey_v2() const {
+    ParamsKey k = Params::GetParamsKey();
+
+    bool bBatching = false;
+    bool bPitches = false;
+    bool bOffests = false;
+    bool bDifferentTypes = false;
+    bool bFP16Used = (output.GetDType() == Datatype::F16);
+
+    std::cout << "# of inputs: " << inputs.size() << std::endl;
+    for (const auto& i : inputs) {
+        {
+            switch (i.GetDType()) {
+                case Datatype::INT8:
+                    std::cout << "INT8 type" << std::endl;
+                    break;
+                case Datatype::UINT8:
+                    std::cout << "UINT8 type" << std::endl;
+                    break;
+                case Datatype::INT16:
+                    std::cout << "INT16 type" << std::endl;
+                    break;
+                case Datatype::UINT16:
+                    std::cout << "UINT16 type" << std::endl;
+                    break;
+                case Datatype::INT32:
+                    std::cout << "INT32 type" << std::endl;
+                    break;
+                case Datatype::UINT32:
+                    std::cout << "UINT32 type" << std::endl;
+                    break;
+                case Datatype::INT64:
+                    std::cout << "INT64 type" << std::endl;
+                    break;
+                case Datatype::F16:
+                    std::cout << "F16 type" << std::endl;
+                    break;
+                case Datatype::F32:
+                    std::cout << "F32 type" << std::endl;
+                    break;
+                case Datatype::BINARY:
+                    std::cout << "BINARY type" << std::endl;
+                    break;
+                default:
+                    break;
+            }
+        }
+        k.EnableInputDataType(i.GetDType());
+        k.EnableInputLayout(i.GetLayout());
+
+        bBatching |= (i.Batch().v > 1);
+        bPitches |= (i.PitchesDifferFromLogicalDims());
+        bOffests |= (i.GetFirstElementOffset() != 0);
+        bDifferentTypes |= (i.GetDType() != output.GetDType());
+        bFP16Used |= (i.GetDType() == Datatype::F16);
+    }
+
+    k.EnableOutputDataType(output.GetDType());
+    k.EnableOutputLayout(output.GetLayout());
+
+    if (bBatching) {
+        k.EnableBatching();
+    }
+
+    if (bPitches || output.PitchesDifferFromLogicalDims()) {
+        k.EnableTensorPitches();
+    }
+
+    if (bDifferentTypes) {
+        k.EnableDifferentTypes();
+    }
+
+    if (bOffests || output.GetFirstElementOffset() != 0) {
+        k.EnableTensorOffset();
+    }
+
+    if (!engineInfo.bFP16Support && bFP16Used) {
+        // I'm not sure it's the best idea, but we can live with it right now
+        k.EnableFP16Emulation();
+    }
+
+    return k;
+}
+
+
 }  // namespace kernel_selector

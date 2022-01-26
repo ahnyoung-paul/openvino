@@ -329,6 +329,9 @@ public:
     }
     ParamsKey Merge(const ParamsKey& k) const;
 
+    bool Support_v2(const ParamsKey& k) const;
+    std::string to_string() const;
+
 private:
     Key key;
 };
@@ -594,6 +597,7 @@ struct base_params : public Params {
     std::string to_string() const override;
     std::string to_cache_string_v2() const override;
     ParamsKey GetParamsKey() const override;
+    ParamsKey GetParamsKey_v2() const;
 
 protected:
     explicit base_params(KernelType kt) : Params(kt, ""), inputs(1) {}
