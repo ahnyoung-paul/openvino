@@ -122,6 +122,14 @@ TuningCache::Entry TuningCache::LoadKernel_v1(const Params& params, uint32_t com
 
     auto hashStr = std::to_string(create_hash(params.to_string()));
     auto computeUnitsStr = std::to_string(computeUnitsCount);
+    {
+        const std::string specified_name = "convolution:0-convolutional";
+        if (params.layerID == specified_name) {
+            std::cout << "[TARGET][LoadKernel_v1] hashStr           : " << hashStr << std::endl;
+            std::cout << "[TARGET][LoadKernel_v1] version1Marker    : " << version1Marker << std::endl;
+            std::cout << "[TARGET][LoadKernel_v1] computeUnitsStr   : " << computeUnitsStr << std::endl;
+        }
+    }
 
     auto v1It = cache.FindMember(version1Marker);
     if (v1It == cache.MemberEnd())
@@ -145,6 +153,14 @@ TuningCache::Entry TuningCache::LoadKernel_v2(const Params& params, uint32_t com
     auto kTypeStr = toString(params.GetType());
     auto paramStr = params.to_cache_string_v2();
     auto computeUnitsStr = std::to_string(computeUnitsCount);
+    {
+        const std::string specified_name = "convolution:0-convolutional";
+        if (params.layerID == specified_name) {
+            std::cout << "[TARGET][LoadKernel_v2] kTypeStr          : " << kTypeStr << std::endl;
+            std::cout << "[TARGET][LoadKernel_v2] paramStr          : " << paramStr << std::endl;
+            std::cout << "[TARGET][LoadKernel_v2] computeUnitsStr   : " << computeUnitsStr << std::endl;
+        }
+    }
 
     auto v2It = cache.FindMember(version2Marker);
     if (v2It == cache.MemberEnd())
