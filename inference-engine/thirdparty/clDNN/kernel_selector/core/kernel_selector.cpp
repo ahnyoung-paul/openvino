@@ -13,6 +13,7 @@
 #include <vector>
 #include <tuple>
 #include <set>
+#include <iostream>
 
 // #define ENABLE_ENV
 // #define ENABLE_ENV_PRINT
@@ -68,8 +69,12 @@ KernelsData kernel_selector_base::GetNaiveBestKernel(const Params& params,
                                                      KernelType kType) const {
     KernelsData kernelsData;
     std::string kernelName;
+    const std::string specified_name = "convolution:0-convolutional";
 
     auto allImplementations = GetAllImplementations(params, options, kType);
+    if (params.layerID == specified_name) {
+        std::cout << "[GetNaiveBestKernel][GOLD] is called for " << params.layerID << std::endl;
+    }
 
     for (const auto& implementation : allImplementations) {
         // TODO: Unify this check with the Validate virtual method. Make
@@ -83,22 +88,41 @@ KernelsData kernel_selector_base::GetNaiveBestKernel(const Params& params,
                 const auto& it = forceKernels.find(implementation->GetName());
                 if (it != forceKernels.end()) {
                     if (it->second == true) {
+                        if (params.layerID == specified_name) {
+                            std::cout << "[GetNaiveBestKernel][GOLD] " <<  kernelName << " is forced selection from " << params.layerID << std::endl;
+                        }
                         ENV_PRINTF("Force: %s\n", it->first.c_str());
                         return kds;
                     } else {
+                        if (params.layerID == specified_name) {
+                            std::cout << "[GetNaiveBestKernel][GOLD] " <<  kernelName << " is denied from " << params.layerID << std::endl;
+                        }
                         ENV_PRINTF("Deny: %s\n", it->first.c_str());
                     }
                 } else {
 #endif
                     kernelsData = kds;
                     kernelName = implementation->GetName();
+                    if (params.layerID == specified_name) {
+                        std::cout << "[GetNaiveBestKernel][GOLD] " <<  kernelName << " is selected from " << params.layerID << std::endl;
+                    }
                     break;
 #ifdef ENABLE_ENV
                 }
 #endif
+            } else {
+                if (params.layerID == specified_name) {
+                    kernelName = implementation->GetName();
+                    std::cout << "[GetNaiveBestKernel][GOLD][NOT] " << kernelName << " is not selected from " << params.layerID << std::endl;
+                }
             }
-        } catch (std::runtime_error&) {
+        } catch (std::runtime_error& ex) {
             // we have to handle it in order to avoid exception in KernelSelector as much we can
+            if (params.layerID == specified_name) {
+                kernelName = (implementation != nullptr)? implementation->GetName() : "[impl is null]";
+                std::cout << "[GOLD][Exception] layerID: " << params.layerID << " kenrel: "
+                    << kernelName << " - " << ex.what() << std::endl;
+            }
         }
     }
 
@@ -116,15 +140,27 @@ KernelsData kernel_selector_base::GetAutoTuneBestKernel(const Params& params,
                                                         KernelType kType) const {
     KernelsData kernelsData;
     std::string kernelName;
-
+    const std::string specified_name = "convolution:0-convolutional";
     auto allImplementations = GetAllImplementations(params, options, kType);
+    if (params.layerID == specified_name) {
+        std::cout << "[GetAutoTuneBestKernel][GOLD] is called for " << params.layerID << std::endl;
+    }
     auto kernel_params = static_cast<const base_params&>(params);
     bool int8_kernel = kernel_params.inputs[0].GetDType() == Datatype::INT8 || kernel_params.inputs[0].GetDType() == Datatype::UINT8;
     std::tuple<std::string, int> cachedKernelConfig;
     if (options.tuningParams.mode == TuningMode::TUNING_DISABLED && !int8_kernel) {  // Try to load kernel/config from offline cache
 #if ENABLE_OFFLINE_TUNING_CACHE
         cachedKernelConfig = autoTuner.LoadKernelOffline(params.engineInfo.deviceCache, params);
+        if (params.layerID == specified_name) {
+            std::cout << "[GetAutoTuneBestKernel][GOLD] Call LoadKernelOffline " << params.layerID << std::endl;
+            std::cout << "- std::get<0>(cachedKernelConfig): " << std::get<0>(cachedKernelConfig) << std::endl;
+            std::cout << "- Params" << params.to_cache_string_v2() << std::endl;
+        }
 #else
+
+        if (params.layerID == specified_name) {
+            std::cout << "[GetAutoTuneBestKernel][GOLD] is calling GetNaiveBestKernel for " << params.layerID << std::endl;
+        }
         return GetNaiveBestKernel(params, options, kType);
 #endif
     } else if (UseCached(options.tuningParams.mode)) {  // Try to load kernel/config from on-line cache
@@ -133,7 +169,32 @@ KernelsData kernel_selector_base::GetAutoTuneBestKernel(const Params& params,
                                                         params);
     }
     bool hashFoundInCache = !std::get<0>(cachedKernelConfig).empty();
-
+    if (params.layerID == specified_name) {
+        std::cout << "[GetAutoTuneBestKernel][GOLD] Checking " << params.layerID << std::endl;
+        switch (options.tuningParams.mode) {
+        case TuningMode::TUNING_DISABLED:
+            std::cout << "- Tuning mode: TUNING_DISABLED" << std::endl;
+            break;
+        case TuningMode::TUNING_USE_CACHE:
+            std::cout << "- Tuning mode: TUNING_USE_CACHE" << std::endl;
+            break;
+        case TuningMode::TUNING_TUNE_AND_CACHE:
+            std::cout << "- Tuning mode: TUNING_TUNE_AND_CACHE" << std::endl;
+            break;
+        case TuningMode::TUNING_USE_AND_UPDATE:
+            std::cout << "- Tuning mode: TUNING_USE_AND_UPDATE" << std::endl;
+            break;
+        case TuningMode::TUNING_RETUNE_AND_CACHE:
+            std::cout << "- Tuning mode: TUNING_RETUNE_AND_CACHE" << std::endl;
+            break;
+        default:
+            break;
+        }
+        std::cout << "- hasFoundInCache: " << (hashFoundInCache? "True" : "False") << std::endl;
+    }
+    if (params.layerID == specified_name) {
+        std::cout << "[GetAutoTuneBestKernel][GOLD] Step 02 " << params.layerID << std::endl;
+    }
     if (hashFoundInCache) {
         std::string cachedkernelName = std::get<0>(cachedKernelConfig);
         int autoTuneIndex = std::get<1>(cachedKernelConfig);
@@ -152,6 +213,10 @@ KernelsData kernel_selector_base::GetAutoTuneBestKernel(const Params& params,
         }
 
         if (!kernelsData.empty()) {
+            if (params.layerID == specified_name) {
+                std::cout << "[GetAutoTuneBestKernel][GOLD] Step 02 " << cachedkernelName;
+                std::cout << " - cached kernel is selected for " << params.layerID << std::endl;
+            }
             return kernelsData;
         }
     }
@@ -159,6 +224,10 @@ KernelsData kernel_selector_base::GetAutoTuneBestKernel(const Params& params,
     // Cache is not valid, remove it if performing update tasks.
     if (hashFoundInCache && PerformUpdates(options.tuningParams.mode)) {
         autoTuner.RemoveKernel(options.tuningParams.cacheFilePath, params);
+    }
+
+    if (params.layerID == specified_name) {
+        std::cout << "[GetAutoTuneBestKernel][GOLD] Step 03 " << params.layerID << std::endl;
     }
 
     if (hashFoundInCache ||  // Cache is not valid - hash exists in cache but kernelsData was empty or kernel
@@ -172,6 +241,9 @@ KernelsData kernel_selector_base::GetAutoTuneBestKernel(const Params& params,
     // Start on-line tuning
     assert(options.tuningParams.runner);
 
+    if (params.layerID == specified_name) {
+        std::cout << "[GetAutoTuneBestKernel][GOLD] Step 05 " << params.layerID << std::endl;
+    }
     for (const auto& implementation : allImplementations) {
         const ParamsKey implKey = implementation->GetSupportedKey();
         if (implKey.TuningSupport()) {
@@ -184,14 +256,24 @@ KernelsData kernel_selector_base::GetAutoTuneBestKernel(const Params& params,
                     if (kernelsData.size() == 0 || kds[i].runTime < kernelsData[0].runTime) {
                         kernelsData = {kds[i]};
                         kernelName = implementation->GetName();
+                        if (params.layerID == specified_name) {
+                            std::cout << "[GetAutoTuneBestKernel-01][GOLD] " <<  kernelName << " is selected from " << params.layerID << std::endl;
+                        }
                     }
                 }
-            } catch (std::runtime_error&) {
+            } catch (std::runtime_error& ex) {
                 // we have to handle it in order to avoid exception in KernelSelector as much we can
+                if (params.layerID == specified_name) {
+                    kernelName = (implementation != nullptr)? implementation->GetName() : "[impl is null]";
+                    std::cout << "[GOLD][Exception] layerID: " << params.layerID << " kenrel: "
+                        << kernelName << " - " << ex.what() << std::endl;
+                }
             }
         }
     }
-
+    if (params.layerID == specified_name) {
+        std::cout << "[GetAutoTuneBestKernel][GOLD] Step 06 " << params.layerID << std::endl;
+    }
     // try to fallback to reference kernels if no optimized were found during tuning
     if (!kernelsData.size()) {
         for (const auto& implementation : allImplementations) {
@@ -207,16 +289,29 @@ KernelsData kernel_selector_base::GetAutoTuneBestKernel(const Params& params,
                         if (kernelsData.size() == 0 || kds[i].runTime < kernelsData[0].runTime) {
                             kernelsData = {kds[i]};
                             kernelName = implementation->GetName();
+                            if (params.layerID == specified_name) {
+                                std::cout << "[GetAutoTuneBestKernel-01][GOLD] " <<  kernelName << " is selected from " << params.layerID << std::endl;
+                            }
                         }
                     }
-                } catch (std::runtime_error&) {
+                } catch (std::runtime_error& ex) {
                     // we have to handle it in order to avoid exception in KernelSelector as much we can
+                    if (params.layerID == specified_name) {
+                        kernelName = (implementation != nullptr)? implementation->GetName() : "[impl is null]";
+                        std::cout << "[GOLD][Exception] layerID: " << params.layerID << " kenrel: "
+                            << kernelName << " - " << ex.what() << std::endl;
+                    }
                 }
             }
         }
     }
-
+    if (params.layerID == specified_name) {
+        std::cout << "[GetAutoTuneBestKernel][GOLD] Step 07 " << params.layerID << std::endl;
+    }
     if (kernelsData.size()) {
+        if (params.layerID == specified_name) {
+            std::cout << "[GetAutoTuneBestKernel-01][GOLD] " <<  kernelName << " is stored.... from " << params.layerID << std::endl;
+        }
         kernelsData[0].kernelName = kernelName;
         kernelsData[0].kernels[0].layerID = params.layerID;
         autoTuner.StoreKernel(options.tuningParams.cacheFilePath,
@@ -228,6 +323,9 @@ KernelsData kernel_selector_base::GetAutoTuneBestKernel(const Params& params,
         return GetNaiveBestKernel(params, options, kType);
     }
 
+    if (params.layerID == specified_name) {
+        std::cout << "[GetAutoTuneBestKernel][GOLD] Step 08 " << params.layerID << std::endl;
+    }
     return kernelsData;
 }
 
@@ -239,14 +337,52 @@ KernelList kernel_selector_base::GetAllImplementations(const Params& params, con
 
     std::multiset<PriorityPair, decltype(comparePriority)> sortedImpls(comparePriority);
     KernelList result;
+    // const std::string specified_name = "convolution:Conv_8/WithoutBiases";
+    const std::string specified_name = "convolution:0-convolutional";
 
     if (params.GetType() == kType && options.GetType() == kType) {
+        // if (params.layerID == specified_name) {
+        // // if (params.layerID.find(specified_name) != std::string::npos) {
+        //     std::cout << "**************************************************" << std::endl;
+        //     std::cout << "Before params kernel params : " << params.layerID << " - " << typeid(params).name() << std::endl;
+        //     {
+        //         const kernel_selector::base_params& bp = static_cast<const kernel_selector::base_params&>(params);
+        //         std::cout << bp.GetParamsKey().to_string() << std::endl;
+        //     }
+        //     // std::cout << params.GetParamsKey().to_string() << std::endl;
+        //     std::cout << "**************************************************" << std::endl;
+
+        //     std::cout << "**************************************************" << std::endl;
+        //     std::cout << "Before options.GetSupportedKey() kernel params : " << params.layerID << std::endl;
+        //     std::cout << options.GetSupportedKey().to_string() << std::endl;
+        //     std::cout << "**************************************************" << std::endl;
+        // }
         ParamsKey requireKey = params.GetParamsKey().Merge(options.GetSupportedKey());
+        // if (params.layerID == specified_name) {
+        // // if (params.layerID.find(specified_name) != std::string::npos) {
+        //     std::cout << "**************************************************" << std::endl;
+        //     std::cout << "After requireKey kernel params : " << params.layerID << std::endl;
+        //     std::cout << requireKey.to_string() << std::endl;
+        //     std::cout << "**************************************************" << std::endl;
+        // }
+
         bool forceImplementation = !params.forceImplementation.empty();
         for (auto& impl : implementations) {
             const ParamsKey implKey = impl->GetSupportedKey();
-            if (!implKey.Support(requireKey))
-                continue;
+            // if (params.layerID == specified_name) {
+            // // if (params.layerID.find(specified_name) != std::string::npos) {
+            //     std::cout << "**************************************************" << std::endl;
+            //     std::cout << " Checking Key kernel params : " << impl->GetName() << std::endl;
+            //     std::cout << implKey.to_string() << std::endl;
+            //     std::cout << "**************************************************" << std::endl;
+            //     if (!implKey.Support_v2(requireKey)) {
+            //         std::cout << "Fail to check !!" << std::endl;
+            //         continue;
+            //     }
+            // } else {
+                if (!implKey.Support(requireKey))
+                    continue;
+            // }
             if (forceImplementation && params.forceImplementation != impl->GetName())
                 continue;
             sortedImpls.emplace(impl->GetKernelsPriority(params, options), impl);
@@ -259,6 +395,16 @@ KernelList kernel_selector_base::GetAllImplementations(const Params& params, con
             [](const PriorityPair& impl) {
                 return std::move(impl.second);
             });
+    }
+
+    if (params.layerID == specified_name) {
+    // if (params.layerID.find(specified_name) != std::string::npos) {
+        std::cout << "<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<" << std::endl;
+        std::cout << "[GOLD] kernel candidates for " << params.layerID << " : " << std::endl;
+        for (auto& r : result) {
+            std::cout << " * " << r->GetName() << std::endl;
+        }
+        std::cout << "<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<" << std::endl;
     }
 
     return result;
