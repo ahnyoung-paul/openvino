@@ -125,17 +125,17 @@ KernelsData kernel_selector_base::GetAutoTuneBestKernel(const Params& params,
     KernelsData kernelsData;
     std::string kernelName;
 
-    bool show = false;
-    {
-        std::vector<std::string> keys;
-        keys.push_back("convolution:0-convolutional");
-        keys.push_back("convolution:3-convolutional");
-        keys.push_back("convolution:6-convolutional");
-        keys.push_back("convolution:20-convolutional");
-        if (std::find(keys.begin(), keys.end(), params.layerID) != keys.end()) {
-            show = true;
-        }
-    }
+    // bool show = false;
+    // {
+    //     std::vector<std::string> keys;
+    //     keys.push_back("convolution:0-convolutional");
+    //     keys.push_back("convolution:3-convolutional");
+    //     keys.push_back("convolution:6-convolutional");
+    //     keys.push_back("convolution:20-convolutional");
+    //     if (std::find(keys.begin(), keys.end(), params.layerID) != keys.end()) {
+    //         show = true;
+    //     }
+    // }
 
     auto allImplementations = GetAllImplementations(params, options, kType);
     auto kernel_params = static_cast<const base_params&>(params);
@@ -155,9 +155,9 @@ KernelsData kernel_selector_base::GetAutoTuneBestKernel(const Params& params,
     bool hashFoundInCache = !std::get<0>(cachedKernelConfig).empty();
 
     if (hashFoundInCache) {
-        if (show) {
-            std::cout << "Found cache for " << params.layerID << std::endl;
-        }
+        // if (show) {
+        //     std::cout << "Found cache for " << params.layerID << std::endl;
+        // }
         std::string cachedkernelName = std::get<0>(cachedKernelConfig);
         int autoTuneIndex = std::get<1>(cachedKernelConfig);
 
@@ -177,10 +177,10 @@ KernelsData kernel_selector_base::GetAutoTuneBestKernel(const Params& params,
         if (!kernelsData.empty()) {
             return kernelsData;
         }
-    } else {
-        if (show) {
-            std::cout << "Not found cache for " << params.layerID << std::endl;
-        }
+    // } else {
+    //     if (show) {
+    //         std::cout << "Not found cache for " << params.layerID << std::endl;
+    //     }
     }
 
     // Cache is not valid, remove it if performing update tasks.
@@ -193,9 +193,9 @@ KernelsData kernel_selector_base::GetAutoTuneBestKernel(const Params& params,
         !PerformTuning(options.tuningParams.mode) ||  // On-line tuning is not allowed.
         !options.tuningParams.runner) {  // Runner is invalid - can't run on-line tuning
         // Fall back to the default path.
-        if (show) {
-            std::cout << "Fall back to the default path for " << params.layerID << std::endl;
-        }
+        // if (show) {
+        //     std::cout << "Fall back to the default path for " << params.layerID << std::endl;
+        // }
         return GetNaiveBestKernel(params, options, kType);
     }
 
@@ -258,14 +258,14 @@ KernelsData kernel_selector_base::GetAutoTuneBestKernel(const Params& params,
         }
     }
 
-    if (show) {
-        std::cout << "Final for " << params.layerID << std::endl;
-    }
+    // if (show) {
+    //     std::cout << "Final for " << params.layerID << std::endl;
+    // }
 
     if (kernelsData.size()) {
         kernelsData[0].kernelName = kernelName;
         kernelsData[0].kernels[0].params.layerID = params.layerID;
-        std::cout << kernelName << " is stored to " << options.tuningParams.cacheFilePath << std::endl;
+        // std::cout << kernelName << " is stored to " << options.tuningParams.cacheFilePath << std::endl;
         autoTuner.StoreKernel(options.tuningParams.cacheFilePath,
                                 params,
                                 kernelName,

@@ -47,6 +47,9 @@ public:
 
     bool NeedsSave() const { return needsSave; }
 
+    std::vector<std::string>& GetKeys() { return keys; }
+    std::map<std::string, std::string>& GetKeyMaps() { return key_maps; }
+
 private:
     Entry LoadKernel_v1(const Params& params, uint32_t computeUnitsCount);
     Entry LoadKernel_v2(const Params& params, uint32_t computeUnitsCount);
@@ -62,6 +65,7 @@ private:
     static constexpr const char* version2Marker = "version_2";
 
     std::vector<std::string> keys;
+    std::map<std::string, std::string> key_maps;
 };
 
 class AutoTuner {

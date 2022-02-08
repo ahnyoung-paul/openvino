@@ -22,11 +22,20 @@ TuningCache::TuningCache(const std::string& cacheFilePath, bool createMode)
     {
         keys.push_back("convolution:0-convolutional");
         keys.push_back("convolution:3-convolutional");
-        keys.push_back("yolov2/darknet19_model/conv1/Conv2D");
-        keys.push_back("yolov2/darknet19_model/conv2/Conv2D");
-        keys.push_back("conv2d_1/Conv2D");
-        keys.push_back("conv2d_3/Conv2D");
-        keys.push_back("conv2d_4/Conv2D");
+        keys.push_back("convolution:6-convolutional");
+        keys.push_back("convolution:yolov2/darknet19_model/conv1/Conv2D");
+        keys.push_back("convolution:yolov2/darknet19_model/conv2/Conv2D");
+        keys.push_back("convolution:conv2d_1/Conv2D");
+        keys.push_back("convolution:conv2d_3/Conv2D");
+        keys.push_back("convolution:conv2d_4/Conv2D");
+        key_maps["convolution:0-convolutional"] = "convolution_gpu_bfyx_gemm_like";
+        key_maps["convolution:3-convolutional"] = "convolution_gpu_bfyx_direct_10_12_16";
+        key_maps["convolution:6-convolutional"] = "convolution_gpu_bfyx_direct_10_12_16";
+        key_maps["convolution:yolov2/darknet19_model/conv1/Conv2D"] = "convolution_gpu_bfyx_gemm_like";
+        key_maps["convolution:yolov2/darknet19_model/conv2/Conv2D"] = "convolution_gpu_bfyx_direct_10_12_16";
+        key_maps["convolution:conv2d_1/Conv2D"] = "convolution_gpu_bfyx_gemm_like";
+        key_maps["convolution:conv2d_3/Conv2D"] = "convolution_gpu_bfyx_direct_10_12_16";
+        key_maps["convolution:conv2d_4/Conv2D"] = "convolution_gpu_bfyx_direct_10_12_16";
     }
     // Read cache file
     std::ifstream tuningFile(cacheFilePath);
@@ -118,6 +127,7 @@ TuningCache::Entry TuningCache::LoadKernel(const Params& params, uint32_t comput
             auto computeUnitsStr = std::to_string(computeUnitsCount);
 
             std::cout << "Item: " << params.layerID << std::endl;
+            std::cout << " - idealKernel    : " <<  key_maps[params.layerID] << std::endl;
             std::cout << " - hashStr        : " <<  hashStr << std::endl;
             std::cout << " - kTypeStr       : " <<  kTypeStr << std::endl;
             std::cout << " - paramStr       : " <<  paramStr << std::endl;
@@ -130,7 +140,15 @@ TuningCache::Entry TuningCache::LoadKernel(const Params& params, uint32_t comput
             if (std::get<0>(result).empty()) {
                 std::cout << "result1 is empty in LoadKernel_v2 for " << params.layerID << std::endl;
             } else {
-                std::cout << "result1 is not empty in LoadKernel_v2 for " << params.layerID << std::endl;
+                std::cout << "result1[" << std::get<0>(result) << "] is not empty in LoadKernel_v2 for " << params.layerID << std::endl;
+                auto actual_result = std::get<0>(result);
+                auto expected_result = key_maps[params.layerID];
+
+                if (actual_result == expected_result) {
+                    std::cout << "[result1]result is matched " << std::endl;
+                } else {
+                    std::cout << "[result1][Not matched - invalid] result: " << actual_result << " vs " << expected_result <<  std::endl;
+                }
             }
         }
     }
@@ -142,7 +160,15 @@ TuningCache::Entry TuningCache::LoadKernel(const Params& params, uint32_t comput
                 if (std::get<0>(result_v1).empty()) {
                     std::cout << "result_v1 is empty in LoadKernel_v1 for " << params.layerID << std::endl;
                 } else {
-                    std::cout << "result_v1 is not empty in LoadKernel_v1 for " << params.layerID << std::endl;
+                    std::cout << "result_v1[" << std::get<0>(result_v1) << "] is not empty in LoadKernel_v1 for " << params.layerID << std::endl;
+                    auto actual_result = std::get<0>(result_v1);
+                    auto expected_result = key_maps[params.layerID];
+
+                    if (actual_result == expected_result) {
+                        std::cout << "[result_v1]result is matched " << std::endl;
+                    } else {
+                        std::cout << "[result_v1][Not matched - invalid] result: " << actual_result << " vs " << expected_result <<  std::endl;
+                    }
                 }
             }
         }
@@ -410,6 +436,7 @@ std::tuple<std::string, int> AutoTuner::LoadKernelOffline(TuningCache* deviceCac
     if (!deviceCache) {
             // Try to load from version 2
         {
+            auto& keys = deviceCache->GetKeys();
             if (std::find(keys.begin(), keys.end(), params.layerID) != keys.end()) {
                 std::cout << "Try to load from version 2 for " << params.layerID << std::endl;
             }
@@ -418,6 +445,7 @@ std::tuple<std::string, int> AutoTuner::LoadKernelOffline(TuningCache* deviceCac
     }
     auto result = deviceCache->LoadKernel(params, false);
     {
+        auto& keys = deviceCache->GetKeys();
         if (std::find(keys.begin(), keys.end(), params.layerID) != keys.end()) {
             if (std::get<0>(result).empty()) {
                 std::cout << "result1 is empty for " << params.layerID << std::endl;
@@ -430,7 +458,7 @@ std::tuple<std::string, int> AutoTuner::LoadKernelOffline(TuningCache* deviceCac
         result = deviceCache->LoadKernel(params, defaultComputeUnits);
     }
     {
-        std::vector<std::string> keys;
+        auto& keys = deviceCache->GetKeys();
         if (std::find(keys.begin(), keys.end(), params.layerID) != keys.end()) {
             if (std::get<0>(result).empty()) {
                 std::cout << "result2 is empty for " << params.layerID << std::endl;
