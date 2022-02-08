@@ -19,8 +19,18 @@ namespace kernel_selector {
 
 TuningCache::TuningCache(const std::string& cacheFilePath, bool createMode)
     : cache(), needsSave(false) {
+    {
+        keys.push_back("convolution:0-convolutional");
+        keys.push_back("convolution:3-convolutional");
+        keys.push_back("yolov2/darknet19_model/conv1/Conv2D");
+        keys.push_back("yolov2/darknet19_model/conv2/Conv2D");
+        keys.push_back("conv2d_1/Conv2D");
+        keys.push_back("conv2d_3/Conv2D");
+        keys.push_back("conv2d_4/Conv2D");
+    }
     // Read cache file
     std::ifstream tuningFile(cacheFilePath);
+    std::cout << "[[[[[[ " << cacheFilePath << std::endl;
 
     if (tuningFile && tuningFile.good()) {
         std::stringstream buffer;
@@ -100,10 +110,42 @@ TuningCache::Entry TuningCache::LoadKernel(const Params& params, bool update) {
 TuningCache::Entry TuningCache::LoadKernel(const Params& params, uint32_t computeUnitsCount, bool update) {
     bool oldVersion = false;
     // Try to load from version 2
+    {
+        if (std::find(keys.begin(), keys.end(), params.layerID) != keys.end()) {
+            auto hashStr = std::to_string(create_hash(params.to_string()));
+            auto kTypeStr = toString(params.GetType());
+            auto paramStr = params.to_cache_string_v2();
+            auto computeUnitsStr = std::to_string(computeUnitsCount);
+
+            std::cout << "Item: " << params.layerID << std::endl;
+            std::cout << " - hashStr        : " <<  hashStr << std::endl;
+            std::cout << " - kTypeStr       : " <<  kTypeStr << std::endl;
+            std::cout << " - paramStr       : " <<  paramStr << std::endl;
+            std::cout << " - computeUnitsStr: " <<  computeUnitsStr << std::endl;
+        }
+    }
     auto result = LoadKernel_v2(params, computeUnitsCount);
+    {
+        if (std::find(keys.begin(), keys.end(), params.layerID) != keys.end()) {
+            if (std::get<0>(result).empty()) {
+                std::cout << "result1 is empty in LoadKernel_v2 for " << params.layerID << std::endl;
+            } else {
+                std::cout << "result1 is not empty in LoadKernel_v2 for " << params.layerID << std::endl;
+            }
+        }
+    }
     // Try to load from version 1
     if (std::get<0>(result).empty() || update) {
         auto result_v1 = LoadKernel_v1(params, computeUnitsCount);
+        {
+            if (std::find(keys.begin(), keys.end(), params.layerID) != keys.end()) {
+                if (std::get<0>(result_v1).empty()) {
+                    std::cout << "result_v1 is empty in LoadKernel_v1 for " << params.layerID << std::endl;
+                } else {
+                    std::cout << "result_v1 is not empty in LoadKernel_v1 for " << params.layerID << std::endl;
+                }
+            }
+        }
         oldVersion = !std::get<0>(result_v1).empty();
         if (oldVersion && std::get<0>(result).empty()) {
             result = result_v1;
@@ -122,19 +164,39 @@ TuningCache::Entry TuningCache::LoadKernel_v1(const Params& params, uint32_t com
 
     auto hashStr = std::to_string(create_hash(params.to_string()));
     auto computeUnitsStr = std::to_string(computeUnitsCount);
-
+    bool show = false;
+    {
+        if (std::find(keys.begin(), keys.end(), params.layerID) != keys.end()) {
+            show = true;
+        }
+    }
     auto v1It = cache.FindMember(version1Marker);
-    if (v1It == cache.MemberEnd())
+    if (v1It == cache.MemberEnd()) {
+        if (show) {
+            std::cout << "[LoadKernel_v1] Cannot find member for version1Marker[" << version1Marker << "] in " << params.layerID << std::endl;
+        }
         return result;
+    }
 
     auto computeUnitsIt = v1It->value.FindMember(computeUnitsStr.c_str());
-    if (computeUnitsIt == v1It->value.MemberEnd())
+    if (computeUnitsIt == v1It->value.MemberEnd()) {
+        if (show) {
+            std::cout << "[LoadKernel_v1] Cannot find member for computeUnitsStr.c_str()[" << computeUnitsStr.c_str() << "] in " << params.layerID << std::endl;
+        }
         return result;
+    }
 
     auto hashIt = computeUnitsIt->value.FindMember(hashStr.c_str());
-    if (hashIt == computeUnitsIt->value.MemberEnd())
+    if (hashIt == computeUnitsIt->value.MemberEnd()) {
+        if (show) {
+            std::cout << "[LoadKernel_v1] Cannot find member for hashStr.c_str()[" << hashStr.c_str() << "] in " << params.layerID << std::endl;
+        }
         return result;
+    }
 
+    if (show) {
+        std::cout << "[LoadKernel_v2] II Find member for hashStr.c_str()[" << hashStr.c_str() << "] in " << params.layerID << std::endl;
+    }
     auto& prog = hashIt->value;
     return std::make_tuple(prog[0].GetString(), prog[1].GetInt());
 }
@@ -146,22 +208,48 @@ TuningCache::Entry TuningCache::LoadKernel_v2(const Params& params, uint32_t com
     auto paramStr = params.to_cache_string_v2();
     auto computeUnitsStr = std::to_string(computeUnitsCount);
 
+    bool show = false;
+    {
+        if (std::find(keys.begin(), keys.end(), params.layerID) != keys.end()) {
+            show = true;
+        }
+    }
+
     auto v2It = cache.FindMember(version2Marker);
-    if (v2It == cache.MemberEnd())
+    if (v2It == cache.MemberEnd()) {
+        if (show) {
+            std::cout << "[LoadKernel_v2] Cannot find member for version2Marker[" << version2Marker << "] in " << params.layerID << std::endl;
+        }
         return result;
+    }
 
     auto computeUnitsIt = v2It->value.FindMember(computeUnitsStr.c_str());
-    if (computeUnitsIt == v2It->value.MemberEnd())
+    if (computeUnitsIt == v2It->value.MemberEnd()) {
+        if (show) {
+            std::cout << "[LoadKernel_v2] Cannot find member for computeUnitsStr.c_str()[" << computeUnitsStr.c_str() << "] in " << params.layerID << std::endl;
+        }
         return result;
+    }
 
     auto kTypeIt = computeUnitsIt->value.FindMember(kTypeStr.c_str());
-    if (kTypeIt == computeUnitsIt->value.MemberEnd())
+    if (kTypeIt == computeUnitsIt->value.MemberEnd()) {
+        if (show) {
+            std::cout << "[LoadKernel_v2] Cannot find member for kTypeStr.c_str()[" << kTypeStr.c_str() << "] in " << params.layerID << std::endl;
+        }
         return result;
+    }
 
     auto paramIt = kTypeIt->value.FindMember(paramStr.c_str());
-    if (paramIt == kTypeIt->value.MemberEnd())
+    if (paramIt == kTypeIt->value.MemberEnd()) {
+        if (show) {
+            std::cout << "[LoadKernel_v2] Cannot find member for paramStr.c_str()[" << paramStr.c_str() << "] in " << params.layerID << std::endl;
+        }
         return result;
+    }
 
+    if (show) {
+        std::cout << "[LoadKernel_v2] II Find member for paramStr.c_str()[" << paramStr.c_str() << "] in " << params.layerID << std::endl;
+    }
     auto& prog = paramIt->value;
     return std::make_tuple(prog[0].GetString(), prog[1].GetInt());
 }
@@ -319,11 +407,37 @@ std::tuple<std::string, int> AutoTuner::LoadKernelOffline(TuningCache* deviceCac
                                                           const Params& params) {
     std::lock_guard<std::mutex> lock(mutex);
     static const uint32_t defaultComputeUnits = 24;
-    if (!deviceCache)
+    if (!deviceCache) {
+            // Try to load from version 2
+        {
+            if (std::find(keys.begin(), keys.end(), params.layerID) != keys.end()) {
+                std::cout << "Try to load from version 2 for " << params.layerID << std::endl;
+            }
+        }
         return {};
+    }
     auto result = deviceCache->LoadKernel(params, false);
+    {
+        if (std::find(keys.begin(), keys.end(), params.layerID) != keys.end()) {
+            if (std::get<0>(result).empty()) {
+                std::cout << "result1 is empty for " << params.layerID << std::endl;
+            } else {
+                std::cout << "result1 is not empty for " << params.layerID << std::endl;
+            }
+        }
+    }
     if (std::get<0>(result).empty() && params.engineInfo.computeUnitsCount != defaultComputeUnits) {
         result = deviceCache->LoadKernel(params, defaultComputeUnits);
+    }
+    {
+        std::vector<std::string> keys;
+        if (std::find(keys.begin(), keys.end(), params.layerID) != keys.end()) {
+            if (std::get<0>(result).empty()) {
+                std::cout << "result2 is empty for " << params.layerID << std::endl;
+            } else {
+                std::cout << "result2 is not empty for " << params.layerID << std::endl;
+            }
+        }
     }
     return result;
 }

@@ -60,6 +60,8 @@ private:
 
     static constexpr const char* version1Marker = "version_1";
     static constexpr const char* version2Marker = "version_2";
+
+    std::vector<std::string> keys;
 };
 
 class AutoTuner {

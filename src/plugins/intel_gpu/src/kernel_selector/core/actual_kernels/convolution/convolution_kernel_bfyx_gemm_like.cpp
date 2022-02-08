@@ -87,7 +87,15 @@ ConvolutionKernel_bfyx_GEMMLike::Parent::DispatchData ConvolutionKernel_bfyx_GEM
 
 KernelsPriority ConvolutionKernel_bfyx_GEMMLike::GetKernelsPriority(const Params& params, const optional_params& /*options*/) const {
     const auto& p = static_cast<const convolution_params&>(params);
+    // {
+    //     std::vector<std::string> specified_names;
+    //     specified_names.push_back("convolution:0-convolutional");
+    //     specified_names.push_back("convolution:3-convolutional");
 
+    //     if (std::find(specified_names.begin(), specified_names.end(), params.layerID) != specified_names.end()) {
+    //         return FORCE_PRIORITY_1;
+    //     }
+    // }
     return p.output.GetDType() == Datatype::F16 ? FORCE_PRIORITY_6 : FORCE_PRIORITY_8;
 }
 
