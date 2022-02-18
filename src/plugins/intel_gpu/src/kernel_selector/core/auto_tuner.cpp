@@ -99,11 +99,41 @@ TuningCache::Entry TuningCache::LoadKernel(const Params& params, bool update) {
 
 TuningCache::Entry TuningCache::LoadKernel(const Params& params, uint32_t computeUnitsCount, bool update) {
     bool oldVersion = false;
+    bool show = false;
+    if (params.GetType() == KernelType::CONVOLUTION || params.GetType() == KernelType::FULLY_CONNECTED) {
+        show = true;
+    }
+    auto hashStr = std::to_string(create_hash(params.to_string()));
+    auto paramStr = params.to_cache_string_v2();
+
+    if (show) {
+        auto kTypeStr = toString(params.GetType());
+        auto computeUnitsStr = std::to_string(computeUnitsCount);
+        std::cout << params.layerID << "][T] - START ************************************************************" << std::endl;
+        std::cout << params.layerID << "][T] - kTypeStr       : " <<  kTypeStr << std::endl;
+        std::cout << params.layerID << "][T] - hashStr        : " <<  hashStr << std::endl;
+        std::cout << params.layerID << "][T] - paramStr       : " <<  paramStr << std::endl;
+        std::cout << params.layerID << "][T] - computeUnitsStr: " <<  computeUnitsStr << std::endl;
+    }
+
     // Try to load from version 2
     auto result = LoadKernel_v2(params, computeUnitsCount);
+    if (show && (std::get<0>(result).empty() == false)) {
+        std::cout << params.layerID << "][T] - FOUND IN KERNEL_v2: { \"" << paramStr;
+        std::cout <<"\" : [\""<< std::get<0>(result) << "\", " << std::get<1>(result) << "] }"<< std::endl;
+        std::cout << params.layerID << "][T] - FOUND IN KERNEL_v2: { \"" << hashStr;
+        std::cout  <<"\" : [\""<< std::get<0>(result) << "\", " << std::get<1>(result) << "] }"<< std::endl;
+    }
     // Try to load from version 1
     if (std::get<0>(result).empty() || update) {
         auto result_v1 = LoadKernel_v1(params, computeUnitsCount);
+        if (show && (std::get<0>(result).empty() == false)) {
+            auto paramStr = params.to_cache_string_v2();
+            std::cout << params.layerID << "][T] - FOUND IN KERNEL_v1: { \"" << paramStr;
+            std::cout <<"\" : [\""<< std::get<0>(result_v1) << "\", " << std::get<1>(result_v1) << "] }"<< std::endl;
+            std::cout << params.layerID << "][T] - FOUND IN KERNEL_v1: { \"" << hashStr;
+            std::cout <<"\" : [\""<< std::get<0>(result_v1) << "\", " << std::get<1>(result_v1) << "] }"<< std::endl;
+        }
         oldVersion = !std::get<0>(result_v1).empty();
         if (oldVersion && std::get<0>(result).empty()) {
             result = result_v1;
@@ -114,6 +144,9 @@ TuningCache::Entry TuningCache::LoadKernel(const Params& params, uint32_t comput
         StoreKernel(params, computeUnitsCount, std::get<0>(result), std::get<1>(result));
     }
 
+    if (show) {
+        std::cout << params.layerID << "][T] - END   ************************************************************" << std::endl;
+    }
     return result;
 }
 
