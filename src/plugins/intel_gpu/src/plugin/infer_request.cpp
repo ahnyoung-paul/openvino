@@ -672,12 +672,12 @@ void InferRequest::copy_output_data(cldnn::memory::ptr src, Blob::Ptr dst) {
     OV_ITT_SCOPED_TASK(itt::domains::intel_gpu_plugin, "InferRequest::copy_output_data");
     auto& stream = m_graph->GetNetwork()->get_stream();
     switch (dst->getTensorDesc().getPrecision()) {
-    case Precision::FP32: copyResultToOutputBlob<float>(src, dst,stream);    break;
-    case Precision::FP16: copyResultToOutputBlob<uint16_t>(src, dst,stream); break;
-    case Precision::I32:  copyResultToOutputBlob<int32_t>(src, dst,stream);  break;
-    case Precision::I64:  copyResultToOutputBlob<int64_t>(src, dst,stream);  break;
-    case Precision::U8:  copyResultToOutputBlob<uint8_t>(src, dst,stream);  break;
-    case Precision::I8:  copyResultToOutputBlob<int8_t>(src, dst,stream);  break;
+    case Precision::FP32: copyResultToOutputBlob<float>(src, dst, stream);    break;
+    case Precision::FP16: copyResultToOutputBlob<uint16_t>(src, dst, stream); break;
+    case Precision::I32:  copyResultToOutputBlob<int32_t>(src, dst, stream);  break;
+    case Precision::I64:  copyResultToOutputBlob<int64_t>(src, dst, stream);  break;
+    case Precision::U8:  copyResultToOutputBlob<uint8_t>(src, dst, stream);  break;
+    case Precision::I8:  copyResultToOutputBlob<int8_t>(src, dst, stream);  break;
     default: IE_THROW(NotImplemented) << "The plugin does not support output " << dst->getTensorDesc().getPrecision() << " precision";
     }
 }

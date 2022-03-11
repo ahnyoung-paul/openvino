@@ -329,7 +329,7 @@ struct layout {
         : data_type(data_type), format(fmt), size(size), data_padding(apadding) { }
 
     layout(data_types data_type, cldnn::format fmt, tensor size, padding apadding = padding())
-        : data_type(data_type), format(fmt),data_padding(apadding) {
+        : data_type(data_type), format(fmt), data_padding(apadding) {
             auto sizes = fmt == format::any ? size.sizes() : size.sizes(layout::get_default_format(fmt.dimension()));
             ov::Shape shape(sizes.begin(), sizes.end());
             this->size = ov::PartialShape(shape);

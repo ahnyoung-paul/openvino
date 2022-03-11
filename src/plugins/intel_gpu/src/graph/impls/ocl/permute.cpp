@@ -40,7 +40,7 @@ inline std::vector<uint16_t> convert_permute_order(const std::vector<uint16_t>& 
 
     return cldnn_order;
 }
-}
+}   // namespace
 
 struct permute_impl : typed_primitive_impl_ocl<permute> {
     using parent = typed_primitive_impl_ocl<permute>;
