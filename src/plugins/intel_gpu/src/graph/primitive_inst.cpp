@@ -101,8 +101,9 @@ void primitive_inst::update_shape() {
 
     auto new_layout = _node.type()->calc_output_layout(_node);
 
-    auto out_layout = _node.is_valid_output_layout() ? _node.get_output_layout() : layout(data_types::f32, format::any, tensor{});
-    auto out_layout_str = _node.is_valid_output_layout() ? out_layout.to_string() : "invalid";
+    auto old_layout = const_cast<program_node&>(_node).get_old_output_layout();
+    auto out_layout = _node.is_valid_output_layout() ? _node.get_output_layout() : old_layout;
+    auto out_layout_str = _node.is_valid_output_layout() ? out_layout.to_string() : old_layout.to_string();
     GPU_DEBUG_IF(debug_config->verbose >= 4) {
         GPU_DEBUG_COUT << id() << " update shape: was: " << out_layout_str << " now: " << new_layout.to_string() << std::endl;
     }

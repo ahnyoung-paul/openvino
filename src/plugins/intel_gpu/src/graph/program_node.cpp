@@ -234,6 +234,7 @@ bool program_node::set_output_layout(layout& new_layout, bool invalidate_users_i
     if (changed && invalidate_users_if_changed)  // output_layout has changed! invalidate users
         invalidate_users();
 
+    old_output_layout = output_layout;
     output_layout = new_layout;
     valid_output_layout = true;
     return changed;

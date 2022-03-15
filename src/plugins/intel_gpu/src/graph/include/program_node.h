@@ -354,6 +354,7 @@ public:
     std::string get_unique_id() const { return unique_id; }
     void set_unique_id(std::string id) { unique_id = id; }
     bool is_dynamic() const;
+    layout get_old_output_layout() const { return old_output_layout; }
 
 protected:
     std::string unique_id;
@@ -365,6 +366,7 @@ protected:
 
     bool valid_output_layout = false;
     layout output_layout = layout(data_types::f32, format::bfyx, tensor());
+    layout old_output_layout = layout(data_types::f32, format::bfyx, tensor());
 
     std::vector<program_node*> dependencies;
     std::list<program_node*> users;
