@@ -6,6 +6,7 @@
 
 #include "intel_gpu/runtime/engine.hpp"
 #include "intel_gpu/runtime/kernel.hpp"
+#include "intel_gpu/runtime/utils.hpp"
 
 #include <map>
 #include <mutex>
@@ -76,6 +77,7 @@ private:
     kernels_code _kernels_code;
     std::atomic<bool> _pending_compilation{false};
     std::map<const std::string, kernel::ptr> _kernels;
+    LRUCache<size_t, std::vector<uint8_t>> _in_memory_kernels_cache;  // for testing, use 10 MB
     std::vector<std::string> batch_header_str;
 
     void get_program_source(const kernels_code& kernels_source_code, std::vector<batch_program>*) const;
