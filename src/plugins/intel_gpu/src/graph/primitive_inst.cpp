@@ -142,11 +142,28 @@ void primitive_inst::realloc_if_needed() {
         _output = _network.get_engine().reinterpret_buffer(*_output, _node.get_output_layout());
     }
 }
+std::string primitive_inst::get_layout_key() {
+    auto layout_key_str = _node.get_output_layout().to_string();
+    for (auto in : _node.get_users()) {
+        layout_key_str += in->get_output_layout().to_string();
+    }
+    return layout_key_str;
+}
 
 void primitive_inst::update_impl() {
     if (!_node.is_type<data>() && !(_node.is_type<mutable_data>() && _node.get_dependencies().empty())) {
-        PRINT_TIME(_impl = std::move(_node.type()->choose_impl(_node)));
-        PRINT_TIME(_network.get_program()->compile());
+        auto layout_key = get_layout_key();
+        auto cache = _node.get_primitive_impl_cache();
+        bool is_new_impl = false;
+        PRINT_TIME(std::tie(_impl, is_new_impl) = cache->get(layout_key, [&]() {
+            cldnn::LRUCache<std::string, std::shared_ptr<cldnn::primitive_impl>>::CacheEntry new_entry;
+            new_entry.data = std::move(_node.type()->choose_impl(_node));
+            new_entry.size = sizeof(new_entry.data);
+            return new_entry;
+        }));
+        if (is_new_impl) {
+            PRINT_TIME(_network.get_program()->compile());
+        }
         PRINT_TIME(_impl->init_kernels());
         reset_shape_change();
         GPU_DEBUG_GET_INSTANCE(debug_config);

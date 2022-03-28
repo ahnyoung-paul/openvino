@@ -163,13 +163,15 @@ public:
     virtual void update_weights() {}
     void update_impl();
 
+    std::string get_layout_key();
+
 protected:
     primitive_inst(network& network, program_node const& node, bool allocate_memory);
 
     network& _network;
     program_node const& _node;
 
-    std::unique_ptr<primitive_impl> _impl;
+    std::shared_ptr<primitive_impl> _impl;
 
     // this is a set of dependencies in terms of memory, if execution of this primitive requires data from another one,
     // it should be added to this set

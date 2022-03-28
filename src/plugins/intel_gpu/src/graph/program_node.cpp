@@ -32,6 +32,10 @@ program_node::program_node(std::shared_ptr<primitive> prim, program& prog)
     : desc(prim), myprog(prog), org_id(prim ? (prim->id) : 0) {
     if (prim)
         output_layout.data_padding = prim->output_padding;
+
+    const size_t max_num_primitive_impls = 4;
+    primitive_impl_cache = std::make_shared<LRUCache<std::string, std::shared_ptr<primitive_impl>>>(
+                                        max_num_primitive_impls * sizeof(std::shared_ptr<primitive_impl>));
 }
 
 void program_node::replace_dependency(size_t idx, program_node& new_dep) {
