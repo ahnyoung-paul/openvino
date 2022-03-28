@@ -227,8 +227,8 @@ void kernels_cache::get_program_source(const kernels_code& kernels_source_code, 
     }
 }
 
-kernels_cache::kernels_cache(engine& engine) 
-    : _engine(engine) 
+kernels_cache::kernels_cache(engine& engine)
+    : _engine(engine)
     , _in_memory_kernels_cache(DEF_IN_MEMORY_CACHE_CAPACITY_IN_MB * 1024 * 1024) {
 }
 
@@ -269,9 +269,9 @@ static std::vector<unsigned char> getProgramBinaries(cl::Program program) {
 static std::string find_str(const std::string& input, std::string str, std::string& default_str) {
     std::istringstream ss(input);
     std::string token;
-    while(std::getline(ss, token, '\n')) {
+    while (std::getline(ss, token, '\n')) {
         size_t nPos = token.find(str);
-        if( nPos != std::string::npos ) {
+        if ( nPos != std::string::npos ) {
             return token.substr(nPos + str.size());
         }
     }
@@ -319,9 +319,9 @@ void kernels_cache::build_batch(const engine& build_engine, const batch_program&
     if (batch.kernels_counter == 1) {
         std::vector<uint8_t> data;
         bool hitted = false;
-        std::tie(data, hitted) = _in_memory_kernels_cache.find(batch.hash_value);
+        std::tie(data, hitted) = _in_memory_kernels_cache.get(batch.hash_value, nullptr);
 
-        if (hitted) {
+        if (hitted && (data.size() > 0)) {
             precompiled_kernels.push_back(data);
 
             ////////////////// debug code //////////////////
@@ -331,7 +331,7 @@ void kernels_cache::build_batch(const engine& build_engine, const batch_program&
     }
 
     // file-memory cache
-    if(precompiled_kernels.empty() && is_cache_enabled()) {
+    if (precompiled_kernels.empty() && is_cache_enabled()) {
         // Try to load file with name ${hash_value}.cl_cache which contains precompiled kernels for current bucket
         // If read is successful, then remove kernels from compilation bucket
         auto bin = loadBinaryFromFile(cached_bin_name);
@@ -363,7 +363,7 @@ void kernels_cache::build_batch(const engine& build_engine, const batch_program&
 
             // save to in_memory cache
             // Cache is saved at both in-memory and file, because in-memory cache capacity is limited.
-            if(batch.kernels_counter == 1) {
+            if (batch.kernels_counter == 1) {
                 auto program_bin = getProgramBinaries(program);
                 _in_memory_kernels_cache.get(batch.hash_value, [program_bin](){
                     return LRUCache<size_t, std::vector<uint8_t>>::CacheEntry{program_bin, program_bin.size()};

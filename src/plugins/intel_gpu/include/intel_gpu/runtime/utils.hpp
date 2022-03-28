@@ -12,7 +12,7 @@
 #include <algorithm>
 #include <sstream>
 #include <vector>
-#include <deque>
+#include <list>
 #include <unordered_map>
 #include <mutex>
 #include <functional>
@@ -200,8 +200,8 @@ public:
     };
 
 private:
-    std::deque<TypeK> deque;
-    std::unordered_map<TypeK, std::pair<typename std::deque<TypeK>::iterator, LRUCache::CacheEntry>> cache_entry_map;
+    std::list<TypeK> order;
+    std::unordered_map<TypeK, std::pair<typename std::list<TypeK>::iterator, LRUCache::CacheEntry>> cache_entry_map;
     size_t curr_data_size;
     const size_t capacity;
 
@@ -215,27 +215,24 @@ public:
     }
 
     std::tuple<TypeD, bool> get(TypeK key, std::function<LRUCache::CacheEntry(void)> create_new_data) {
-        if (!create_new_data) {
-            throw std::runtime_error("create_new_data should not be null");
-        }
         std::lock_guard<std::mutex> lock(mtx);
         TypeD data;
-        bool is_created_entry = false;
+        bool is_found = true;
         if (cache_entry_map.find(key) == cache_entry_map.end()) {
             if (create_new_data) {
                 auto new_entry = create_new_data();
                 add_new_entry(key, new_entry);
                 data = cache_entry_map[key].second.data;
-                is_created_entry = true;
             }
+            is_found = false;
         } else {
             // Move current data to front of deque
-            deque.erase(cache_entry_map[key].first);
-            deque.push_front(key);
-            cache_entry_map[key].first = deque.begin();
+            order.erase(cache_entry_map[key].first);
+            order.push_front(key);
+            cache_entry_map[key].first = order.begin();
             data = cache_entry_map[key].second.data;
         }
-        return std::make_pair(data, is_created_entry);
+        return std::make_pair(data, is_found);
     }
 
     std::tuple<TypeD, bool> find(TypeK key) {
@@ -246,9 +243,9 @@ public:
         if (cache_entry_map.find(key) == cache_entry_map.end()) {
             is_found = false;
         } else {
-            deque.erase(cache_entry_map[key].first);
-            deque.push_front(key);
-            cache_entry_map[key].first = deque.begin();
+            order.erase(cache_entry_map[key].first);
+            order.push_front(key);
+            cache_entry_map[key].first = order.begin();
             is_found = true;
             data = cache_entry_map[key].second.data;
         }
@@ -258,7 +255,7 @@ public:
 
     void clear() {
         std::lock_guard<std::mutex> lock(mtx);
-        deque.clear();
+        order.clear();
         cache_entry_map.clear();
         curr_data_size = 0;
     }
@@ -271,25 +268,25 @@ public:
         return curr_data_size;
     }
 
-    std::deque<TypeK> get_all_keys() const {
-        return deque;
+    std::list<TypeK> get_all_keys() const {
+        return order;
     }
+
 private:
     void add_new_entry(TypeK key, LRUCache::CacheEntry entry) {
         if (cache_entry_map.find(key) == cache_entry_map.end()) {
             if (curr_data_size > 0 && capacity < (curr_data_size + entry.size)) {
-                //  Remove cache at the dend of deque
-                curr_data_size -= cache_entry_map[deque.back()].second.size;
-                cache_entry_map.erase(deque.back());
-                deque.pop_back();
+                //  Remove cache at the end of order
+                curr_data_size -= cache_entry_map[order.back()].second.size;
+                cache_entry_map.erase(order.back());
+                order.pop_back();
             }
         } else {
-            deque.erase(cache_entry_map[key].first);
+            order.erase(cache_entry_map[key].first);
         }
-        deque.push_front(key);
-        cache_entry_map[key] = std::make_pair(deque.begin(), entry);
+        order.push_front(key);
+        cache_entry_map[key] = std::make_pair(order.begin(), entry);
         curr_data_size += entry.size;
-
         std::cout << "cache_entry_map size=" << cache_entry_map.size() << std::endl;
     }
 };
