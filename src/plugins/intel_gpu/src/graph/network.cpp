@@ -661,6 +661,7 @@ void network::execute_impl(const std::vector<event::ptr>& events) {
 
     auto surf_lock = surfaces_lock::create(get_engine().type(), in_out_mem, get_stream());
 
+    auto e_start = std::chrono::high_resolution_clock::now();
     // set_arguments();
     for (auto& inst : _exec_order) {
         GPU_DEBUG_IF(debug_config->dump_layers_path.length() > 0) {
@@ -729,6 +730,9 @@ void network::execute_impl(const std::vector<event::ptr>& events) {
     for (auto& prim : _primitives) {
         prim.second->reset_output_change();
     }
+    auto e_duration = std::chrono::high_resolution_clock::now() - e_start;
+    std::cout << "network::execute_impl : shape_changed(" << (_shape_changed? "True" : "False");
+    std::cout << ") time(" << (static_cast<double>(std::chrono::duration_cast<std::chrono::microseconds>(e_duration).count())/1000) << ") ms\n";
 
     // Using output of previous network as input to another one may cause hazard (in OOOQ mode) if user would not
     // provide proper event to execution. Flushing pipeline should prevent this kind of issues.
