@@ -1140,11 +1140,13 @@ void program::remove_nodes(std::vector<program_node*>& to_remove) {
 void program::dump_program(const char* stage,
                            bool with_full_info,
                            std::function<bool(program_node const&)> const& filter) const {
-    std::string path = get_dir_path(options);
+    // std::string path = get_dir_path(options);
+    std::string path = "/home/ahnyoung/cldnn.dyn_shapes/debug_dump";
     if (path.empty() || !with_full_info) {
         return;
     }
 
+    std::cout << "Run dump_program ... " << path << "/" << stage << std::endl;
     std::ofstream graph(path + "cldnn_program_" + std::to_string(prog_id) + "_" + stage + ".graph");
     dump_graph_init(graph, *this, filter);
 

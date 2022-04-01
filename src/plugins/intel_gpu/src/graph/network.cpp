@@ -633,12 +633,22 @@ std::map<primitive_id, network_output> network::execute(const std::vector<event:
     for (auto& id : output_ids) {
         result.emplace(id, get_output(id));
     }
+    // if (func_iter == 5) { // dump graph when func_iter is 5
+    //     std::string dump_file_name = "debug_5_execution_result";
+    //     _program->dump_program(dump_file_name.c_str(), true);
+    // }
     return result;
 }
 
 
 void network::execute_impl(const std::vector<event::ptr>& events) {
     OV_ITT_SCOPED_TASK(itt::domains::CLDNN, "NetworkImpl::Execute");
+    clear_func_time();
+#ifdef PRINT_EXECUTE_TIME
+    std::cout << "[ DEBUG PERF ][" << func_iter << "] Start network::execute_impl ..." << std::endl;
+    auto e_start = std::chrono::high_resolution_clock::now();
+#endif
+
     // Wait for previous execution completion
     reset_execution(false);
     GPU_DEBUG_GET_INSTANCE(debug_config);
@@ -650,8 +660,10 @@ void network::execute_impl(const std::vector<event::ptr>& events) {
     for (auto& inst : _inputs) {
         if (inst->output_memory_ptr())
             in_out_mem.push_back(inst->output_memory_ptr());
-        if (inst->shape_changed())
+        if (inst->shape_changed()) {
             _shape_changed = true;
+            // std::cout << "[ DEBUG PERF ] ShapeIsChanged ( " << inst->id() << ") => " << inst->get_layout_key() << std::endl;
+        }
     }
 
     for (auto& inst : _outputs) {
@@ -734,6 +746,14 @@ void network::execute_impl(const std::vector<event::ptr>& events) {
     // provide proper event to execution. Flushing pipeline should prevent this kind of issues.
     // In scenarios with a big number of very small networks it can provide performance drop.
     get_stream().flush();
+#ifdef PRINT_EXECUTE_TIME
+    auto e_duration = std::chrono::high_resolution_clock::now() - e_start;
+
+    show_func_time();
+
+    std::cout << "[ DEBUG PERF ][" << func_iter << "] End.. network::execute_impl : shape_changed(" << (_shape_changed? "True" : "False");
+    std::cout << ") time(" << (static_cast<double>(std::chrono::duration_cast<std::chrono::microseconds>(e_duration).count())/1000) << ") ms\n";
+#endif
 }
 
 std::vector<primitive_id> network::get_input_ids() const {
