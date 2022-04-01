@@ -74,6 +74,12 @@ bool is_output_buffer(const program_node& node) {
 
 namespace cldnn {
 
+// static std::vector<std::string> key_list = {
+//     "multiply:Multiply_25715",
+//     "transpose:389",
+//     "transpose:412",
+//     "scatterupdate:ScatterUpdate_24379" };
+
 bool is_user_cpu(const program_node* user) {
     if (user->can_be_optimized()) {
         auto users = user->get_users();
@@ -114,9 +120,11 @@ void primitive_inst::update_shape() {
     //     return;
     GPU_DEBUG_GET_INSTANCE(debug_config);
 
-    if (!_network.shape_changed())
+    if (!_network.shape_changed()) {
         return;
+    }
 
+    // bool show_debug = (std::find(key_list.begin(), key_list.end(), _node.id()) != key_list.end());
     auto new_layout = _node.type()->calc_output_layout(_node);
 
     auto out_layout = _node.is_valid_output_layout() ? _node.get_output_layout() : layout(data_types::f32, format::any, tensor{});
@@ -124,8 +132,13 @@ void primitive_inst::update_shape() {
     GPU_DEBUG_IF(debug_config->verbose >= 4) {
         GPU_DEBUG_COUT << id() << " update shape: was: " << out_layout_str << " now: " << new_layout.to_string() << std::endl;
     }
-    if (out_layout != new_layout)
+    if (out_layout != new_layout) {
+        // if (show_debug) {
+        //     std::cout << "[update_shape][" << id() << "] shape is changed from ";
+        //     std::cout << out_layout_str << " to " << new_layout.to_string() << std::endl;
+        // }
         set_shape_change();
+    }
     // TODO: Get rid of this const_cast
     const_cast<program_node&>(_node).set_output_layout(new_layout);
 }
@@ -143,33 +156,74 @@ void primitive_inst::realloc_if_needed() {
     }
 }
 std::string primitive_inst::get_layout_key() {
-    auto layout_key_str = _node.get_output_layout().to_string();
-    for (auto in : _node.get_users()) {
-        layout_key_str += in->get_output_layout().to_string();
+    std::string layout_key_str = "";
+    if (!_node.is_valid_output_layout()) {
+        std::cout << "output layout is not valid : " << id() << std::endl;
+        return layout_key_str;
     }
+    layout_key_str = _node.get_output_layout().to_string();
+
+    for (auto in : _node.get_users()) {
+        if (in->is_valid_output_layout()) {
+            layout_key_str += in->get_output_layout().to_string();
+        } else {
+            auto new_layout = _node.type()->calc_output_layout(_node);
+            const_cast<program_node&>(_node).set_output_layout(new_layout);
+            layout_key_str += new_layout.to_string();
+        }
+    }
+
     return layout_key_str;
 }
 
 void primitive_inst::update_impl() {
-    if (!_node.is_type<data>() && !(_node.is_type<mutable_data>() && _node.get_dependencies().empty())) {
-        auto layout_key = get_layout_key();
-        auto cache = _node.get_primitive_impl_cache();
-        bool is_new_impl = false;
-        PRINT_TIME(std::tie(_impl, is_new_impl) = cache->get(layout_key, [&]() {
-            cldnn::LRUCache<std::string, std::shared_ptr<cldnn::primitive_impl>>::CacheEntry new_entry;
-            new_entry.data = std::move(_node.type()->choose_impl(_node));
-            new_entry.size = sizeof(new_entry.data);
-            return new_entry;
-        }));
-        if (is_new_impl) {
-            PRINT_TIME(_network.get_program()->compile());
+    try {
+        if (!_node.is_type<data>() && !(_node.is_type<mutable_data>() && _node.get_dependencies().empty())) {
+            // bool show_debug = (std::find(key_list.begin(), key_list.end(), _node.id()) != key_list.end());
+            auto layout_key = get_layout_key();
+            auto ret = std::getenv("RUN_KERNEL_SELECOTR_OPT");
+            if (ret) {
+                if (layout_key != "") {
+                    // std::cout << "update impl for " << id() << " - get the impl from cache : " << layout_key << std::endl;
+                    auto cache = _node.get_primitive_impl_cache();
+                    bool is_hitted = false;
+                    PRINT_TIME(std::tie(_impl, is_hitted) = cache->get(layout_key, [&]() {
+                        cldnn::LRUCache<std::string, std::shared_ptr<cldnn::primitive_impl>>::CacheEntry new_entry;
+                        new_entry.data = std::move(_node.type()->choose_impl(_node));
+                        new_entry.size = sizeof(new_entry.data);
+                        return new_entry;
+                    }));
+
+                    if (!is_hitted) {
+                        // if (show_debug)
+                        //     std::cout << "[update_impl][" << id() << " XX " << layout_key << "] no hitted : compile " << std::endl;
+                        PRINT_TIME(_network.get_program()->compile());
+                    // } else {
+                    //     if (show_debug)
+                    //         std::cout << "[update_impl][" << id() << " XX " << layout_key << "] hitted  " << std::endl;
+                    }
+                } else {
+                    // if (show_debug)
+                    //     std::cout << "[update_impl][" << id() << " XX " << layout_key << "] have no layout_key : choose_impl and compile  " << std::endl;
+
+                    PRINT_TIME(_impl = std::move(_node.type()->choose_impl(_node)));
+                    PRINT_TIME(_network.get_program()->compile());
+                }
+            } else {
+                // if (show_debug)
+                //     std::cout << "[update_impl][" << id() << " XX " << layout_key << "] Original : choose_impl and compile  " << std::endl;
+                PRINT_TIME(_impl = std::move(_node.type()->choose_impl(_node)));
+                PRINT_TIME(_network.get_program()->compile());
+            }
+            PRINT_TIME(_impl->init_kernels());
+            reset_shape_change();
+            GPU_DEBUG_GET_INSTANCE(debug_config);
+            GPU_DEBUG_IF(debug_config->verbose >= 4) {
+                GPU_DEBUG_COUT << "Update impl for node " << id() << ": " << (_impl != nullptr ? _impl->get_kernel_name() : "Nullptr") << std::endl;
+            }
         }
-        PRINT_TIME(_impl->init_kernels());
-        reset_shape_change();
-        GPU_DEBUG_GET_INSTANCE(debug_config);
-        GPU_DEBUG_IF(debug_config->verbose >= 4) {
-            GPU_DEBUG_COUT << "Update impl for node " << id() << ": " << (_impl != nullptr ? _impl->get_kernel_name() : "Nullptr") << std::endl;
-        }
+    } catch (std::exception& ex) {
+        std::cout << "Exception: " << ex.what() << std::endl;
     }
 }
 
