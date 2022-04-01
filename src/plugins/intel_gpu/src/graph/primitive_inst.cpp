@@ -27,8 +27,9 @@
 #include <vector>
 #include <memory>
 #include <algorithm>
+#include <iomanip>
 
-
+#define PERF_TEST
 #if 0
 #define PRINT_TIME(func) \
 { \
@@ -39,6 +40,22 @@
 }
 #else
 #define PRINT_TIME(func) func;
+#endif
+
+#ifdef BREAKDOWN_PERF
+#define GET_PERF_TIME(func) \
+do { \
+    auto start_ = std::chrono::high_resolution_clock::now(); \
+    func; \
+    auto end_ = std::chrono::high_resolution_clock::now(); \
+    auto perf_time_ = std::chrono::duration_cast<std::chrono::microseconds>((end_ - start_)).count(); \
+    std::stringstream ss; \
+    ss << #func; \
+    std::string func_name_ = ss.str(); \
+    _network.set_func_time(func_name_, perf_time_); \
+} while (0);
+#else
+#define GET_PERF_TIME(func) func
 #endif
 
 namespace {
@@ -76,6 +93,11 @@ bool is_output_buffer(const program_node& node) {
 }  // namespace
 
 namespace cldnn {
+
+static std::vector<std::string> debug_keys = {
+    "parameter:token_type_ids",
+    "parameter:input_ids",
+    "parameter:attention_mask"};
 
 bool is_user_cpu(const program_node* user) {
     if (user->can_be_optimized()) {
@@ -121,7 +143,6 @@ void primitive_inst::update_shape() {
         return;
 
     auto new_layout = _node.type()->calc_output_layout(_node);
-
     auto out_layout = _node.is_valid_output_layout() ? _node.get_output_layout() : layout(data_types::f32, format::any, tensor{});
     auto out_layout_str = _node.is_valid_output_layout() ? out_layout.to_string() : "invalid";
     GPU_DEBUG_IF(debug_config->verbose >= 4) {
@@ -147,6 +168,7 @@ void primitive_inst::realloc_if_needed() {
         _output = _network.get_engine().reinterpret_buffer(*_output, _node.get_output_layout());
     }
 }
+
 std::string primitive_inst::get_layout_key() {
     std::string layout_key_str = "";
     if (!_node.is_valid_output_layout()) {
@@ -264,21 +286,39 @@ event::ptr primitive_inst::execute(const std::vector<event::ptr>& events) {
                      "Invalid/unset input",
                      !_has_valid_input,
                      "Cannot execute primitive " + primitive_id + " with invalid/unset input");
+#ifdef SHOW_LAYOUT
+    if (std::find(debug_keys.begin(), debug_keys.end(), primitive_id) != debug_keys.end()) {
+        std::string msg = _network.shape_changed()? "shape_changed" : "shape_unchanged";
+        auto new_layout = _node.type()->calc_output_layout(_node);
+        std::cout << "[ DEBUG PERF ] ** CHECK layout for ( " << std::setw(30) << primitive_id << " ) : ";
+        std::cout << msg << " - " << _node.get_output_layout().to_string();
+        std::cout << " => " << new_layout.to_string() << "\n";
+    }
+#endif
 
     static std::mutex m;
     {
         // Lock for program nodes
         // To be removed once concurrency issue for program node is resolved
         std::lock_guard<std::mutex> lock(m);
+#ifndef BREAKDOWN_PERF
         PRINT_TIME(update_shape());
         if (shape_changed()) {
             PRINT_TIME(update_impl());
             PRINT_TIME(update_weights());
             PRINT_TIME(realloc_if_needed());
         }
+#else
+        GET_PERF_TIME(update_shape());
+        if (shape_changed()) {
+            GET_PERF_TIME(update_impl());
+            GET_PERF_TIME(update_weights());
+            GET_PERF_TIME(realloc_if_needed());
+        }
+#endif
     }
 
-    on_execute();
+    GET_PERF_TIME(on_execute());
 
     GPU_DEBUG_GET_INSTANCE(debug_config);
     GPU_DEBUG_IF(debug_config->verbose >= 1) {
@@ -289,11 +329,12 @@ event::ptr primitive_inst::execute(const std::vector<event::ptr>& events) {
     // If a node has mutable input or it's an output, then the input/output buffers might be changed
     // So we need to set arguments on each execution.
     // if (has_mutable_input() || is_output() || is_dynamic()) {
-        set_arguments();
+    GET_PERF_TIME(set_arguments());
     // }
 
-    if (_exec_deps.empty())
+    if (_exec_deps.empty()) {
         return _impl->execute(events, *this);
+    }
 
     std::vector<event::ptr> dependencies;
     auto queue_type = get_network().get_stream().get_queue_type();
@@ -313,6 +354,7 @@ event::ptr primitive_inst::execute(const std::vector<event::ptr>& events) {
             }
         }
     }
+
     return _impl->execute(dependencies, *this);
 }
 
