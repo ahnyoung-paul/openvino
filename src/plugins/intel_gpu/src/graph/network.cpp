@@ -639,6 +639,14 @@ std::map<primitive_id, network_output> network::execute(const std::vector<event:
 
 void network::execute_impl(const std::vector<event::ptr>& events) {
     OV_ITT_SCOPED_TASK(itt::domains::CLDNN, "NetworkImpl::Execute");
+
+#ifdef BREAKDOWN_PERF
+    clear_func_time();
+
+    std::cout << "[ DEBUG PERF ][" << func_iter << "] Start network::execute_impl ..." << std::endl;
+    auto e_start = std::chrono::high_resolution_clock::now();
+#endif
+
     // Wait for previous execution completion
     reset_execution(false);
     GPU_DEBUG_GET_INSTANCE(debug_config);
@@ -650,8 +658,10 @@ void network::execute_impl(const std::vector<event::ptr>& events) {
     for (auto& inst : _inputs) {
         if (inst->output_memory_ptr())
             in_out_mem.push_back(inst->output_memory_ptr());
-        if (inst->shape_changed())
+        if (inst->shape_changed()) {
             _shape_changed = true;
+            // std::cout << "[ DEBUG PERF ] ShapeIsChanged ( " << inst->id() << ") => " << inst->get_layout_key() << std::endl;
+        }
     }
 
     for (auto& inst : _outputs) {
@@ -661,7 +671,6 @@ void network::execute_impl(const std::vector<event::ptr>& events) {
 
     auto surf_lock = surfaces_lock::create(get_engine().type(), in_out_mem, get_stream());
 
-    auto e_start = std::chrono::high_resolution_clock::now();
     // set_arguments();
     for (auto& inst : _exec_order) {
         GPU_DEBUG_IF(debug_config->dump_layers_path.length() > 0) {
@@ -730,14 +739,19 @@ void network::execute_impl(const std::vector<event::ptr>& events) {
     for (auto& prim : _primitives) {
         prim.second->reset_output_change();
     }
-    auto e_duration = std::chrono::high_resolution_clock::now() - e_start;
-    std::cout << "network::execute_impl : shape_changed(" << (_shape_changed? "True" : "False");
-    std::cout << ") time(" << (static_cast<double>(std::chrono::duration_cast<std::chrono::microseconds>(e_duration).count())/1000) << ") ms\n";
 
     // Using output of previous network as input to another one may cause hazard (in OOOQ mode) if user would not
     // provide proper event to execution. Flushing pipeline should prevent this kind of issues.
     // In scenarios with a big number of very small networks it can provide performance drop.
     get_stream().flush();
+#ifdef BREAKDOWN_PERF
+    auto e_duration = std::chrono::high_resolution_clock::now() - e_start;
+
+    show_func_time();
+
+    std::cout << "[ DEBUG PERF ][" << func_iter << "] End.. network::execute_impl : shape_changed(" << (_shape_changed? "True" : "False");
+    std::cout << ") time(" << (static_cast<double>(std::chrono::duration_cast<std::chrono::microseconds>(e_duration).count())/1000) << ") ms\n";
+#endif
 }
 
 std::vector<primitive_id> network::get_input_ids() const {

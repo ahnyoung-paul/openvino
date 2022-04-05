@@ -24,8 +24,9 @@
 #include <vector>
 #include <memory>
 #include <algorithm>
+#include <iomanip>
 
-
+#define PERF_TEST
 #if 0
 #define PRINT_TIME(func) \
 { \
@@ -36,6 +37,22 @@
 }
 #else
 #define PRINT_TIME(func) func;
+#endif
+
+#ifdef BREAKDOWN_PERF
+#define GET_PERF_TIME(func) \
+do { \
+    auto start_ = std::chrono::high_resolution_clock::now(); \
+    func; \
+    auto end_ = std::chrono::high_resolution_clock::now(); \
+    auto perf_time_ = std::chrono::duration_cast<std::chrono::microseconds>((end_ - start_)).count(); \
+    std::stringstream ss; \
+    ss << #func; \
+    std::string func_name_ = ss.str(); \
+    _network.set_func_time(func_name_, perf_time_); \
+} while (0);
+#else
+#define GET_PERF_TIME(func) func
 #endif
 
 namespace {
@@ -74,11 +91,10 @@ bool is_output_buffer(const program_node& node) {
 
 namespace cldnn {
 
-// static std::vector<std::string> key_list = {
-//     "multiply:Multiply_25715",
-//     "transpose:389",
-//     "transpose:412",
-//     "scatterupdate:ScatterUpdate_24379" };
+static std::vector<std::string> debug_keys = {
+    "parameter:token_type_ids",
+    "parameter:input_ids",
+    "parameter:attention_mask"};
 
 bool is_user_cpu(const program_node* user) {
     if (user->can_be_optimized()) {
@@ -120,23 +136,16 @@ void primitive_inst::update_shape() {
     //     return;
     GPU_DEBUG_GET_INSTANCE(debug_config);
 
-    if (!_network.shape_changed()) {
+    if (!_network.shape_changed())
         return;
-    }
 
-    // bool show_debug = (std::find(key_list.begin(), key_list.end(), _node.id()) != key_list.end());
     auto new_layout = _node.type()->calc_output_layout(_node);
-
     auto out_layout = _node.is_valid_output_layout() ? _node.get_output_layout() : layout(data_types::f32, format::any, tensor{});
     auto out_layout_str = _node.is_valid_output_layout() ? out_layout.to_string() : "invalid";
     GPU_DEBUG_IF(debug_config->verbose >= 4) {
         GPU_DEBUG_COUT << id() << " update shape: was: " << out_layout_str << " now: " << new_layout.to_string() << std::endl;
     }
     if (out_layout != new_layout) {
-        // if (show_debug) {
-        //     std::cout << "[update_shape][" << id() << "] shape is changed from ";
-        //     std::cout << out_layout_str << " to " << new_layout.to_string() << std::endl;
-        // }
         set_shape_change();
     }
     // TODO: Get rid of this const_cast
@@ -155,6 +164,7 @@ void primitive_inst::realloc_if_needed() {
         _output = _network.get_engine().reinterpret_buffer(*_output, _node.get_output_layout());
     }
 }
+
 std::string primitive_inst::get_layout_key() {
     std::string layout_key_str = "";
     if (!_node.is_valid_output_layout()) {
@@ -179,12 +189,10 @@ std::string primitive_inst::get_layout_key() {
 void primitive_inst::update_impl() {
     try {
         if (!_node.is_type<data>() && !(_node.is_type<mutable_data>() && _node.get_dependencies().empty())) {
-            // bool show_debug = (std::find(key_list.begin(), key_list.end(), _node.id()) != key_list.end());
             auto layout_key = get_layout_key();
             auto ret = std::getenv("RUN_KERNEL_SELECOTR_OPT");
             if (ret) {
                 if (layout_key != "") {
-                    // std::cout << "update impl for " << id() << " - get the impl from cache : " << layout_key << std::endl;
                     auto cache = _node.get_primitive_impl_cache();
                     bool is_hitted = false;
                     PRINT_TIME(std::tie(_impl, is_hitted) = cache->get(layout_key, [&]() {
@@ -195,23 +203,13 @@ void primitive_inst::update_impl() {
                     }));
 
                     if (!is_hitted) {
-                        // if (show_debug)
-                        //     std::cout << "[update_impl][" << id() << " XX " << layout_key << "] no hitted : compile " << std::endl;
                         PRINT_TIME(_network.get_program()->compile());
-                    // } else {
-                    //     if (show_debug)
-                    //         std::cout << "[update_impl][" << id() << " XX " << layout_key << "] hitted  " << std::endl;
                     }
                 } else {
-                    // if (show_debug)
-                    //     std::cout << "[update_impl][" << id() << " XX " << layout_key << "] have no layout_key : choose_impl and compile  " << std::endl;
-
                     PRINT_TIME(_impl = std::move(_node.type()->choose_impl(_node)));
                     PRINT_TIME(_network.get_program()->compile());
                 }
             } else {
-                // if (show_debug)
-                //     std::cout << "[update_impl][" << id() << " XX " << layout_key << "] Original : choose_impl and compile  " << std::endl;
                 PRINT_TIME(_impl = std::move(_node.type()->choose_impl(_node)));
                 PRINT_TIME(_network.get_program()->compile());
             }
@@ -287,21 +285,39 @@ event::ptr primitive_inst::execute(const std::vector<event::ptr>& events) {
                      "Invalid/unset input",
                      !_has_valid_input,
                      "Cannot execute primitive " + primitive_id + " with invalid/unset input");
+#ifdef BREAKDOWN_PERF
+    if (std::find(debug_keys.begin(), debug_keys.end(), primitive_id) != debug_keys.end()) {
+        std::string msg = _network.shape_changed()? "shape_changed" : "shape_unchanged";
+        auto new_layout = _node.type()->calc_output_layout(_node);
+        std::cout << "[ DEBUG PERF ] ** CHECK layout for ( " << std::setw(30) << primitive_id << " ) : ";
+        std::cout << msg << " - " << _node.get_output_layout().to_string();
+        std::cout << " => " << new_layout.to_string() << std::endl;
+    }
+#endif
 
     static std::mutex m;
     {
         // Lock for program nodes
         // To be removed once concurrency issue for program node is resolved
         std::lock_guard<std::mutex> lock(m);
+#ifndef BREAKDOWN_PERF
         PRINT_TIME(update_shape());
         if (shape_changed()) {
             PRINT_TIME(update_impl());
             PRINT_TIME(update_weights());
             PRINT_TIME(realloc_if_needed());
         }
+#else
+        GET_PERF_TIME(update_shape());
+        if (shape_changed()) {
+            GET_PERF_TIME(update_impl());
+            GET_PERF_TIME(update_weights());
+            GET_PERF_TIME(realloc_if_needed());
+        }
+#endif
     }
 
-    on_execute();
+    GET_PERF_TIME(on_execute());
 
     GPU_DEBUG_GET_INSTANCE(debug_config);
     GPU_DEBUG_IF(debug_config->verbose >= 1) {
@@ -312,11 +328,14 @@ event::ptr primitive_inst::execute(const std::vector<event::ptr>& events) {
     // If a node has mutable input or it's an output, then the input/output buffers might be changed
     // So we need to set arguments on each execution.
     // if (has_mutable_input() || is_output() || is_dynamic()) {
-        set_arguments();
+    GET_PERF_TIME(set_arguments());
     // }
 
-    if (_exec_deps.empty())
-        return _impl->execute(events, *this);
+    event::ptr ret;
+    if (_exec_deps.empty()) {
+        GET_PERF_TIME(ret = _impl->execute(events, *this));
+        return ret;
+    }
 
     std::vector<event::ptr> dependencies;
     auto queue_type = get_network().get_stream().get_queue_type();
@@ -336,7 +355,9 @@ event::ptr primitive_inst::execute(const std::vector<event::ptr>& events) {
             }
         }
     }
-    return _impl->execute(dependencies, *this);
+
+    GET_PERF_TIME(ret = _impl->execute(dependencies, *this));
+    return ret;
 }
 
 void primitive_inst::set_arguments() {
