@@ -763,6 +763,7 @@ public:
     cl_int setArgUsm(cl_uint index, const UsmMemory& mem) {
         return detail::errHandler(_usmHelper.set_kernel_arg_mem_pointer(*this, index, mem.get()), "[CL_EXT] setArgUsm in KernelIntel failed");
     }
+
 private:
     const UsmHelper& _usmHelper;
 };

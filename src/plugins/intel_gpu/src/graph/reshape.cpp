@@ -113,6 +113,9 @@ static std::vector<int64_t> read_vector(cldnn::memory::ptr mem, cldnn::stream& s
 }
 
 void reshape_inst::update_shape() {
+    if (!_network.shape_changed())
+        return;
+
     auto& node = const_cast<reshape_node&>(dynamic_cast<const reshape_node&>(_node));
 
     if (_node.get_dependencies().size() == 2) {

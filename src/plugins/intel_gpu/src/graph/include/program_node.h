@@ -390,11 +390,7 @@ public:
 
     bool is_dynamic() const;
 
-    std::shared_ptr<LRUCache<std::string, std::shared_ptr<primitive_impl>>> get_primitive_impl_cache() const { return primitive_impl_cache; }
-
 protected:
-    std::shared_ptr<LRUCache<std::string, std::shared_ptr<primitive_impl>>> primitive_impl_cache;
-
     size_t unique_id = 0;
     static thread_local size_t cur_id;
 

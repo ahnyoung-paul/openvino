@@ -27,6 +27,21 @@ public:
     const ocl_kernel_type& get_handle() const { return _compiled_kernel; }
     ocl_kernel_type& get_handle() { return _compiled_kernel; }
     std::shared_ptr<kernel> clone() const override { return std::make_shared<ocl_kernel>(get_handle().clone(), _kernel_id); }
+
+    size_t getProgramBinSize() const {
+        cl_int ret;
+        auto program = _compiled_kernel.getInfo<CL_KERNEL_PROGRAM>(&ret);
+        if (ret != 0) {
+            std::cout << "Fail to get info" << std::endl;
+            return 0;
+        }
+        std::vector<size_t> binary_sizes = program.getInfo<CL_PROGRAM_BINARY_SIZES>();
+        if (binary_sizes.size() != 1)
+            throw std::runtime_error("Invalid binaries count because cl_prog can't get program binary size");
+
+        size_t binary_size = binary_sizes.front();
+        return binary_size;
+    }
 };
 
 }  // namespace ocl

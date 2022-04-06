@@ -15,6 +15,7 @@
 #include <vector>
 #include <list>
 #include <utility>
+#include "runtime/ocl/ocl_kernel.hpp"
 
 namespace cldnn {
 namespace ocl {
@@ -59,6 +60,24 @@ struct typed_primitive_impl_ocl : public typed_primitive_impl<PType> {
     }
 
     bool is_cpu() const override { return false; }
+
+    size_t get_ocl_program_binary_size() const override {
+        std::vector<size_t> size_vector;
+        for (auto& k : _kernels) {
+            const ocl::ocl_kernel& ocl_kernel = dynamic_cast<const ocl::ocl_kernel&>(*(k.get()));
+            size_t size = ocl_kernel.getProgramBinSize();
+            if (size_vector.empty()
+                || std::find(size_vector.begin(), size_vector.end(), size) == size_vector.end()) {
+                size_vector.push_back(size);
+            }
+        }
+
+        size_t total_size = 0;
+        for (auto& size : size_vector) {
+            total_size += size;
+        }
+        return total_size;
+    }
 
 protected:
     virtual bool optimized_out(typed_primitive_inst<PType>&) const { return false; }
@@ -107,6 +126,9 @@ protected:
             _kernels.emplace_back(std::move(_outer.get_program().get_kernel(_kernel_ids[k])));
         }
     }
+
+
+
 
     std::vector<layout> get_internal_buffer_layouts_impl() const override {
         if (_kernel_data.internalBufferSizes.empty())

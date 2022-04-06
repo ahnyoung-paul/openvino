@@ -104,6 +104,11 @@ program::program(engine& engine_ref,
       processing_order(),
       tuning_cache(nullptr),
       is_body_program(is_body_program) {
+
+    const size_t def_impl_cache_in_mb = 100;
+    primitive_impl_cache = std::make_shared<LRUCache<std::string, std::shared_ptr<primitive_impl>>>(
+                                        def_impl_cache_in_mb * 1024 * 1024);
+
     init_primitives();
     set_options();
     pm = std::unique_ptr<pass_manager>(new pass_manager(*this));

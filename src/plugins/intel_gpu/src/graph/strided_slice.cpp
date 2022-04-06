@@ -84,6 +84,9 @@ layout strided_slice_inst::calc_output_layout(strided_slice_node const& node) {
 }
 
 void strided_slice_inst::update_shape() {
+    if (!_network.shape_changed())
+        return;
+
     auto& node = const_cast<strided_slice_node&>(dynamic_cast<const strided_slice_node&>(_node));
     auto in_mem1 = _network.get_output_memory(_node.get_dependency(1).id());
     auto in_mem2 = _network.get_output_memory(_node.get_dependency(2).id());
