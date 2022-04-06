@@ -633,16 +633,20 @@ std::map<primitive_id, network_output> network::execute(const std::vector<event:
     for (auto& id : output_ids) {
         result.emplace(id, get_output(id));
     }
+    if (func_iter == 5) { // dump graph when func_iter is 5
+        std::string dump_file_name = "debug_5_execution_result";
+        _program->dump_program(dump_file_name.c_str(), true);
+    }
     return result;
 }
 
 
 void network::execute_impl(const std::vector<event::ptr>& events) {
     OV_ITT_SCOPED_TASK(itt::domains::CLDNN, "NetworkImpl::Execute");
+    func_iter++;
 
-#ifdef BREAKDOWN_PERF
     clear_func_time();
-
+#ifdef PRINT_EXECUTE_TIME
     std::cout << "[ DEBUG PERF ][" << func_iter << "] Start network::execute_impl ..." << std::endl;
     auto e_start = std::chrono::high_resolution_clock::now();
 #endif
@@ -744,7 +748,7 @@ void network::execute_impl(const std::vector<event::ptr>& events) {
     // provide proper event to execution. Flushing pipeline should prevent this kind of issues.
     // In scenarios with a big number of very small networks it can provide performance drop.
     get_stream().flush();
-#ifdef BREAKDOWN_PERF
+#ifdef PRINT_EXECUTE_TIME
     auto e_duration = std::chrono::high_resolution_clock::now() - e_start;
 
     show_func_time();

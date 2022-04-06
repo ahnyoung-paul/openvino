@@ -285,13 +285,13 @@ event::ptr primitive_inst::execute(const std::vector<event::ptr>& events) {
                      "Invalid/unset input",
                      !_has_valid_input,
                      "Cannot execute primitive " + primitive_id + " with invalid/unset input");
-#ifdef BREAKDOWN_PERF
+#ifdef SHOW_LAYOUT
     if (std::find(debug_keys.begin(), debug_keys.end(), primitive_id) != debug_keys.end()) {
         std::string msg = _network.shape_changed()? "shape_changed" : "shape_unchanged";
         auto new_layout = _node.type()->calc_output_layout(_node);
         std::cout << "[ DEBUG PERF ] ** CHECK layout for ( " << std::setw(30) << primitive_id << " ) : ";
         std::cout << msg << " - " << _node.get_output_layout().to_string();
-        std::cout << " => " << new_layout.to_string() << std::endl;
+        std::cout << " => " << new_layout.to_string() << "\n";
     }
 #endif
 

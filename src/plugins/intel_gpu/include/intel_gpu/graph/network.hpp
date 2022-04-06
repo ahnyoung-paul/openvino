@@ -21,7 +21,10 @@
 #include <set>
 #include <iomanip>
 
-// #define BREAKDOWN_PERF
+#define BREAKDOWN_PERF
+#define SHOW_LAYOUT
+#define PRINT_EXECUTE_TIME
+
 #define UNUSED_2(x) x
 
 namespace cldnn {
@@ -226,13 +229,13 @@ public:
     void clear_func_time() {
 #ifdef BREAKDOWN_PERF
         time_logs.clear();
-        func_iter++;
 #endif
+        func_iter++;
     }
 
-#ifdef BREAKDOWN_PERF
     size_t func_iter = 0;
-    std::unordered_map<std::string, long long> time_logs;
+#ifdef BREAKDOWN_PERF
+    std::map<std::string, long long> time_logs;
 #endif
 
 private:
