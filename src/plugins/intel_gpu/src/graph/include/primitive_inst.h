@@ -18,6 +18,8 @@
 #include <memory>
 #include <vector>
 #include <string>
+#include <chrono>
+#include <iomanip>
 
 namespace cldnn {
 
@@ -28,6 +30,8 @@ class primitive_inst;
 
 template <class PType>
 class typed_primitive_inst;
+
+
 
 /*
     Base class for all implementations.
@@ -209,7 +213,71 @@ protected:
     virtual void on_execute() {}
 
     static std::string generic_to_string(program_node const& node, const char* type_name);
+
+public:
+    static void analyze_data(std::string type_str, std::vector<double>& data) {
+        // type str, count, sum, average, min, max, geomean, variance
+        size_t count    = data.size();
+        double sum      = std::accumulate(data.begin(), data.end(), 0.0);
+        double mean     = sum / count;
+        double min      = *std::min_element(data.cbegin(), data.cend());
+        double max      = *std::max_element(data.cbegin(), data.cend());
+
+        std::cout << std::setw(20) << type_str << "";
+        std::cout << "," << std::setw(12) << count;
+        std::cout << "," << std::setw(12) << mean;
+        std::cout << "," << std::setw(12) << min;
+        std::cout << "," << std::setw(12) << max;
+        std::cout << std::endl;
+    }
+
+    static void show_perf_result() {
+        if (perf_maps.size() > 0) {
+            std::cout << std::setw(20) << "Type";
+            std::cout << ", " << std::setw(10) << "NUM";
+            std::cout << ", " << std::setw(12) << "AVG(us)";
+            std::cout << ", " << std::setw(12) << "MIN(us)";
+            std::cout << ", " << std::setw(10) << "MAX(us)";
+            std::cout << std::endl;
+        }
+        for (auto& perf_data : perf_maps) {
+            analyze_data(perf_data.first, perf_data.second);
+        }
+    }
+
+    static void set_perf_data(std::string type_str, size_t time) {
+        if (perf_maps.find(type_str) == perf_maps.end()) {
+            perf_maps.insert(std::pair<std::string, std::vector<double>>(type_str, std::vector<double>()));
+        }
+        perf_maps[type_str].push_back((static_cast<double>(time) / 1000.0));
+    }
+
+    static void clear_perf_data() {
+        for (auto perf : perf_maps) {
+            perf.second.clear();
+        }
+        perf_maps.clear();
+    }
+
+public:
+    static std::map<std::string, std::vector<double>> perf_maps;
 };
+
+#define START_PERF()  \
+    std::chrono::_V2::system_clock::time_point exec_start; \
+    do { \
+        exec_start = std::chrono::high_resolution_clock::now(); \
+    } while (0);
+
+
+#define END_PERF(node)\
+    do {\
+        auto type_str = node.get_primitive()->type_string();\
+        auto exec_duration = std::chrono::high_resolution_clock::now() - exec_start;\
+        auto exec_nanotime = std::chrono::duration_cast<std::chrono::nanoseconds>(exec_duration).count();\
+        primitive_inst::set_perf_data(type_str, exec_nanotime);\
+    } while (0);
+
 
 /*
 Base class for all implementation of specified primitive type.

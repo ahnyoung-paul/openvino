@@ -48,6 +48,8 @@
 
 namespace cldnn {
 
+std::map<std::string, std::vector<double>> primitive_inst::perf_maps;
+
 #ifdef GPU_DEBUG_CONFIG
 static float convert_half_to_float(half_t val, bool flush_denorm_to_zero = false) {
 #if defined HALF_HALF_HPP
@@ -283,7 +285,11 @@ network::network(program::ptr program, uint16_t stream_id)
 network::network(program::ptr program, stream::ptr stream, uint16_t stream_id)
     : network(program, stream, false, stream_id == 0) {}
 
+static size_t iter = 0;
 network::~network() {
+    std::cout << "Total iteration (" << iter << ") except first inference: " << std::endl;
+    primitive_inst::show_perf_result();
+    primitive_inst::clear_perf_data();
     _memory_pool->clear_pool_for_network(net_id);
 }
 
@@ -625,8 +631,23 @@ void network::add_to_exec_order(const primitive_id& id) {
     _exec_order.push_back(inst);
 }
 
+static bool is_first_infer = true;
 std::map<primitive_id, network_output> network::execute(const std::vector<event::ptr>& dependencies) {
+    if (is_first_infer) {
+        std::cout << "After Load network: " << std::endl;
+        primitive_inst::show_perf_result();
+        primitive_inst::clear_perf_data();
+    }
     execute_impl(dependencies);
+    if (is_first_infer) {
+        is_first_infer = false;
+        std::cout << std::endl;
+        std::cout << "After first inference: " << std::endl;
+        primitive_inst::show_perf_result();
+        primitive_inst::clear_perf_data();
+    } else {
+        iter++;
+    }
 
     auto output_ids = get_output_ids();
     std::map<primitive_id, network_output> result;
@@ -635,7 +656,6 @@ std::map<primitive_id, network_output> network::execute(const std::vector<event:
     }
     return result;
 }
-
 
 void network::execute_impl(const std::vector<event::ptr>& events) {
     OV_ITT_SCOPED_TASK(itt::domains::CLDNN, "NetworkImpl::Execute");
