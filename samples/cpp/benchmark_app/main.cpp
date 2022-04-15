@@ -977,16 +977,16 @@ int main(int argc, char* argv[]) {
 
                 if (isDynamicNetwork) {
                     batchSize = get_batch_size(inputs);
-                    if (!std::any_of(inputs.begin(),
-                                     inputs.end(),
-                                     [](const std::pair<const std::string, benchmark_app::InputInfo>& info) {
-                                         return ov::layout::has_batch(info.second.layout);
-                                     })) {
-                        slog::warn
-                            << "No batch dimension was found, asssuming batch to be 1. Beware: this might affect "
-                               "FPS calculation."
-                            << slog::endl;
-                    }
+                    // if (!std::any_of(inputs.begin(),
+                    //                  inputs.end(),
+                    //                  [](const std::pair<const std::string, benchmark_app::InputInfo>& info) {
+                    //                      return ov::layout::has_batch(info.second.layout);
+                    //                  })) {
+                    //     slog::warn
+                    //         << "No batch dimension was found, asssuming batch to be 1. Beware: this might affect "
+                    //            "FPS calculation."
+                    //         << slog::endl;
+                    // }
                 }
 
                 for (auto& item : inputs) {
