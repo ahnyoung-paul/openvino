@@ -687,6 +687,7 @@ void reorder_inputs::run(program& p, layout_optimizer& lo, reorder_factory& rf) 
     };
 
     const auto reorder_input_fully_connected = [&p, &lo, &rf](typed_program_node<fully_connected>& fc_node) {
+        auto reorder_exec_start = std::chrono::high_resolution_clock::now();
         auto& weights = fc_node.weights();
         auto& input = fc_node.input();
         auto input_layout = input.get_output_layout();
@@ -700,6 +701,9 @@ void reorder_inputs::run(program& p, layout_optimizer& lo, reorder_factory& rf) 
             auto& new_reorder_node = p.get_or_create(new_reshape);
             p.add_intermediate(new_reorder_node, fc_node, 0);
         }
+        auto reorder_exec_duration = std::chrono::high_resolution_clock::now() - reorder_exec_start;
+        auto reorder_exec_nanotime = std::chrono::duration_cast<std::chrono::nanoseconds>(reorder_exec_duration).count();
+        primitive_inst::set_perf_data("reorder_input_fully_connected", reorder_exec_nanotime);
     };
 
     for (auto& prim : p.get_processing_order()) {

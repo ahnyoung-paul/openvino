@@ -207,6 +207,7 @@ private:
     bool _is_dynamic = false;
     bool _shape_changed = false;
     bool _reset_arguments;
+    bool _is_first_infer = true;
 
     std::map<primitive_id, std::shared_ptr<primitive_inst>> _primitives;
     std::vector<std::shared_ptr<primitive_inst>> _inputs;

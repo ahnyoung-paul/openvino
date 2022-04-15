@@ -18,8 +18,11 @@
 
 using namespace cldnn;
 
+static size_t propagate_constants_iter = 0;
 // ToDo remove friendship relation from  program_node and program
 void propagate_constants::run(program& p) {
+    const size_t my_iter = (propagate_constants_iter++);
+    std::cout << "[START] propagate_constants[" << my_iter << "] ... " << std::endl;
     OV_ITT_SCOPED_TASK(itt::domains::CLDNN, "CLDNN::pass::PropagateConstants");
     for (auto& node : p.get_processing_order()) {
         if (node->is_constant())
@@ -95,6 +98,7 @@ void propagate_constants::run(program& p) {
                               curr_node.users.end());
         p.replace(curr_node, new_node);
     }
+    std::cout << "[END__] propagate_constants[" << my_iter << "] ... " << std::endl;
 }
 
 bool propagate_constants::has_non_const_user(program_node& node) const {

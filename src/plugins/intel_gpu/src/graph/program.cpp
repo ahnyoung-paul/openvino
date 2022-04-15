@@ -105,6 +105,7 @@ program::program(engine& engine_ref,
       tuning_cache(nullptr),
       is_body_program(is_body_program) {
 
+    std::cout << "[START] program build ... TYPE1 " << std::endl;
     primitive_impl_cache = std::make_shared<LRUCache<std::string, std::shared_ptr<primitive_impl>>>(3000);
 
     init_primitives();
@@ -119,6 +120,10 @@ program::program(engine& engine_ref,
     } else {
         build_program(is_internal);
     }
+    std::cout << "[END__] program build ... TYPE1 " << std::endl;
+    std::cout << "After Build program ... TYPE1" << std::endl;
+    primitive_inst::show_perf_result();
+    primitive_inst::clear_perf_data();
 }
 
 program::program(engine& engine_ref,
@@ -129,6 +134,7 @@ program::program(engine& engine_ref,
       options(options),
       processing_order(),
       tuning_cache(nullptr) {
+    std::cout << "[START] program build ... TYPE2 " << std::endl;
     init_primitives();
     set_options();
     _kernels_cache = std::unique_ptr<kernels_cache>(new kernels_cache(_engine, prog_id,
@@ -136,6 +142,10 @@ program::program(engine& engine_ref,
     pm = std::unique_ptr<pass_manager>(new pass_manager(*this));
     prepare_nodes(nodes);
     build_program(is_internal);
+    std::cout << "[END__] program build ... TYPE2 " << std::endl;
+    std::cout << "After Build program ... TYPE2" << std::endl;
+    primitive_inst::show_perf_result();
+    primitive_inst::clear_perf_data();
 }
 
 program::~program() {

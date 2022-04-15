@@ -619,7 +619,7 @@ void InferRequest::wait() {
                 same_mem = same_host_mem(outputMemory, dst_ptr);
             }
             if (!same_mem) {
-                std::cerr << "Copy " << outputID << " blob\n";
+                // std::cerr << "Copy " << outputID << " blob\n";
                 copy_output_data(outputMemory, bptr);
             }
         }
