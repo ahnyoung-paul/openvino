@@ -98,18 +98,64 @@ reshape_inst::typed_primitive_inst(network& network, reshape_node const& node) :
         reuse_input();
 }
 
-static std::vector<int64_t> read_vector(cldnn::memory::ptr mem, cldnn::stream& stream) {
-    switch (mem->get_layout().data_type) {
-        case data_types::i32: {
-            mem_lock<int32_t, mem_lock_type::read> lock{mem, stream};
-            return std::vector<int64_t>(lock.begin(), lock.end());
+static std::vector<int64_t> read_vector(cldnn::memory::ptr mem, cldnn::stream& stream, bool is_debug) {
+    // switch (mem->get_layout().data_type) {
+    //     case data_types::i32: {
+    //         mem_lock<int32_t, mem_lock_type::read> lock{mem, stream};
+    //         return std::vector<int64_t>(lock.begin(), lock.end());
+    //     }
+    //     case data_types::i64: {
+    //         mem_lock<int64_t, mem_lock_type::read> lock{mem, stream};
+    //         return std::vector<int64_t>(lock.begin(), lock.end());
+    //     }
+    //     default: IE_THROW() << "read_vector: unsupported data type";
+    // }
+    std::vector<int64_t> out_vecs;
+    if (mem->get_allocation_type() == allocation_type::usm_host || mem->get_allocation_type() == allocation_type::usm_shared) {
+        if (is_debug)
+            std::cout << "usm_shared and usm_host" << std::endl;
+        switch (mem->get_layout().data_type) {
+            case data_types::i32: {
+                int32_t* p_mem = reinterpret_cast<int32_t*>(mem->buffer_ptr());
+                for (int i=0; i < mem->count(); i++) {
+                    out_vecs.push_back(p_mem[i]);
+                }
+                break;
+            }
+            case data_types::i64: {
+                int64_t* p_mem = reinterpret_cast<int64_t*>(mem->buffer_ptr());
+                for (int i=0; i < mem->count(); i++) {
+                    out_vecs.push_back(p_mem[i]);
+                }
+                break;
+            }
+            default: IE_THROW() << "read_vector: unsupported data type";
         }
-        case data_types::i64: {
-            mem_lock<int64_t, mem_lock_type::read> lock{mem, stream};
-            return std::vector<int64_t>(lock.begin(), lock.end());
+    } else {
+        if (is_debug)
+            std::cout << "usm_device" << std::endl;
+        auto host_mem = mem->get_engine()->allocate_memory(mem->get_layout(), allocation_type::usm_host);
+        host_mem->copy_from(stream, *mem);
+        // std::cout << "host_mem->count() : " << host_mem->count() << std::endl;
+        switch (host_mem->get_layout().data_type) {
+            case data_types::i32: {
+                int32_t* p_host_mem = reinterpret_cast<int32_t*>(host_mem->buffer_ptr());
+                for (int i=0; i < host_mem->count(); i++) {
+                    out_vecs.push_back(p_host_mem[i]);
+                }
+                break;
+            }
+            case data_types::i64: {
+                int64_t* p_host_mem = reinterpret_cast<int64_t*>(host_mem->buffer_ptr());
+                for (int i=0; i < host_mem->count(); i++) {
+                    out_vecs.push_back(p_host_mem[i]);
+                }
+                break;
+            }
+            default: IE_THROW() << "read_vector: unsupported data type";
         }
-        default: IE_THROW() << "read_vector: unsupported data type";
     }
+    return out_vecs;
 }
 
 void reshape_inst::update_shape() {
@@ -127,6 +173,7 @@ void reshape_inst::update_shape() {
         auto perf_time = static_cast<double>(std::chrono::duration_cast<std::chrono::microseconds>((end - start)).count());
         _network.set_func_time("reshape_inst::update_shape::pa01::get_output_memory", perf_time);
 
+        const std::string key = "constant:1563";
         // TODO: usm_device is copied to host on lock(), but we need to ensure that this is better, then
         // keeping such constants on host (i.e. modifying transfer_memory_to_device)
         // if (shape_mem->get_allocation_type() == allocation_type::usm_device) {
@@ -134,10 +181,18 @@ void reshape_inst::update_shape() {
         // }
         auto reshape_prim = std::static_pointer_cast<reshape>(std::const_pointer_cast<primitive>(_node.get_primitive()));
         start = std::chrono::high_resolution_clock::now();
-        auto r_vecs = read_vector(shape_mem, _network.get_stream());
+        auto r_vecs = read_vector(shape_mem, _network.get_stream(), (_node.get_dependency(1).id() == key));
         end = std::chrono::high_resolution_clock::now();
         perf_time = static_cast<double>(std::chrono::duration_cast<std::chrono::microseconds>((end - start)).count());
         _network.set_func_time("reshape_inst::update_shape::pa01::read_vector_"+std::to_string(r_vecs.size()), perf_time);
+
+        if (_node.get_dependency(1).id() == key) {
+            std::cout << "Reshape: " << _node.get_dependency(1).id() << ", " << (_node.get_dependency(1).is_constant()? "constant " : "non-constant ");
+            for (auto v : r_vecs) {
+                std::cout << v << ", ";
+            }
+            std::cout << " num " << (_node.get_dependency(1).get_users().size()) << std::endl;
+        }
 
         start = std::chrono::high_resolution_clock::now();
         reshape_prim->output_shape = ov::PartialShape(r_vecs);

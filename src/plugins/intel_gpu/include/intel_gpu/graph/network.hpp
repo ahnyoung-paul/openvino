@@ -204,12 +204,17 @@ public:
     }
 
 public:
-    void set_func_time(std::string func_name, long long t) {
+    struct my_data {
+        double time;
+        size_t count;
+    };
+    void set_func_time(std::string func_name, double t) {
 #ifdef BREAKDOWN_PERF
         if (time_logs.find(func_name) == time_logs.end()) {
-            time_logs[func_name] = t;
+            time_logs[func_name] = {t, 1};
         } else {
-            time_logs[func_name] += t;
+            time_logs[func_name].time  += t;
+            time_logs[func_name].count += 1;
         }
 #else
         UNUSED_2(func_name);
@@ -221,7 +226,7 @@ public:
 #ifdef BREAKDOWN_PERF
         for (auto item : time_logs) {
             std::cout << "[ DEBUG PERF ][" << func_iter << "] **** [" << std::setw(50) << item.first << "], ";
-            std::cout << (static_cast<double>(item.second) / 1000) << " ms" << std::endl;
+            std::cout << (static_cast<double>(item.second.time) / 1000) << " ms, " << item.second.count << " calls" << std::endl;
         }
 #endif
     }
@@ -235,7 +240,7 @@ public:
 
     size_t func_iter = 0;
 #ifdef BREAKDOWN_PERF
-    std::map<std::string, long long> time_logs;
+    std::map<std::string, my_data> time_logs;
 #endif
 
 private:

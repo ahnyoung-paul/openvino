@@ -280,9 +280,24 @@ void primitive_inst::check_memory_to_set(const memory& mem, const layout& layout
 }
 
 void primitive_inst::set_output_memory(memory::ptr mem_new, bool check) {
+    if (_node.id() == "constant:1563") {
+        std::cout << _node.id() << " is set to ";
+        if (mem_new->get_allocation_type() == allocation_type::usm_device) {
+            std::cout << "usm_device";
+        } else if (mem_new->get_allocation_type() == allocation_type::usm_host) {
+            std::cout << "usm_host";
+        } else {
+            std::cout << "usm_shared";
+        }
+        std::cout << std::endl;
+    }
+
     auto& eng = _network.get_engine();
     // skip all the buzz if no action actually required
     if (eng.is_the_same_buffer(*mem_new, *_output)) {
+        if (_node.id() == "constant:1563") {
+            std::cout << "skip for same buffer " << std::endl;
+        }
         return;
     }
 
@@ -293,7 +308,8 @@ void primitive_inst::set_output_memory(memory::ptr mem_new, bool check) {
 
     if (_node.is_constant()) {
         mem_new->copy_from(_network.get_stream(), *_output);
-    } else {
+    }
+    {
         _output = mem_new;
     }
 }
