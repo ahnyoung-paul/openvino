@@ -12,9 +12,6 @@
 #include "experimental_detectron_roi_feature_extractor_inst.hpp"
 #include "reshape_inst.h"
 
-#include "kernel_selector/core/kernel_selector_common.h"
-#include "kernel_selector_helper.h"
-
 #include "intel_gpu/graph/network.hpp"
 #include "intel_gpu/runtime/engine.hpp"
 #include "intel_gpu/runtime/memory.hpp"
@@ -138,7 +135,9 @@ void primitive_inst::update_shape() {
 void primitive_inst::realloc_if_needed() {
     GPU_DEBUG_GET_INSTANCE(debug_config);
 
-    if (!_output  || _output->get_layout().count() < _node.get_output_layout().count()) {
+    if (!_output
+        || ((_output->get_layout().count() < _node.get_output_layout().count())
+        && (max_output_layout_size < _node.get_output_layout().count()))) {
         GPU_DEBUG_IF(debug_config->verbose >= 4) {
             GPU_DEBUG_COUT << "realloc memory for node: " << id() << std::endl;
         }
@@ -146,37 +145,33 @@ void primitive_inst::realloc_if_needed() {
     } else {
         _output = _network.get_engine().reinterpret_buffer(*_output, _node.get_output_layout());
     }
-}
-std::string primitive_inst::get_layout_key() {
-    std::string layout_key_str = "";
-    if (!_node.is_valid_output_layout()) {
-        std::cout << id() << " has invaild output layout!" << std::endl;
-        return "";
-    }
-    layout_key_str = id() + "_" + std::to_string(_node.get_unique_id());
-
-    auto data_tensor = convert_data_tensor(_node.get_output_layout());
-    layout_key_str += "_" + kernel_selector::toString_v2(data_tensor);
-
-    for (auto in : _node.get_dependencies()) {
-        if (!in->is_constant()) {
-            auto data_tensor = convert_data_tensor(in->get_output_layout());
-            layout_key_str += "_" + kernel_selector::toString_v2(data_tensor);
-        }
-    }
-    return layout_key_str;
+    max_output_layout_size = std::max(_output->get_layout().count(), max_output_layout_size);
 }
 
 void primitive_inst::update_impl() {
     auto pid = id();
     if (!_node.is_type<data>() && !(_node.is_type<mutable_data>() && _node.get_dependencies().empty())) {
+        auto get_layout_key = [&]()->std::string {
+            std::string layout_key_str = "";
+            if (_node.is_valid_output_layout()) {
+                layout_key_str = id() + "_" + std::to_string(_node.get_unique_id());
+                layout_key_str += "_" + _node.get_output_layout().to_string();
+
+                for (auto in : _node.get_dependencies()) {
+                    if (!in->is_constant()) {
+                        layout_key_str += "_" + in->get_output_layout().to_string();
+                    }
+                }
+            }
+            return layout_key_str;
+        };
+
         auto layout_key = get_layout_key();
-        auto ret = std::getenv("NO_USE_IMPL_CACHE");
-        if ((ret == nullptr) && layout_key != "") {
+        if (layout_key != "") {
             auto cache = _network.get_program()->get_primitive_impl_cache();
-            bool is_hitted = false;
+            bool is_hit = false;
             std::shared_ptr<cldnn::primitive_impl> origin_impl;
-            PRINT_TIME(std::tie(origin_impl, is_hitted) = cache->get(layout_key, [&]() {
+            PRINT_TIME(std::tie(origin_impl, is_hit) = cache->get(layout_key, [&]() {
                 cldnn::LRUCache<std::string, std::shared_ptr<cldnn::primitive_impl>>::CacheEntry new_entry;
                 auto new_impl = std::move(_node.type()->choose_impl(_node));
                 PRINT_TIME(_network.get_program()->compile());
@@ -187,7 +182,7 @@ void primitive_inst::update_impl() {
             }));
 
             _impl = std::move(origin_impl->clone());
-            if (is_hitted) {
+            if (is_hit) {
                 PRINT_TIME(_impl->init_kernels());
             }
         } else {
@@ -253,9 +248,9 @@ void primitive_inst::set_output_memory(memory::ptr mem_new, bool check) {
 
     if (_node.is_constant()) {
         mem_new->copy_from(_network.get_stream(), *_output);
-    } else {
-        _output = mem_new;
     }
+
+    _output = mem_new;
 }
 
 event::ptr primitive_inst::execute(const std::vector<event::ptr>& events) {
@@ -361,6 +356,8 @@ primitive_inst::primitive_inst(network& network, program_node const& node, bool 
             _output = allocate_output();
         }
     }
+    if (_output)
+        max_output_layout_size = _output->get_layout().count();
 }
 
 void primitive_inst::allocate_internal_buffers(void) {

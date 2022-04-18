@@ -99,17 +99,39 @@ reshape_inst::typed_primitive_inst(network& network, reshape_node const& node) :
 }
 
 static std::vector<int64_t> read_vector(cldnn::memory::ptr mem, cldnn::stream& stream) {
-    switch (mem->get_layout().data_type) {
-        case data_types::i32: {
-            mem_lock<int32_t, mem_lock_type::read> lock{mem, stream};
-            return std::vector<int64_t>(lock.begin(), lock.end());
+    std::vector<int64_t> out_vecs;
+    if (mem->get_allocation_type() == allocation_type::usm_host || mem->get_allocation_type() == allocation_type::usm_shared) {
+        switch (mem->get_layout().data_type) {
+            case data_types::i32: {
+                int32_t* p_mem = reinterpret_cast<int32_t*>(mem->buffer_ptr());
+                for (int i=0; i < mem->count(); i++) {
+                    out_vecs.push_back(p_mem[i]);
+                }
+                break;
+            }
+            case data_types::i64: {
+                int64_t* p_mem = reinterpret_cast<int64_t*>(mem->buffer_ptr());
+                for (int i=0; i < mem->count(); i++) {
+                    out_vecs.push_back(p_mem[i]);
+                }
+                break;
+            }
+            default: IE_THROW() << "read_vector: unsupported data type";
         }
-        case data_types::i64: {
-            mem_lock<int64_t, mem_lock_type::read> lock{mem, stream};
-            return std::vector<int64_t>(lock.begin(), lock.end());
+    } else {
+        switch (mem->get_layout().data_type) {
+            case data_types::i32: {
+                mem_lock<int32_t, mem_lock_type::read> lock{mem, stream};
+                out_vecs = std::move(std::vector<int64_t>(lock.begin(), lock.end()));
+            }
+            case data_types::i64: {
+                mem_lock<int64_t, mem_lock_type::read> lock{mem, stream};
+                out_vecs = std::move(std::vector<int64_t>(lock.begin(), lock.end()));
+            }
+            default: IE_THROW() << "read_vector: unsupported data type";
         }
-        default: IE_THROW() << "read_vector: unsupported data type";
     }
+    return out_vecs;
 }
 
 void reshape_inst::update_shape() {

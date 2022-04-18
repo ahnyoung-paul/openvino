@@ -637,6 +637,12 @@ void program::transfer_memory_to_device() {
                 throw std::invalid_argument(err_str);
             }
 
+            auto users = data_node.get_users();
+            if (users.size() == 1
+                && users.front()->is_type<reshape>()
+                && users.front()->is_dynamic()) {
+                    continue;
+                }
 
             if (alloc_type == allocation_type::usm_host || alloc_type == allocation_type::usm_shared) {
                 GPU_DEBUG_GET_INSTANCE(debug_config);

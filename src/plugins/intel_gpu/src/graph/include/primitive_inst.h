@@ -163,8 +163,6 @@ public:
     virtual void update_weights() {}
     void update_impl();
 
-    std::string get_layout_key();
-
 protected:
     primitive_inst(network& network, program_node const& node, bool allocate_memory);
 
@@ -199,6 +197,8 @@ protected:
         true;  // by default all primitives has valid inputs, exception is input_layout (see input_layout_inst)
     bool _has_mutable_input = false;
     bool _mem_allocated = false;
+
+    size_t max_output_layout_size;
 
     memory::ptr allocate_output();
     static std::vector<std::shared_ptr<primitive_inst>> build_exec_deps(
