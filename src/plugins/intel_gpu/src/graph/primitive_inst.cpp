@@ -142,7 +142,14 @@ void primitive_inst::update_shape() {
     if (!_network.shape_changed())
         return;
 
+    auto start = std::chrono::high_resolution_clock::now();
+    auto total_start = start;
     auto new_layout = _node.type()->calc_output_layout(_node);
+    auto end = std::chrono::high_resolution_clock::now();
+    double perf_time = static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>((end - start)).count());
+    _network.set_func_time("update_shape::calc_output_layout", perf_time / 1000.0);
+
+    start = std::chrono::high_resolution_clock::now();
     auto out_layout = _node.is_valid_output_layout() ? _node.get_output_layout() : layout(data_types::f32, format::any, tensor{});
     auto out_layout_str = _node.is_valid_output_layout() ? out_layout.to_string() : "invalid";
     GPU_DEBUG_IF(debug_config->verbose >= 4) {
@@ -152,8 +159,19 @@ void primitive_inst::update_shape() {
     if (out_layout != new_layout)
         set_shape_change();
 
+    end = std::chrono::high_resolution_clock::now();
+    perf_time = static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>((end - start)).count());
+    _network.set_func_time("update_shape::check_shape_change", perf_time / 1000.0);
+
+    start = std::chrono::high_resolution_clock::now();
     // TODO: Get rid of this const_cast
-    const_cast<program_node&>(_node).set_output_layout(new_layout);
+    const_cast<program_node&>(_node).set_output_layout(new_layout, false);
+    end = std::chrono::high_resolution_clock::now();
+    perf_time = static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>((end - start)).count());
+    _network.set_func_time("update_shape::set_output_layout", perf_time / 1000.0);
+
+    perf_time = static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>((end - total_start)).count());
+    _network.set_func_time("update_shape::total", perf_time / 1000.0);
 }
 
 void primitive_inst::realloc_if_needed() {

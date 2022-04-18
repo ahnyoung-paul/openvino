@@ -116,20 +116,46 @@ void reshape_inst::update_shape() {
     if (!_network.shape_changed())
         return;
 
+    auto start = std::chrono::high_resolution_clock::now();
+    auto total_start = start;
     auto& node = const_cast<reshape_node&>(dynamic_cast<const reshape_node&>(_node));
 
     if (_node.get_dependencies().size() == 2) {
+        start = std::chrono::high_resolution_clock::now();
         auto shape_mem = _network.get_output_memory(_node.get_dependency(1).id());
+        auto end = std::chrono::high_resolution_clock::now();
+        auto perf_time = static_cast<double>(std::chrono::duration_cast<std::chrono::microseconds>((end - start)).count());
+        _network.set_func_time("reshape_inst::update_shape::pa01::get_output_memory", perf_time);
+
         // TODO: usm_device is copied to host on lock(), but we need to ensure that this is better, then
         // keeping such constants on host (i.e. modifying transfer_memory_to_device)
         // if (shape_mem->get_allocation_type() == allocation_type::usm_device) {
         //     IE_THROW() << " lockable memory is required to update shape for reshape prim\n";
         // }
         auto reshape_prim = std::static_pointer_cast<reshape>(std::const_pointer_cast<primitive>(_node.get_primitive()));
-        reshape_prim->output_shape = ov::PartialShape(read_vector(shape_mem, _network.get_stream()));
-        node.set_shape_ready();
-    }
+        start = std::chrono::high_resolution_clock::now();
+        auto r_vecs = read_vector(shape_mem, _network.get_stream());
+        end = std::chrono::high_resolution_clock::now();
+        perf_time = static_cast<double>(std::chrono::duration_cast<std::chrono::microseconds>((end - start)).count());
+        _network.set_func_time("reshape_inst::update_shape::pa01::read_vector_"+std::to_string(r_vecs.size()), perf_time);
 
+        start = std::chrono::high_resolution_clock::now();
+        reshape_prim->output_shape = ov::PartialShape(r_vecs);
+        end = std::chrono::high_resolution_clock::now();
+        perf_time = static_cast<double>(std::chrono::duration_cast<std::chrono::microseconds>((end - start)).count());
+        _network.set_func_time("reshape_inst::update_shape::pa01::PartialShape", perf_time);
+
+        start = std::chrono::high_resolution_clock::now();
+        node.set_shape_ready();
+        end = std::chrono::high_resolution_clock::now();
+        perf_time = static_cast<double>(std::chrono::duration_cast<std::chrono::microseconds>((end - start)).count());
+        _network.set_func_time("reshape_inst::update_shape::pa01::set_shape_ready", perf_time);
+    }
+    auto end = std::chrono::high_resolution_clock::now();
+    auto perf_time = static_cast<double>(std::chrono::duration_cast<std::chrono::microseconds>((end - start)).count());
+    _network.set_func_time("reshape_inst::update_shape::pa01", perf_time);
+
+    start = std::chrono::high_resolution_clock::now();
     GPU_DEBUG_GET_INSTANCE(debug_config);
     auto new_layout = _node.type()->calc_output_layout(_node);
     auto out_layout = _node.is_valid_output_layout() ? _node.get_output_layout() : layout(data_types::f32, format::any, tensor{});
@@ -141,6 +167,13 @@ void reshape_inst::update_shape() {
         set_shape_change();
     // TODO: Get rid of this const_cast
     node.set_output_layout(new_layout);
+
+    end = std::chrono::high_resolution_clock::now();
+    perf_time = static_cast<double>(std::chrono::duration_cast<std::chrono::microseconds>((end - start)).count());
+    _network.set_func_time("reshape_inst::update_shape::part02", perf_time);
+
+    perf_time = static_cast<double>(std::chrono::duration_cast<std::chrono::microseconds>((end - total_start)).count());
+    _network.set_func_time("reshape_inst::update_shape::total_parts", perf_time);
 }
 
 void reshape_inst::on_execute() {
