@@ -998,6 +998,8 @@ Blob::Ptr InferRequest::reinterpret_device_blob(Blob::Ptr data, const TensorDesc
     if (!remote_blob)
         IE_THROW() << "Invalid blob used for reinterpretation";
 
+    remote_blob->setShape(new_desc.getDims());
+
     auto impl = getBlobImpl(remote_blob);
     impl->reinterpret(l);
 
