@@ -19,6 +19,13 @@
 #include <memory>
 #include <list>
 #include <set>
+#include <iomanip>
+
+#define BREAKDOWN_PERF
+#define SHOW_LAYOUT
+#define PRINT_EXECUTE_TIME
+
+#define UNUSED_2(x) x
 
 namespace cldnn {
 
@@ -195,6 +202,41 @@ public:
     memory_pool& get_memory_pool() {
         return *_memory_pool;
     }
+
+public:
+    void set_func_time(std::string func_name, long long t) {
+#ifdef BREAKDOWN_PERF
+        if (time_logs.find(func_name) == time_logs.end()) {
+            time_logs[func_name] = t;
+        } else {
+            time_logs[func_name] += t;
+        }
+#else
+        UNUSED_2(func_name);
+        UNUSED_2(t);
+#endif
+    }
+
+    void show_func_time() {
+#ifdef BREAKDOWN_PERF
+        for (auto item : time_logs) {
+            std::cout << "[ DEBUG PERF ][" << func_iter << "] **** [" << std::setw(50) << item.first << "], ";
+            std::cout << (static_cast<double>(item.second) / 1000) << " ms" << std::endl;
+        }
+#endif
+    }
+
+    void clear_func_time() {
+#ifdef BREAKDOWN_PERF
+        time_logs.clear();
+#endif
+        func_iter++;
+    }
+
+    size_t func_iter = 0;
+#ifdef BREAKDOWN_PERF
+    std::map<std::string, long long> time_logs;
+#endif
 
 private:
     using output_chains_map = std::map<primitive_id, std::vector<std::shared_ptr<primitive_inst>>>;
