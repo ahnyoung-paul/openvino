@@ -231,7 +231,8 @@ TEST(depth_to_space_fp32_gpu, d112960540_bs2) {
     auto output = outputs.at("depth_to_space").get_memory();
     cldnn::mem_lock<FLOAT16> output_ptr (output, get_test_stream());
 
-    std::vector<uint16_t> perm = { 0,4,5,2,1,3 };
+    // std::vector<uint16_t> perm = { 0,4,5,2,1,3 };// Old version test fail
+    std::vector<uint16_t> perm = { 0,3,4,1,5,2 };// New version test pass
 
     topology topology_ref;
     topology_ref.add(input_layout("Input0", input1->get_layout()));
@@ -244,7 +245,8 @@ TEST(depth_to_space_fp32_gpu, d112960540_bs2) {
         permute("perm", "reshape", perm)
     );
     topology_ref.add(
-        reshape("reshape2", "perm", ov::PartialShape{1, 3, 2 * 540, 2 * 960})
+        reshape("reshape2", "perm", ov::PartialShape{1, 3, 2 * 540, 2 * 960}) //bfyxzw ngraph layout
+        //reshape("reshape2", "perm", tensor(1, 3, 2 * 960, 2 * 540)) // bfxyzw cldnn::tensor layout
     );
 
     build_options build_opt;
@@ -259,7 +261,7 @@ TEST(depth_to_space_fp32_gpu, d112960540_bs2) {
     cldnn::mem_lock<FLOAT16> output_ptr_ref(output_ref, get_test_stream());
 
     for (size_t i = 0; i < output->get_layout().count(); ++i) {
-        EXPECT_EQ(output_ptr_ref[i], output_ptr[i]);
+        ASSERT_EQ(output_ptr_ref[i], output_ptr[i]);
     }
 }
 
