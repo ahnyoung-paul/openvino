@@ -179,3 +179,66 @@ INSTANTIATE_TEST_SUITE_P(smoke, weights_layout_test,
         {data_types::f32, format::g_os_is_yx_osa2_isa8_osv16_isv2, {4, 2, 15, 3, 5}, {4, 32, 16, 3, 5}, {0, 1, 2, 3, 4}},
         {data_types::f32, format::g_os_is_zyx_osa4_isa8_osv8_isv4, {4, 2, 15, 3, 5, 6}, {4, 32, 32, 3, 5, 6}, {0, 1, 2, 3, 4, 5}},
     }));
+
+struct partial_shape_test_params {
+    data_types dt;
+    format fmt;
+    cldnn::tensor ten;
+};
+
+std::ostream& operator << (std::ostream& o, const partial_shape_test_params& a)
+{
+    o << "[data_type: " << cldnn::data_type_traits::name(a.dt) << ", ";
+    o << "format: " << a.fmt.to_string() << ", ";
+    o << "{" << a.ten.to_string() << "}]";
+    return o;
+}
+
+class paritial_shape_test : public testing::TestWithParam<partial_shape_test_params> { };
+
+TEST_P(paritial_shape_test, compatibility_test) {
+    auto p = GetParam();
+    auto l = layout(p.dt, p.fmt, p.ten);
+    auto out_tensor = l.get_tensor();
+    std::cout << p.ten.to_string() << " <==> " << out_tensor.to_string() << std::endl;
+    ASSERT_EQ(p.ten, out_tensor);
+}
+
+TEST_P(paritial_shape_test, check_get_dim_test) {
+    auto p = GetParam();
+    auto l = layout(p.dt, p.fmt, p.ten);
+    auto out_tensor = l.get_tensor();
+    std::cout << p.ten.to_string() << " <==> " << out_tensor.to_string() << std::endl;
+    auto expected_dims = p.ten.sizes(p.fmt);
+    auto actual_dims = l.get_dims();
+    ASSERT_EQ(expected_dims.size(), actual_dims.size());
+    for (size_t i = 0; i < expected_dims.size(); i++) {
+        ASSERT_EQ(expected_dims[i], actual_dims[i]);
+    }
+}
+
+INSTANTIATE_TEST_SUITE_P(smoke, paritial_shape_test,
+    testing::ValuesIn(std::vector<partial_shape_test_params>{
+        {data_types::f32, format::bfyx, {2, 2, 1, 1 }},
+        {data_types::f32, format::bfyx, {2, 33, 3, 5}},
+        {data_types::f16, format::bfzyx, {2, 33, 3, 5, 4}},
+        {data_types::i8, format::bfwzyx, {2, 33, 3, 5, 4, 6}},
+        {data_types::u8, format::yxfb, {2, 33, 3, 5}},
+        {data_types::f32, format::byxf, {2, 33, 3, 5}},
+        {data_types::f32, format::fyxb, {2, 33, 3, 5}},
+        {data_types::f32, format::b_fs_yx_fsv16, {2, 33, 3, 5}},
+        {data_types::f32, format::b_fs_yx_fsv32, {2, 33, 3, 5}},
+        {data_types::f32, format::b_fs_zyx_fsv16, {2, 33, 3, 5, 6}},
+        {data_types::f32, format::b_fs_zyx_fsv32, {2, 33, 3, 5, 6}},
+        {data_types::f32, format::bs_fs_zyx_bsv16_fsv16, {2, 33, 3, 5, 6}},
+        {data_types::f32, format::bs_fs_yx_bsv16_fsv16, {2, 33, 3, 5}},
+        {data_types::f32, format::bs_fs_yx_bsv4_fsv4, {2, 33, 3, 5}},
+        {data_types::f32, format::oiyx, {2, 15, 3, 5}},
+        {data_types::f32, format::ioyx, {2, 15, 3, 5}},
+        {data_types::f32, format::yxio, {2, 15, 3, 5}},
+        {data_types::f32, format::goiyx, {4, 2, 15, 3, 5}},
+        {data_types::f32, format::goizyx, {4, 2, 15, 3, 5, 6}},
+        {data_types::f32, format::giozyx, {4, 2, 15, 3, 5, 6}},
+        {data_types::f32, format::g_os_is_yx_osa2_isa8_osv16_isv2, {4, 2, 15, 3, 5}},
+        {data_types::f32, format::g_os_is_zyx_osa4_isa8_osv8_isv4, {4, 2, 15, 3, 5, 6}},
+    }));

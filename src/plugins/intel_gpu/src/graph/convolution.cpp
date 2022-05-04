@@ -22,8 +22,13 @@ primitive_type_id convolution::type_id() {
 layout convolution_inst::calc_output_layout(convolution_node const& node) {
     auto desc = node.get_primitive();
 
+
+
     auto input_layout = node.input().get_output_layout();
     auto weights_layout = node.weights(0).get_output_layout().convert_to_weights_layout(desc->grouped_weights_shape);
+
+    std::cout << "convolution: input " << node.input().id() << " ";
+    std::cout << input_layout.size << std::endl;
 
     auto pad = desc->pad;
     auto stride = desc->stride;
@@ -33,6 +38,8 @@ layout convolution_inst::calc_output_layout(convolution_node const& node) {
     // compute how many outputs in rows and columns will be generate by filter.
     // outp <= (input_size + (2*pad) - kernel_size)/ stride
     auto filter_size = weights_layout.get_tensor();
+    std::cout << "convolution: weights_layout " << node.weights(0).id() << " ";
+    std::cout << weights_layout.size << " ( " << filter_size.to_string() << " ) " << std::endl;
 
     auto input_type = input_layout.data_type;
 

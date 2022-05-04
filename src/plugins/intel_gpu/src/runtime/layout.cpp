@@ -82,15 +82,20 @@ tensor::value_type layout::ifm() const {
 }
 
 std::vector<tensor::value_type> layout::get_dims() const {
-    if (is_dynamic())
-        throw std::runtime_error("[GPU] get_dims() is called for dynamic shape");
-    auto shape = size.to_shape();
-    std::vector<tensor::value_type> res(shape.begin(), shape.end());
+    if (use_partial_shape) {
+        if (is_dynamic())
+            throw std::runtime_error("[GPU] get_dims() is called for dynamic shape");
+        auto shape = size.to_shape();
+        std::vector<tensor::value_type> res(shape.begin(), shape.end());
 
-    if (res.size() < format.dimension())
-        res.insert(res.end(), format.dimension() - res.size(), 1);
+        if (res.size() < format.dimension())
+            res.insert(res.end(), format.dimension() - res.size(), 1);
 
-    return res;
+        return res;
+    } else {
+        auto default_fmt = format::get_default_format(format.dimension(), format::is_weights_format(format), format::is_grouped(format));
+        return tensor_size.sizes(default_fmt);
+    }
 }
 
 std::vector<tensor::value_type> layout::get_padded_dims() const {
@@ -290,6 +295,10 @@ layout layout::with_padding(padding const& padd) const {
 }
 
 tensor layout::get_tensor() const {
+    if (!use_partial_shape) {
+        return tensor_size;
+    }
+
     if (is_dynamic())
         throw std::runtime_error("[GPU] get_tensor() is called for dynamic shape");
 

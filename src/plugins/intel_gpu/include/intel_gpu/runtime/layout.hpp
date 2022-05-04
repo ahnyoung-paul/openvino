@@ -326,13 +326,23 @@ private:
 struct layout {
     /// Constructs layout based on @p data_type and @p size information described by @ref tensor
     layout(data_types data_type, cldnn::format fmt, ov::PartialShape size, padding apadding = padding())
-        : data_type(data_type), format(fmt), size(size), data_padding(apadding) { }
+        : data_type(data_type), format(fmt), size(size), data_padding(apadding), use_partial_shape(true) {
+            this->tensor_size = get_tensor();
+        }
 
     layout(data_types data_type, cldnn::format fmt, tensor size, padding apadding = padding())
-        : data_type(data_type), format(fmt), data_padding(apadding) {
+        : data_type(data_type), format(fmt), data_padding(apadding), use_partial_shape(false) {
             auto sizes = fmt == format::any ? size.sizes() : size.sizes(format::get_default_format(fmt.dimension()));
+            // std::cout << "layout construct = {";
+            // for (auto& s : sizes) {
+            // std::cout << s << ",";
+            // }
+            // std::cout << "}" << std::endl;
+
             ov::Shape shape(sizes.begin(), sizes.end());
             this->size = ov::PartialShape(shape);
+
+            this->tensor_size = size;
         }
 
     layout(const layout& other) = default;
@@ -343,6 +353,8 @@ struct layout {
         data_type = other.data_type;
         format = other.format;
         size = other.size;
+        use_partial_shape = other.use_partial_shape;
+        tensor_size = other.tensor_size;
         data_padding = other.data_padding;
         return *this;
     }
@@ -391,6 +403,10 @@ struct layout {
 
     /// The size of the @ref memory (excluding padding)
     ov::PartialShape size;
+
+    cldnn::tensor tensor_size;
+
+    bool use_partial_shape;
 
     /// Explicit padding of the @ref memory
     padding data_padding;

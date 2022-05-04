@@ -142,6 +142,11 @@ public:
         spatial(_sizes + tensor_batch_dim_max + tensor_feature_dim_max, tensor_spatial_dim_max),
         group(_sizes + tensor_batch_dim_max + tensor_feature_dim_max + tensor_spatial_dim_max, tensor_group_dim_max) {
         std::fill_n(_sizes, tensor_dim_max, default_size);
+        // std::cout << "tensor construct = {";
+        // for (auto& s : _sizes) {
+        //     std::cout << s << ",";
+        // }
+        // std::cout << "}" << std::endl;
     }
 
     /// @brief Constructs tensor.

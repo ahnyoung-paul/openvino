@@ -23,11 +23,14 @@ layout concatenation_inst::calc_output_layout(concatenation_node const& node) {
     auto input_layout = node.input(0).get_output_layout();
     auto output_format = input_layout.format;
     auto result_sizes = input_layout.get_dims();
+    std::cout << "concatenation_inst node.input(0)(" << node.input(0).id() << ") : input_layout.size(" << input_layout.size << ") ";
+    std::cout << " input_layout.tensor_size(" << input_layout.tensor_size.to_string() << ") ";
 
     auto output_dt = desc->output_data_type ? *desc->output_data_type : input_layout.data_type;
 
     auto axis_index = node.get_primitive()->axis;
 
+    std::cout << "axis_index(" << axis_index << ")";
     // calculate sum of features from all inputs
     result_sizes[axis_index] = 0;
     for (size_t i = 0; i < desc->input.size(); ++i) {
@@ -39,6 +42,11 @@ layout concatenation_inst::calc_output_layout(concatenation_node const& node) {
     }
 
     auto def_fmt = format::get_default_format(input_layout.get_rank());
+    std::cout << " result_sizes {";
+    for (auto& r : result_sizes) {
+        std::cout << r << ", ";
+    }
+    std::cout << "}" << std::endl;
 
     return layout {output_dt, output_format, tensor(def_fmt, result_sizes)};
 }
