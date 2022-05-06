@@ -504,8 +504,8 @@ TEST(gemm_gpu, basic_input3_t1) {
 
 TEST(gemm_gpu, basic_bfyx) {
     auto& engine = get_test_engine();
-    auto input = engine.allocate_memory({ data_types::f32, format::bfyx, ov::PartialShape{ 2, 1, 4, 3 } });
-    auto input2 = engine.allocate_memory({ data_types::f32, format::bfyx, ov::PartialShape{ 2, 1, 1, 4 } });
+    auto input = engine.allocate_memory({ data_types::f32, format::bfyx, ov::PartialShape{ 2, 1, 3, 4 } });
+    auto input2 = engine.allocate_memory({ data_types::f32, format::bfyx, ov::PartialShape{ 2, 1, 4, 1 } });
 
     std::vector<float> input_data = {
         1.f, -2.f,  3.f,  -4.f,
