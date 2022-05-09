@@ -31,35 +31,58 @@ public:
         auto op_params = get_default_optional_params<kernel_selector::strided_slice_optional_params>(arg.get_program());
         const size_t dims_num = params.inputs[0].Dimentions();
 
-        // Getting data from constant inputs. There are 3 args: Begin, End, Stride
-        for (size_t i = 0; i < arg.const_mem.size(); ++i) {
-            auto mem = arg.const_mem[i];
-            std::vector<int32_t> sizes;
-            if (mem->get_layout().data_type == cldnn::data_types::i64) {
-                mem_lock<int64_t, mem_lock_type::read> lock{mem, arg.get_program().get_stream()};
-                int64_t* data = lock.data();
-                std::vector<int64_t> sizes_i64 = std::vector<int64_t>(data, data + mem->get_layout().count());
-                sizes.resize(sizes_i64.size());
-                for (size_t j = 0; j < sizes.size(); j++)
-                    sizes[j] = static_cast<int32_t>(sizes_i64[j]);
-            } else {
-                mem_lock<int32_t, mem_lock_type::read> lock{mem, arg.get_program().get_stream()};
-                int32_t* data = lock.data();
-                sizes = std::vector<int32_t>(data, data + mem->get_layout().count());
+        if (!arg.const_mem.empty()) {  // Dynamic shape
+            // Getting data from constant inputs. There are 3 args: Begin, End, Stride
+            for (size_t i = 0; i < arg.const_mem.size(); ++i) {
+                auto mem = arg.const_mem[i];
+                std::vector<int32_t> sizes;
+                if (mem->get_layout().data_type == cldnn::data_types::i64) {
+                    mem_lock<int64_t, mem_lock_type::read> lock{mem, arg.get_program().get_stream()};
+                    int64_t* data = lock.data();
+                    std::vector<int64_t> sizes_i64 = std::vector<int64_t>(data, data + mem->get_layout().count());
+                    sizes.resize(sizes_i64.size());
+                    for (size_t j = 0; j < sizes.size(); j++)
+                        sizes[j] = static_cast<int32_t>(sizes_i64[j]);
+                } else {
+                    mem_lock<int32_t, mem_lock_type::read> lock{mem, arg.get_program().get_stream()};
+                    int32_t* data = lock.data();
+                    sizes = std::vector<int32_t>(data, data + mem->get_layout().count());
+                }
+                pad_vector_to_size(sizes, dims_num, i != 1);  // for "begin" completion used 0 value, for other - 1
+                params.striding_params.push_back(sizes);
             }
-            pad_vector_to_size(sizes, dims_num, i != 1);  // for "begin" completion used 0 value, for other - 1
-            params.striding_params.push_back(sizes);
+        } else {  // Static shape
+            // Getting data from constant inputs. There are 3 args: Begin, End, Stride
+            for (size_t i = 1; i < arg.get_dependencies().size(); ++i) {
+                auto& input = arg.get_dependency(i).as<data>();
+                auto mem = input.get_attached_memory_ptr();
+                std::vector<int32_t> sizes;
+                if (input.get_output_layout().data_type == cldnn::data_types::i64) {
+                    mem_lock<int64_t> lock{mem, arg.get_program().get_stream()};
+                    int64_t* data = lock.data();
+                    std::vector<int64_t> sizes_i64 = std::vector<int64_t>(data, data + input.get_output_layout().count());
+                    sizes.resize(sizes_i64.size());
+                    for (size_t j = 0; j < sizes.size(); j++)
+                        sizes[j] = static_cast<int32_t>(sizes_i64[j]);
+                } else {
+                    mem_lock<int32_t> lock{mem, arg.get_program().get_stream()};
+                    int32_t* data = lock.data();
+                    sizes = std::vector<int32_t>(data, data + input.get_output_layout().count());
+                }
+                pad_vector_to_size(sizes, dims_num, i != 1);  // for "begin" completion used 0 value, for other - 1
+                params.striding_params.push_back(sizes);
+            }
         }
 
         auto begin_mask_ = arg.get_primitive()->begin_mask;
         auto end_mask_ = arg.get_primitive()->end_mask;
         auto new_axis_mask_ = arg.get_primitive()->new_axis_mask;
         auto shrink_axis_mask_ = arg.get_primitive()->shrink_axis_mask;
+        std::vector<uint8_t> begin_mask(begin_mask_.begin(), begin_mask_.end());
+        std::vector<uint8_t> end_mask(end_mask_.begin(), end_mask_.end());
+        std::vector<uint8_t> new_axis_mask(new_axis_mask_.begin(), new_axis_mask_.end());
+        std::vector<uint8_t> shrink_axis_mask(shrink_axis_mask_.begin(), shrink_axis_mask_.end());
 
-        std::vector<uint8_t> begin_mask(begin_mask_.end(), begin_mask_.end());
-        std::vector<uint8_t> end_mask(end_mask_.end(), end_mask_.end());
-        std::vector<uint8_t> new_axis_mask(new_axis_mask_.end(), new_axis_mask_.end());
-        std::vector<uint8_t> shrink_axis_mask(shrink_axis_mask_.end(), shrink_axis_mask_.end());
         // Plugin requires inverted mask values. Consider changing primitive impl to be aligned with the spec.
         for (auto& b : begin_mask) {
             b = 1 - b;

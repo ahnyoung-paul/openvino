@@ -23,11 +23,8 @@ layout strided_slice_inst::calc_output_layout(strided_slice_node const& node) {
     auto desc = node.get_primitive();
     auto input_layout = node.input(0).get_output_layout();
     auto output_format = format::get_default_format(desc->out_size.size());
-    if (node.const_mem.empty()) {
-        return layout{input_layout.data_type, output_format, ov::PartialShape::dynamic(input_layout.size.rank())};
-    }
 
-    {
+    if (!node.const_mem.empty()) { // Original code return dynamic layout when const_mem is empty. however, it cannot support static shape
         ov::op::v1::StridedSlice op;
         std::vector<ov::PartialShape> output_shapes = {ov::PartialShape()};
         std::vector<ov::PartialShape> input_shapes = {
@@ -134,6 +131,12 @@ std::string strided_slice_inst::to_string(strided_slice_node const& node) {
 }
 
 strided_slice_inst::typed_primitive_inst(network& network, strided_slice_node const& node)
-    : parent(network, node) {}
+    : parent(network, node) {
+        // auto in_mem1 = _network.get_output_memory(_node.get_dependency(1).id());
+        // auto in_mem2 = _network.get_output_memory(_node.get_dependency(2).id());
+        // auto in_mem3 = _network.get_output_memory(_node.get_dependency(3).id());
+
+        // node.const_mem = {in_mem1, in_mem2, in_mem3};
+    }
 
 }  // namespace cldnn
