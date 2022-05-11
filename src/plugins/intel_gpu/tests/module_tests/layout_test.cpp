@@ -184,8 +184,18 @@ INSTANTIATE_TEST_SUITE_P(smoke, weights_layout_test,
 struct partial_shape_test_params {
     data_types dt;
     format fmt;
+    std::vector<tensor::value_type> size;
     cldnn::tensor ten;
+    partial_shape_test_params(data_types dt, format fmt, std::initializer_list<tensor::value_type> l)
+        : dt(dt), fmt(fmt), size(l) {
+            auto default_fmt = format::get_default_format(
+                                        fmt.dimension(),
+                                        format::is_weights_format(fmt),
+                                        format::is_grouped(fmt));
+            ten = cldnn::tensor(default_fmt, size);
+        }
 };
+
 std::ostream& operator << (std::ostream& o, const partial_shape_test_params& a)
 {
     o << "[data_type: " << cldnn::data_type_traits::name(a.dt) << ", ";
@@ -199,15 +209,21 @@ TEST_P(paritial_shape_test, compatibility_test) {
     auto p = GetParam();
     auto l = layout(p.dt, p.fmt, p.ten);
     auto out_tensor = l.get_tensor();
-    std::cout << p.ten.to_string() << " <==> " << out_tensor.to_string() << std::endl;
     ASSERT_EQ(p.ten, out_tensor);
 }
+
 TEST_P(paritial_shape_test, check_get_dim_test) {
     auto p = GetParam();
+    auto input_vec = p.ten.sizes();
+
     auto l = layout(p.dt, p.fmt, p.ten);
     auto out_tensor = l.get_tensor();
-    std::cout << p.ten.to_string() << " <==> " << out_tensor.to_string() << std::endl;
-    auto expected_dims = p.ten.sizes(p.fmt);
+
+    auto expected_dims = p.ten.sizes(format::get_default_format(
+                                        p.fmt.dimension(),
+                                        format::is_weights_format(p.fmt),
+                                        format::is_grouped(p.fmt)));
+
     auto actual_dims = l.get_dims();
     ASSERT_EQ(expected_dims.size(), actual_dims.size());
     for (size_t i = 0; i < expected_dims.size(); i++) {
