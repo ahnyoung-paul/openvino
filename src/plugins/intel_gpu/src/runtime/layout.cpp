@@ -300,7 +300,15 @@ tensor layout::get_tensor() const {
     if (default_fmt.dimension() > dims.size()) {
         dims.insert(dims.end(), default_fmt.dimension() - dims.size(), 1);
     }
+#ifdef DEBUG_ERROR
+    std::cout << "[get_tensor][before] " << dims << std::endl;
+#endif
+
     tensor t(default_fmt, dims);
+
+#ifdef DEBUG_ERROR
+    std::cout << "[get_tensor][after_][" << default_fmt.to_string() << "] " << t.sizes() << std::endl;
+#endif
     return t;
 }
 

@@ -22,6 +22,8 @@
 
 #include <openvino/core/partial_shape.hpp>
 
+// #define DEBUG_ERROR
+
 namespace cldnn {
 /// @addtogroup cpp_api C++ API
 /// @{
@@ -278,6 +280,18 @@ public:
 
             _sizes[out_idx] = sizes[in_idx];
         }
+#ifdef DEBUG_ERROR
+        std::cout << "[tensor::ctor] sizes[" << sizes.size() << "] = {";
+        for (int i = 0; i < sizes.size(); i++) {
+            std::cout << std::to_string(sizes[i]) << ",";
+        }
+        std::cout << "}" << std::endl;
+        std::cout << "[tensor::ctor] _sizes[" << tensor_dim_max << "] = {";
+        for (int i = 0; i < tensor_dim_max; i++) {
+            std::cout << std::to_string(_sizes[i]) << ",";
+        }
+        std::cout << "}" << std::endl;
+#endif
     }
 
     /// @brief Copy construction.
@@ -412,15 +426,34 @@ public:
         auto internal_order = fmt.internal_order();
         std::vector<value_type> sizes(output_order.size(), 0);
 
+#ifdef DEBUG_ERROR
+        std::cout << "[tensor::sizes] output_order  : " << output_order.size() << ", " << output_order << std::endl;
+        std::cout << "[tensor::sizes] internal_order: " << internal_order.size() << ", " << internal_order << std::endl;
+        std::cout << "[tensor::sizes] _sizes[" << tensor_dim_max << "] = {";
+        for (int i = 0; i < tensor_dim_max; i++) {
+            std::cout << std::to_string(_sizes[i]) << ",";
+        }
+        std::cout << "}" << std::endl;
+#endif
         for (size_t i = 0; i < sizes.size(); ++i) {
             auto c = output_order[i];
             auto pos = internal_order.find(c);
             if (pos == std::string::npos)
                 throw std::domain_error(std::string("Unknown coord type: ") + c);
 
+#ifdef DEBUG_ERROR
+            std::cout << "[tensor::sizes] [" << i << "] '" << c << "' (" << pos << ") : " << _sizes[pos] << std::endl;
+#endif
             sizes[i] = _sizes[pos];
         }
 
+#ifdef DEBUG_ERROR
+        std::cout << "[tensor::sizes] sizes[" << sizes.size() << "] = {";
+        for (int i = 0; i < sizes.size(); i++) {
+            std::cout << std::to_string(sizes[i]) << ",";
+        }
+        std::cout << "}" << std::endl;
+#endif
         return sizes;
     }
 

@@ -321,6 +321,19 @@ private:
     }
 };
 
+template <typename T>
+std::ostream& operator<<(std::ostream& out, const std::vector<T>& vec) {
+    out << "{";
+    for (size_t i = 0; i < vec.size(); i++) {
+        out << std::to_string(vec[i]);
+        if ((i + 1) < vec.size()) {
+            out << ", ";
+        }
+    }
+    out << "}";
+    return out;
+}
+
 /// @brief Describes memory layout.
 /// @details Contains information about data stored in @ref memory.
 struct layout {
@@ -330,9 +343,20 @@ struct layout {
 
     layout(data_types data_type, cldnn::format fmt, tensor size, padding apadding = padding())
         : data_type(data_type), format(fmt), data_padding(apadding) {
+#ifdef DEBUG_ERROR
+            {
+                auto vec = size.sizes();
+                std::cout << "[layout ctor][Before][" << fmt.to_string() << "] " << vec << std::endl;
+            }
+#endif
             auto sizes = fmt == format::any ? size.sizes() : size.sizes(format::get_default_format(
                                         fmt.dimension(), format::is_weights_format(fmt), format::is_grouped(fmt)));
             ov::Shape shape(sizes.begin(), sizes.end());
+#ifdef DEBUG_ERROR
+            {
+                std::cout << "[layout ctor][After_][" << fmt.to_string() << "] " << sizes << std::endl;
+            }
+#endif
             this->size = ov::PartialShape(shape);
         }
 
