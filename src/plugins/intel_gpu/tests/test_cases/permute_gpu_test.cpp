@@ -1665,12 +1665,13 @@ void TiledPermuteTest::run_test(const std::vector<cldnn::tensor::value_type>& si
     std::swap(internal_sizes.at(2), internal_sizes.back());
     cldnn::tensor tensor(internal_sizes);
 
-    cldnn::format format = sizes.size() == 4?cldnn::format::bfyx:cldnn::format::bfzyx;
+    cldnn::format format = sizes.size() == 4 ? cldnn::format::bfyx : cldnn::format::bfzyx;
 
-    std::vector<uint16_t> order{0, static_cast<uint16_t>(sizes.size()-1)};
-    for (uint16_t i = 1; i<(sizes.size()-1); ++i) {
-        order.push_back(i);
+    std::vector<uint16_t> order = {0};
+    for (uint16_t i = 1; i < (sizes.size() - 1); ++i) {
+        order.push_back(i+1);
     }
+    order.push_back(1);
 
     auto input = engine.allocate_memory({Data_Type, format, tensor});
     set_random_values<type>(input);
