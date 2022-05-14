@@ -323,11 +323,14 @@ private:
 
 template <typename T>
 std::ostream& operator<<(std::ostream& out, const std::vector<T>& vec) {
-    out << "vec[" << vec.size() << "] = {";
-    for (auto& v : vec) {
-        out << std::to_string(v) << ",";
+    out << "{";
+    for (size_t i = 0; i < vec.size(); i++) {
+        out << std::to_string(vec[i]);
+        if ((i + 1) < vec.size()) {
+            out << ", ";
+        }
     }
-    out << "}\n";
+    out << "}";
     return out;
 }
 
