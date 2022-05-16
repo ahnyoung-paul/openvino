@@ -245,13 +245,27 @@ device_info init_device_info(const cl::Device& device) {
         // Set these values as reasonable default for most of the supported platforms
         info.supported_simd_sizes = {8, 16, 32};
     }
+    {
+        auto in = device.getInfo<CL_DEVICE_NUMERIC_VERSION_KHR>();
+        std::cout << "CL_DEVICE_NUMERIC_VERSION_KHR             : " << in << std::endl;
+    }
 
+    std::cout << "Checking extension " << extensions << std::endl;
     bool device_uuid_supported = extensions.find("cl_khr_device_uuid") != std::string::npos;
     if (device_uuid_supported) {
+        std::cout << "[CHECKING] device_uuid_supported is supported" << std::endl;
         static_assert(CL_UUID_SIZE_KHR == device_uuid::max_uuid_size);
         info.uuid.val = device.getInfo<CL_DEVICE_UUID_KHR>();
+        std::cout << "UUID=";
+        for (auto& u : info.uuid.val) {
+            std::cout << std::to_string(u);
+        }
+        std::cout << std::endl;
+
     } else {
+        std::cout << "[CHECKING] device_uuid_supported is not supported" << std::endl;
         std::fill_n(std::begin(info.uuid.val), device_uuid::max_uuid_size, 0);
+        std::cout << "UUID=NoID" << std::endl;
     }
     bool device_attr_supported = extensions.find("cl_intel_device_attribute_query") != std::string::npos;
 
