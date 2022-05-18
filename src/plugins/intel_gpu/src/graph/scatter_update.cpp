@@ -39,7 +39,16 @@ layout scatter_update_inst::calc_output_layout(scatter_update_node const& node) 
     const size_t indices_size = node.input(1).get_output_layout().count();
     const size_t input_number_of_dims = node.input(0).get_output_layout().get_rank();
     const size_t updates_number_of_dims = node.input(2).get_output_layout().get_rank();
-    const size_t nonempty_indices_dims = GetNonEmptyDimsNumber(node.input(1).get_output_layout());
+
+    // convert axis for ie format
+    auto ie_axis = axis;
+    if (axis >= 2) {
+        auto spatial_axis = axis - 2;
+        const size_t default_dims = 4;
+        // Default and minimum number of dimensions is 4
+        auto spatial_size = std::max(input_number_of_dims, default_dims) - 2;
+        ie_axis = spatial_size - spatial_axis - 1 + 2;
+    }
 
     auto input_layout = node.input(0).get_output_layout();
 
@@ -51,15 +60,15 @@ layout scatter_update_inst::calc_output_layout(scatter_update_node const& node) 
         output_type = node.get_fused_output_layout().data_type;
     }
 
-    if (static_cast<size_t>(axis) < 0 || static_cast<size_t>(axis) >= input_number_of_dims)
+    if (static_cast<size_t>(ie_axis) < 0 || static_cast<size_t>(ie_axis) >= input_number_of_dims)
         CLDNN_ERROR_MESSAGE(node.id(), "Incorrect axis value for ScatterUpdate: Axis must be positive and less than the input tensor dimension.");
 
-    if (indices_size > static_cast<size_t>(input_layout.get_dims()[axis])) {
+    if (indices_size > static_cast<size_t>(input_layout.get_dims()[ie_axis])) {
         CLDNN_ERROR_MESSAGE(node.id(),
             "Undefined behavior ScatterUpdate: indices size must not be larger than the output size along the Axis.");
     }
 
-    if (nonempty_indices_dims + static_cast<size_t>(axis) > updates_number_of_dims) {
+    if (static_cast<size_t>(ie_axis) > updates_number_of_dims) {
         CLDNN_ERROR_MESSAGE(node.id(),
             "Undefined behavior ScatterUpdate: indices dimention must not be larger than the updates[:Axis] dimentional size.");
     }
