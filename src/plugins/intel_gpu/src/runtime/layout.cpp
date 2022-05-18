@@ -137,7 +137,11 @@ layout layout::convert_to_weights_layout(bool is_grouped) const {
 }
 
 std::vector<tensor::value_type> layout::get_ordered_dims() const {
-    throw std::runtime_error("get_ordered_dims is not implemented yet");
+    if (is_dynamic())
+        throw std::runtime_error("[GPU] get_ordered_dims() is called for dynamic shape");
+
+    auto t = get_tensor();
+    return t.sizes(format);
 }
 
 std::vector<size_t> layout::get_dims_order() const {
