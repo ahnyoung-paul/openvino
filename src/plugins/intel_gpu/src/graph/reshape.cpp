@@ -141,13 +141,19 @@ void reshape_inst::update_shape() {
     auto& node = const_cast<reshape_node&>(dynamic_cast<const reshape_node&>(_node));
 
     if (_node.get_dependencies().size() == 2) {
-        auto shape_mem = _network.get_output_memory(_node.get_dependency(1).id());
+        auto in_node = _node.get_dependency(1).id();
+        auto shape_mem = _network.get_output_memory(in_node);
         // TODO: usm_device is copied to host on lock(), but we need to ensure that this is better, then
         // keeping such constants on host (i.e. modifying transfer_memory_to_device)
         // if (shape_mem->get_allocation_type() == allocation_type::usm_device) {
         //     IE_THROW() << " lockable memory is required to update shape for reshape prim\n";
         // }
         auto reshape_prim = std::static_pointer_cast<reshape>(std::const_pointer_cast<primitive>(_node.get_primitive()));
+        if (_network.has_event(in_node)) { // affect performance of data
+            const auto& ev = _network.get_primitive_event(in_node);
+            _network.get_stream().wait_for_events({ev});
+        }
+        // _network.get_stream().finish();
         reshape_prim->output_shape = ov::PartialShape(read_vector(shape_mem, _network.get_stream()));
         node.set_shape_ready();
     }

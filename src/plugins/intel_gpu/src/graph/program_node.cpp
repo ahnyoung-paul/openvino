@@ -338,8 +338,8 @@ bool program_node::is_dynamic() const {
             return true;
     }
 
-    if (is_type<reshape>() && get_dependencies().size() == 2)
-        return true;
+    // if (is_type<reshape>() && get_dependencies().size() == 2)
+    //     return true;
 
     return get_output_layout().is_dynamic();
 }

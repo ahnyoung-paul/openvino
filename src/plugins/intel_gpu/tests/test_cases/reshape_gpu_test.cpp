@@ -88,7 +88,15 @@ void generic_reshape_test(format fmt, tensor const& input_size, ov::PartialShape
         cldnn::mem_lock<const ElemType> output_ptr(output, get_test_stream());
         auto output_itr = output_ptr.begin();
 
-        auto sizes = reshape_size.to_shape();
+        auto shape = reshape_size.to_shape();
+        std::vector<tensor::value_type> dims(shape.begin(), shape.end());
+        auto default_fmt = format::get_default_format(fmt.dimension(), format::is_weights_format(fmt), format::is_grouped(fmt));
+        if (default_fmt.dimension() > dims.size()) {
+            dims.insert(dims.end(), default_fmt.dimension() - dims.size(), 1);
+        }
+        cldnn::tensor reshape_tensor(default_fmt, dims);
+
+        auto sizes = reshape_tensor.sizes(fmt);
         auto lower = output_padd.lower_size().sizes(fmt);
         auto upper = output_padd.upper_size().sizes(fmt);
         auto buffer_sizes = sizes;
@@ -299,7 +307,7 @@ TEST(reshape_gpu_f32, basic_2dim_input_output_padd) {
     generic_reshape_test<float>(
         format::byxf,
         tensor(1, 1, 5, 7),
-        ov::PartialShape{1, 1, 5, 7},
+        ov::PartialShape{1, 1, 7, 5},
         false,
         padding({0, 0, 4, 4}, {0, 0, 1, 1}),
         padding({0, 0, 0, 0}, {0, 0, 3, 0}));
@@ -594,7 +602,7 @@ TEST(reshape_gpu_f32, basic_runtime_static_shape) {
     topology.add(input_layout("input", input->get_layout()));
     topology.add(shape_of("shape_of_input", "input", 6, data_types::i32));
     topology.add(reduce("reduced_shape", "shape_of_input", reduce_mode::prod, {0}, true));
-    topology.add(reshape("reshape", "input", "reduced_shape", {}));
+    topology.add(reshape("reshape", "input", "reduced_shape", ov::PartialShape{1, 1, 2, 2, 3, 3}));
 
     // clang-format off
     std::vector<float> input_data = {
