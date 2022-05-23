@@ -75,7 +75,11 @@ public:
 
         auto input_layout = arg.get_dependency(0).get_output_layout();
         gather_params.axis = convert_axis(arg.get_primitive()->axis, input_layout.get_rank());
-        gather_params.batch_dim = size_t(arg.get_primitive()->batch_dim);
+
+        auto indices_shape = arg.get_dependency(1).get_output_layout().size;
+        gather_params.batch_dim = (arg.get_primitive()->batch_dim >= 0) ? arg.get_primitive()->batch_dim
+                        : (indices_shape.rank().get_length() + arg.get_primitive()->batch_dim);
+
         gather_params.support_neg_ind = arg.get_primitive()->support_neg_ind;
 
         gather_params.inputs.push_back(convert_data_tensor(arg.input(1).get_output_layout()));

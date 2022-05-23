@@ -32,6 +32,7 @@ layout gather_inst::calc_output_layout(gather_node const& node) {
 
     {
         ov::op::v8::Gather op;
+        op.set_batch_dims(desc->batch_dim);
         std::vector<ov::PartialShape> output_shapes = {ov::PartialShape()};
         std::vector<ov::PartialShape> input_shapes = {
             node.get_dependency(0).get_output_layout().size,
@@ -40,8 +41,6 @@ layout gather_inst::calc_output_layout(gather_node const& node) {
         };
 
         int64_t axis = desc->axis;
-
-
         auto axis_tensor = std::make_shared<ngraph::runtime::HostTensor>(ov::element::i64, ov::Shape{1}, static_cast<void*>(&axis));
         std::map<size_t, std::shared_ptr<ngraph::runtime::HostTensor>> const_data = {{2, axis_tensor}};
         ov::op::util::shape_infer(&op, input_shapes, output_shapes, const_data);

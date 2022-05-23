@@ -266,8 +266,15 @@ public:
         : tensor(default_size) {
         auto in_order = fmt.order();
         auto out_order = fmt.internal_order();
-        if (in_order.size() != sizes.size())
+        if (in_order.size() != sizes.size()) {
+            std::cout << "[tensor::ctor] in_order[" << in_order.size() << "] " << in_order << std::endl;
+            std::cout << "[tensor::ctor] sizes[" << sizes.size() << "] = {";
+            for (int i = 0; i < sizes.size(); i++) {
+                std::cout << std::to_string(sizes[i]) << ",";
+            }
+            std::cout << "}" << std::endl;
             throw std::invalid_argument("The count of values passed to initialize tensor does not match passed format.");
+        }
 
         for (size_t out_idx = 0; out_idx < out_order.size(); ++out_idx) {
             auto channel = out_order[out_idx];
