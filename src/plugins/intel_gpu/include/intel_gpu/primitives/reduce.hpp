@@ -44,6 +44,8 @@ enum class reduce_mode : uint16_t {
     log_sum_exp
 };
 
+
+
 /// @brief Applies the specific reduction function along provided axes (second input) of the input tensor (first input).
 /// @details
 struct reduce : public primitive_base<reduce> {

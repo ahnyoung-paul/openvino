@@ -479,6 +479,8 @@ public:
         auto input_lay = layout(input_dt, layout_format, input_size);
         auto input_mem = engine.allocate_memory(input_lay);
 
+
+
         {
             cldnn::mem_lock<input_t> input_ptr(input_mem, get_test_stream());
             for (int fi = 0; fi < input_f; fi++)
@@ -516,6 +518,28 @@ public:
         auto out_mem = network.get_output("reduce").get_memory();
         cldnn::mem_lock<output_t> out_ptr(out_mem, get_test_stream());
         auto out_lay = out_mem->get_layout();
+        std::cout << "**input_size.size()               : " << input_size.sizes() << std::endl;
+        std::cout << "**input_size.size(layout_format)  : " << input_size.sizes(layout_format) << std::endl;
+        std::cout << "**input                           : {b" << batch_num << ",f" << input_f << ",x" << input_x << ",y" << input_y << ",z" << input_z << ",w" << input_w << "}" << std::endl;
+        std::cout << "**reduce_axis                     : " << reduce_axis << std::endl;
+
+        std::cout << "**out_lay                         : {";
+        std::cout << "b" << out_lay.get_dims()[0] << ",";
+        std::cout << "f" << out_lay.get_dims()[1] << ",";
+        std::cout << "w" << out_lay.spatial(3) << ",";
+        std::cout << "z" << out_lay.spatial(2) << ",";
+        std::cout << "y" << out_lay.spatial(1) << ",";
+        std::cout << "x" << out_lay.spatial(0) << ",";
+        std::cout << "}" << std::endl;
+
+        std::cout << "**reference_result                : {";
+        std::cout << "b" << reference_result.size() << ",";
+        std::cout << "f" << reference_result[0].size() << ",";
+        std::cout << "w" << reference_result[0][0].size() << ",";
+        std::cout << "z" << reference_result[0][0][0].size() << ",";
+        std::cout << "y" << reference_result[0][0][0][0].size() << ",";
+        std::cout << "x" << reference_result[0][0][0][0][0].size() << ",";
+        std::cout << "}" << std::endl;
 
         ASSERT_EQ(out_lay.get_dims()[0], reference_result.size());                 // b
         ASSERT_EQ(out_lay.get_dims()[1], reference_result[0].size());              // f

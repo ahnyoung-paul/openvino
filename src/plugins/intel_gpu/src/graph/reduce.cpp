@@ -17,6 +17,38 @@ primitive_type_id reduce::type_id() {
     return &instance;
 }
 
+std::string debug_reduce_mode(reduce_mode mode) {
+    switch (mode) {
+        case reduce_mode::max:
+            return "max";
+        case reduce_mode::min:
+            return "min";
+        case reduce_mode::mean:
+            return "mean";
+        case reduce_mode::prod:
+            return "prod";
+        case reduce_mode::sum:
+            return "sum";
+        case reduce_mode::logical_and:
+            return "logical_and";
+        case reduce_mode::logical_or:
+            return "logical_or";
+        case reduce_mode::sum_square:
+            return "sum_square";
+        case reduce_mode::l1:
+            return "l1";
+        case reduce_mode::l2:
+            return "l2";
+        case reduce_mode::log_sum:
+            return "log_sum";
+        case reduce_mode::log_sum_exp:
+            return "log_sum_exp";
+        default:
+            return "none";
+    }
+}
+
+#define USE_PARSIAL_SHAPE
 layout reduce_inst::calc_output_layout(reduce_node const& node) {
     auto desc = node.get_primitive();
 
@@ -26,8 +58,30 @@ layout reduce_inst::calc_output_layout(reduce_node const& node) {
     auto output_type = input_layout.data_type;
     auto mode = desc->mode;
     auto reduce_axes = desc->axes;
-    auto in_dims = input_layout.get_dims();
 
+
+#ifdef USE_PARSIAL_SHAPE
+    auto in_dims_0 = input_layout.get_tensor().sizes();
+    auto in_dims = input_layout.get_dims();
+    std::cout << "Test with FIXED codes" << std::endl;
+    std::cout << "in_dims(get_dims)     : " << in_dims << std::endl;
+    std::cout << "in_dims(tensor.sizes) : " << in_dims_0 << std::endl;
+    std::cout << "reduce_axes           : " << reduce_axes << std::endl;
+    for (size_t a = 0; a < reduce_axes.size(); a++) {
+        reduce_axes[a] = (reduce_axes[a] > 1)? (in_dims.size() - reduce_axes[a] + 1)
+            : reduce_axes[a];
+    }
+    std::cout << "reduce_axes   : " << reduce_axes << std::endl;
+#else
+    std::cout << "Test with ORIGINAL codes" << std::endl;
+    auto in_dims = input_layout.get_tensor().sizes();
+    std::cout << "in_dims(get_dims)     : " << std::endl;
+    std::cout << "in_dims(tensor.sizes) : " << in_dims << std::endl;
+    std::cout << "reduce_axes   : " << reduce_axes << std::endl;
+    std::cout << "reduce_axes   : " << std::endl;
+#endif
+    std::cout << "mode         : " << debug_reduce_mode(mode) << std::endl;
+    std::cout << "input_format : " << input_format.to_string() << std::endl;
     for (size_t a = 0; a < reduce_axes.size(); a++) {
         in_dims[reduce_axes[a]] = 1;
     }
@@ -40,21 +94,39 @@ layout reduce_inst::calc_output_layout(reduce_node const& node) {
             if (!index_to_remove)
                 updated_dims.push_back(in_dims[b_f_index]);
         }
+        std::cout << "updated_dims[1]   : " << updated_dims << std::endl;
+#ifndef USE_PARSIAL_SHAPE
         for (size_t x_w_index = format_dim - 1; x_w_index >= 2; x_w_index--) {
             bool index_to_remove = std::find(reduce_axes.begin(), reduce_axes.end(), x_w_index) != reduce_axes.end();
             if (!index_to_remove)
                 updated_dims.push_back(in_dims[x_w_index]);
         }
-
+#else
+        for (size_t x_w_index = 2; x_w_index < format_dim; x_w_index++) {
+            bool index_to_remove = std::find(reduce_axes.begin(), reduce_axes.end(), x_w_index) != reduce_axes.end();
+            if (!index_to_remove)
+                updated_dims.push_back(in_dims[x_w_index]);
+        }
+#endif
+        std::cout << "updated_dims[2]   : " << updated_dims << std::endl;
         if (input_format.dimension() == 4 && reduce_axes.size() == 1)
             updated_dims.push_back(1);
+        std::cout << "updated_dims[3]   : " << updated_dims << std::endl;
+#ifndef USE_PARSIAL_SHAPE
         if (updated_dims.size() > 2)
             std::reverse(updated_dims.begin() + 2, updated_dims.end());
-
+#endif
         // Fill updated dims to format_dim size
-        while (updated_dims.size() < format_dim)
-            updated_dims.push_back(1);
+        while (updated_dims.size() < format_dim) {
+            if (updated_dims.size() > 2) {
+                updated_dims.insert(std::next(updated_dims.begin(), 2), 1);
+            } else {
+                updated_dims.push_back(1);
+            }
+        }
 
+
+        std::cout << "updated_dims[4]   : " << updated_dims << std::endl;
         in_dims = std::move(updated_dims);
     }
 
@@ -70,12 +142,32 @@ layout reduce_inst::calc_output_layout(reduce_node const& node) {
     if (node.has_fused_primitives())
         output_type = node.get_fused_output_layout().data_type;
 
+    std::cout << "out_dims   : " << in_dims << std::endl;
+#ifdef USE_PARSIAL_SHAPE
+    ov::Shape shape;
+    if (format_dim == 6) {
+        shape = ov::Shape{in_dims[0], in_dims[1], in_dims[2], in_dims[3], in_dims[4], in_dims[5]};
+    } else if (format_dim == 5) {
+        shape = ov::Shape{in_dims[0], in_dims[1], in_dims[2], in_dims[3], in_dims[4]};
+    } else {
+        shape = ov::Shape{in_dims[0], in_dims[1], in_dims[2], in_dims[3]};
+    }
+    auto l = layout{output_type, input_format, ov::PartialShape(shape)};
+    std::cout << "output layout : " << l.get_dims() << std::endl;
+    std::cout << "output layout[get_tensor.sizes] : " << l.get_tensor().sizes(l.format) << std::endl;
+    return l;
+#else
+    cldnn::layout l = layout(output_type, input_format, tensor{});
     if (format_dim == 6)
-        return layout{output_type, input_format, tensor(batch(in_dims[0]), feature(in_dims[1]), spatial(in_dims[2], in_dims[3], in_dims[4], in_dims[5]))};
+        l = layout{output_type, input_format, tensor(batch(in_dims[0]), feature(in_dims[1]), spatial(in_dims[2], in_dims[3], in_dims[4], in_dims[5]))};
     else if (format_dim == 5)
-        return layout{output_type, input_format, tensor(batch(in_dims[0]), feature(in_dims[1]), spatial(in_dims[2], in_dims[3], in_dims[4]))};
+        l = layout{output_type, input_format, tensor(batch(in_dims[0]), feature(in_dims[1]), spatial(in_dims[2], in_dims[3], in_dims[4]))};
     else
-        return layout{output_type, input_format, tensor(batch(in_dims[0]), feature(in_dims[1]), spatial(in_dims[2], in_dims[3]))};
+        l = layout{output_type, input_format, tensor(batch(in_dims[0]), feature(in_dims[1]), spatial(in_dims[2], in_dims[3]))};
+    std::cout << "output layout : " << l.get_dims() << std::endl;
+    std::cout << "output layout[get_tensor.sizes] : " << l.get_tensor().sizes(l.format) << std::endl;
+    return l;
+#endif
 }
 
 std::string reduce_inst::to_string(reduce_node const& node) {
