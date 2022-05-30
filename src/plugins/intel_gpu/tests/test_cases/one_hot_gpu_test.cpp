@@ -821,6 +821,9 @@ TEST(one_hot_error, basic_error_wrong_axis) {
     EXPECT_ANY_THROW(check_exception_massage(engine, topology, msg_to_find));
 }
 
+// One hot is not modified yet.
+// openvino/src/plugins/intel_gpu/src/graph/one_hot.cpp
+// one_hot_inst::typed_primitive_inst is fully disabled
 TEST(one_hot_error, basic_error_bad_shape) {
     auto& engine = get_test_engine();
     auto input = engine.allocate_memory({ data_types::i32, format::bfyx, tensor{ 1, 1, 1, 1 } });
