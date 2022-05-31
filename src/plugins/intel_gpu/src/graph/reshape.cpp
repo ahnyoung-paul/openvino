@@ -92,10 +92,15 @@ reshape_inst::typed_primitive_inst(network& network, reshape_node const& node) :
 
     // if reshape operated in-place, postpone creation of the output until network run,
     // then create new memory object as the reinterpreted output of the previous primitive
-    if (!node.can_be_optimized() && _node.get_output_layout().is_static())
-        _output = allocate_output();
-    else if (_exec_deps.size() > 0 && input_memory_ptr())
-        reuse_input();
+    if (_node.get_output_layout().is_static()) {
+        if (!node.can_be_optimized())
+            _output = allocate_output();
+        else
+            reuse_input();
+    } else {
+        if (_exec_deps.size() > 0 && input_memory_ptr())
+            reuse_input();
+    }
 }
 
 static std::vector<int64_t> read_vector(cldnn::memory::ptr mem, cldnn::stream& stream) {
