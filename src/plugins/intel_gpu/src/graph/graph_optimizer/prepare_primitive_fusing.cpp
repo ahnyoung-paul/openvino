@@ -979,8 +979,8 @@ void prepare_primitive_fusing::fuse_simple_primitives(program &p) {
                 return;
 
             // TODO: check if broadcasable
-            auto p1_raw_size = parent1->get_output_layout().get_dims();
-            auto p2_raw_size = parent2->get_output_layout().get_dims();
+            auto p1_raw_size = parent1->get_output_layout().get_tensor().sizes();
+            auto p2_raw_size = parent2->get_output_layout().get_tensor().sizes();
             for (unsigned k = 0; k < p1_raw_size.size(); k++) {
                 if (p1_raw_size[k] < p2_raw_size[k]) {
                     if (p1_raw_size[k] != 1)
