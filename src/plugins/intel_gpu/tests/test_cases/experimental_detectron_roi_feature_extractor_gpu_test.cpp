@@ -169,8 +169,8 @@ TEST(experimental_detectron_roi_feature_extractor_gpu_fp32, multiple_feature_ext
     const bool aligned = false;
     auto roi_input_first_instance = engine.allocate_memory({data_types::f32, format::bfyx, tensor(batch(rois_num), feature(rois_feature_dim))});
     auto roi_input_second_instance = engine.allocate_memory({data_types::f32, format::bfyx, tensor(batch(rois_num), feature(rois_feature_dim))});
-    auto level_1 = engine.allocate_memory({data_types::f32, format::bfyx, ov::PartialShape{1, 2, 3, 2}});
-    auto level_2 = engine.allocate_memory({data_types::f32, format::bfyx, ov::PartialShape{1, 2, 3, 2}});
+    auto level_1 = engine.allocate_memory({data_types::f32, format::bfyx, ov::PartialShape{1, 2, 2, 3}});
+    auto level_2 = engine.allocate_memory({data_types::f32, format::bfyx, ov::PartialShape{1, 2, 2, 3}});
     auto second_output_first_instance = engine.allocate_memory({ data_types::f32, format::bfyx, tensor(batch(rois_num), feature(rois_feature_dim))});
     auto second_output_second_instance = engine.allocate_memory({ data_types::f32, format::bfyx, tensor(batch(rois_num), feature(rois_feature_dim))});
 
