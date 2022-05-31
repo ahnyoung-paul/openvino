@@ -1817,7 +1817,7 @@ TEST(reorder_gpu_f32, bfwzyx_bfyx_chain)
         reshape("reshape1", "reorder1", ov::PartialShape{2, 2, 2, 2, 1, 1}),
         reorder("reorder2", "reshape1", format::bfwzyx, data_types::f32, sub_bfwzyx),
         reshape("reshape2", "reorder2", ov::PartialShape{4, 2, 2, 1, 1, 1}),
-        reshape("reshape3", "reshape2", ov::PartialShape{1, 4, 2, 2}),
+        reshape("reshape3", "reshape2", ov::PartialShape{1, 4, 1, 1, 2, 2}),
         reorder("reorder3", "reshape3", format::bfyx, data_types::f32, sub_bfyx),
         reorder("out_reorder", "reorder3", format::bfwzyx, data_types::f32)
         );
