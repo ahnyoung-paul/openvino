@@ -484,7 +484,7 @@ INSTANTIATE_TEST_SUITE_P(fusings_gpu, permute_scale_eltwise_actv_scale_actv, ::t
 
 // permute_opt for blocked format => reorder to differnt dim
 #define CASE_PERMUTE_REORDER_TILED_F32_3 { 1, 45, 1, 3, 259 }, { 0, 2, 3, 4, 1 }, { 0, 3, 1, 2 },  data_types::f32, data_types::f32, format::b_fs_zyx_fsv16, format::bfyx
-#define CASE_PERMUTE_REORDER_TILED_F32_4 { 2, 273, 19, 19 }, { 0, 2, 3, 1 }, { 0, 3, 1, 1 },  data_types::f32, data_types::f32, format::b_fs_yx_fsv16, format::bfyx
+#define CASE_PERMUTE_REORDER_TILED_F32_4 { 2, 273, 19, 19 }, { 0, 2, 3, 1 }, { 0, 3, 1, 2 },  data_types::f32, data_types::f32, format::b_fs_yx_fsv16, format::bfyx
 #define CASE_PERMUTE_REORDER_TILED_F32_5 { 2, 546, 2, 2 }, { 0, 2, 3, 1 }, { 0, 3, 1, 2 },  data_types::f32, data_types::f32, format::b_fs_yx_fsv16, format::bfyx
 
 // permute opt for blocked format => reorder to different dim/type
@@ -514,21 +514,21 @@ TEST_P(permute_redundant_reorder, basic) {
 }
 
 INSTANTIATE_TEST_SUITE_P(fusings_gpu, permute_redundant_reorder, ::testing::ValuesIn(std::vector<permute_reorder_params>{
-    permute_reorder_params{ CASE_PERMUTE_REORDER_F32_0, 3, 4 },
-    permute_reorder_params{ CASE_PERMUTE_REORDER_F32_1, 3, 4 },
+    permute_reorder_params{ CASE_PERMUTE_REORDER_F32_0, 4, 4 },
+    permute_reorder_params{ CASE_PERMUTE_REORDER_F32_1, 4, 4 },
     permute_reorder_params{ CASE_PERMUTE_REORDER_F32_2, 3, 4 },
-    permute_reorder_params{ CASE_PERMUTE_REORDER_F16_0, 3, 4 },
-    permute_reorder_params{ CASE_PERMUTE_REORDER_F16_1, 3, 4 },
-    permute_reorder_params{ CASE_PERMUTE_REORDER_F16_2, 3, 4 },
-    permute_reorder_params{ CASE_PERMUTE_REORDER_S8_TO_F32_0, 3, 4 },
-    permute_reorder_params{ CASE_PERMUTE_REORDER_S8_TO_F32_1, 3, 4 },
-    permute_reorder_params{ CASE_PERMUTE_REORDER_F32_TO_F16_0, 3, 4 },
-    permute_reorder_params{ CASE_PERMUTE_REORDER_U8_TO_F16_0, 3, 4 },
+    permute_reorder_params{ CASE_PERMUTE_REORDER_F16_0, 4, 4 },
+    permute_reorder_params{ CASE_PERMUTE_REORDER_F16_1, 4, 4 },
+    permute_reorder_params{ CASE_PERMUTE_REORDER_F16_2, 4, 4 },
+    permute_reorder_params{ CASE_PERMUTE_REORDER_S8_TO_F32_0, 4, 4 },
+    permute_reorder_params{ CASE_PERMUTE_REORDER_S8_TO_F32_1, 4, 4 },
+    permute_reorder_params{ CASE_PERMUTE_REORDER_F32_TO_F16_0, 4, 4 },
+    permute_reorder_params{ CASE_PERMUTE_REORDER_U8_TO_F16_0, 4, 4 },
     permute_reorder_params{ CASE_PERMUTE_REORDER_4D_TO_5D_F32_0, 3, 3 },
     permute_reorder_params{ CASE_PERMUTE_REORDER_4D_TO_6D_F32_1, 3, 3 },
-    permute_reorder_params{ CASE_PERMUTE_REORDER_5D_TO_4D_F32_0, 3, 4 },
+    permute_reorder_params{ CASE_PERMUTE_REORDER_5D_TO_4D_F32_0, 4, 4 },
     permute_reorder_params{ CASE_PERMUTE_REORDER_5D_TO_4D_F32_1, 3, 3 },
-    permute_reorder_params{ CASE_PERMUTE_REORDER_5D_TO_6D_F32_2, 3, 4 },
+    permute_reorder_params{ CASE_PERMUTE_REORDER_5D_TO_6D_F32_2, 4, 4 },
     permute_reorder_params{ CASE_PERMUTE_REORDER_6D_TO_4D_F32_0, 3, 3 },
     permute_reorder_params{ CASE_PERMUTE_REORDER_6D_TO_5D_F32_1, 3, 3 },
     permute_reorder_params{ CASE_PERMUTE_REORDER_TILED_F32_0, 3, 4 },
@@ -563,17 +563,17 @@ TEST_P(permute_act_reorder, basic) {
 }
 
 INSTANTIATE_TEST_SUITE_P(fusings_gpu, permute_act_reorder, ::testing::ValuesIn(std::vector<permute_reorder_params>{
-    permute_reorder_params{ CASE_PERMUTE_REORDER_F32_0, 3, 5 },
-    permute_reorder_params{ CASE_PERMUTE_REORDER_F32_1, 3, 5 },
+    permute_reorder_params{ CASE_PERMUTE_REORDER_F32_0, 4, 5 },
+    permute_reorder_params{ CASE_PERMUTE_REORDER_F32_1, 4, 5 },
     permute_reorder_params{ CASE_PERMUTE_REORDER_F32_2, 3, 5 },
-    permute_reorder_params{ CASE_PERMUTE_REORDER_F16_0, 3, 5 },
-    permute_reorder_params{ CASE_PERMUTE_REORDER_F16_1, 3, 5 },
-    permute_reorder_params{ CASE_PERMUTE_REORDER_F16_2, 3, 5 },
+    permute_reorder_params{ CASE_PERMUTE_REORDER_F16_0, 4, 5 },
+    permute_reorder_params{ CASE_PERMUTE_REORDER_F16_1, 4, 5 },
+    permute_reorder_params{ CASE_PERMUTE_REORDER_F16_2, 4, 5 },
     permute_reorder_params{ CASE_PERMUTE_REORDER_4D_TO_5D_F32_0, 3, 4 },
     permute_reorder_params{ CASE_PERMUTE_REORDER_4D_TO_6D_F32_1, 3, 4 },
-    permute_reorder_params{ CASE_PERMUTE_REORDER_5D_TO_4D_F32_0, 3, 5 },
+    permute_reorder_params{ CASE_PERMUTE_REORDER_5D_TO_4D_F32_0, 4, 5 },
     permute_reorder_params{ CASE_PERMUTE_REORDER_5D_TO_4D_F32_1, 3, 4 },
-    permute_reorder_params{ CASE_PERMUTE_REORDER_5D_TO_6D_F32_2, 3, 5 },
+    permute_reorder_params{ CASE_PERMUTE_REORDER_5D_TO_6D_F32_2, 4, 5 },
     permute_reorder_params{ CASE_PERMUTE_REORDER_6D_TO_4D_F32_0, 3, 4 },
     permute_reorder_params{ CASE_PERMUTE_REORDER_6D_TO_5D_F32_1, 3, 4 },
     permute_reorder_params{ CASE_PERMUTE_REORDER_TILED_F32_0, 3, 5 },

@@ -66,29 +66,29 @@ public:
 /* ------------------------------------------ Gather cases --------------------------------------------- */
 /* ----------------------------------------------------------------------------------------------------- */
 
-#define CASE_GATHER_FP32_1 { 2, 3, 1, 4 }, { 4, 1, 1, 1 }, { 4, 3, 4, 1 }, format::bfyx, 0, data_types::f32, format::bfyx, data_types::f32, format::bfyx
+#define CASE_GATHER_FP32_1 { 2, 3, 1, 4 }, { 4, 1, 1, 1 }, { 4, 3, 1, 4 }, format::bfyx, 0, data_types::f32, format::bfyx, data_types::f32, format::bfyx
 #define CASE_GATHER_FP32_2 { 3, 2, 1, 2 }, { 2, 3, 1, 1 }, { 2, 3, 2, 2 }, format::bfyx, 0, data_types::f32, format::bfyx, data_types::f32, format::bfyx
-#define CASE_GATHER_FP32_3 { 3, 1, 1, 2 }, { 2, 1, 1, 1 }, { 3, 2, 2, 1 }, format::bfyx, 1, data_types::f32, format::bfyx, data_types::f32, format::bfyx
-#define CASE_GATHER_FP32_4 { 5, 3, 2, 2 }, { 3, 1, 1, 1 }, { 5, 2, 3, 2 }, format::bfyx, 2, data_types::f32, format::bfyx, data_types::f32, format::bfyx
-#define CASE_GATHER_FP32_5 { 2, 3, 1, 2 }, { 1, 3, 1, 1 }, { 2, 3, 1, 3 }, format::bfyx, 2, data_types::f32, format::bfyx, data_types::f32, format::bfyx
+#define CASE_GATHER_FP32_3 { 3, 1, 1, 2 }, { 2, 1, 1, 1 }, { 3, 2, 1, 2 }, format::bfyx, 1, data_types::f32, format::bfyx, data_types::f32, format::bfyx
+#define CASE_GATHER_FP32_4 { 5, 3, 2, 2 }, { 3, 1, 1, 1 }, { 5, 2, 2, 3 }, format::bfyx, 2, data_types::f32, format::bfyx, data_types::f32, format::bfyx
+#define CASE_GATHER_FP32_5 { 2, 3, 1, 2 }, { 1, 3, 1, 1 }, { 2, 3, 3, 1 }, format::bfyx, 2, data_types::f32, format::bfyx, data_types::f32, format::bfyx
 
-#define CASE_GATHER_FP16_1 { 2, 3, 1, 4 }, { 4, 1, 1, 1 }, { 4, 3, 4, 1 }, format::bfyx, 0, data_types::f16, format::bfyx, data_types::f16, format::bfyx
+#define CASE_GATHER_FP16_1 { 2, 3, 1, 4 }, { 4, 1, 1, 1 }, { 4, 3, 1, 4 }, format::bfyx, 0, data_types::f16, format::bfyx, data_types::f16, format::bfyx
 #define CASE_GATHER_FP16_2 { 3, 2, 1, 2 }, { 2, 3, 1, 1 }, { 2, 3, 2, 2 }, format::bfyx, 0, data_types::f16, format::bfyx, data_types::f16, format::bfyx
-#define CASE_GATHER_FP16_3 { 3, 1, 1, 2 }, { 2, 1, 1, 1 }, { 3, 2, 2, 1 }, format::bfyx, 1, data_types::f16, format::bfyx, data_types::f16, format::bfyx
+#define CASE_GATHER_FP16_3 { 3, 1, 1, 2 }, { 2, 1, 1, 1 }, { 3, 2, 1, 2 }, format::bfyx, 1, data_types::f16, format::bfyx, data_types::f16, format::bfyx
 #define CASE_GATHER_FP16_4 { 5, 3, 2, 2 }, { 3, 1, 1, 1 }, { 5, 2, 3, 2 }, format::bfyx, 2, data_types::f16, format::bfyx, data_types::f16, format::bfyx
-#define CASE_GATHER_FP16_5 { 2, 3, 1, 2 }, { 1, 3, 1, 1 }, { 2, 3, 1, 3 }, format::bfyx, 2, data_types::f16, format::bfyx, data_types::f16, format::bfyx
+#define CASE_GATHER_FP16_5 { 2, 3, 1, 2 }, { 1, 3, 1, 1 }, { 2, 3, 3, 1 }, format::bfyx, 2, data_types::f16, format::bfyx, data_types::f16, format::bfyx
 
 #define CASE_GATHER_5D_FP32_1 { 2, 3, 1, 4, 1 }, { 4, 1, 1, 1 }, { 4, 3, 1, 4, 1 }, format::bfzyx, 0, data_types::f32, format::bfzyx, data_types::f32, format::bfzyx
 #define CASE_GATHER_5D_FP32_2 { 2, 3, 2, 2, 2 }, { 2, 1, 1, 1 }, { 2, 2, 2, 2, 2 }, format::bfzyx, 1, data_types::f32, format::bfzyx, data_types::f32, format::bfzyx
 #define CASE_GATHER_5D_FP32_3 { 5, 3, 2, 2, 2 }, { 3, 1, 1, 1 }, { 5, 3, 2, 3, 2 }, format::bfzyx, 3, data_types::f32, format::bfzyx, data_types::f32, format::bfzyx
-#define CASE_GATHER_5D_FP32_4 { 2, 3, 1, 4, 4 }, { 2, 1, 1, 1 }, { 2, 3, 2, 4, 1 }, format::bfzyx, 2, data_types::f32, format::bfzyx, data_types::f32, format::bfzyx
+#define CASE_GATHER_5D_FP32_4 { 2, 3, 1, 4, 4 }, { 2, 1, 1, 1 }, { 2, 3, 1, 4, 2 }, format::bfzyx, 2, data_types::f32, format::bfzyx, data_types::f32, format::bfzyx
 #define CASE_GATHER_5D_FP32_5 { 3, 1, 5, 2, 1 }, { 2, 1, 1, 1 }, { 3, 1, 1, 2, 2 }, format::bfzyx, 4, data_types::f32, format::bfzyx, data_types::f32, format::bfzyx
 
-#define CASE_GATHER_5D_FP16_1 { 3, 2, 1, 2, 1 }, { 2, 1, 1, 1 }, { 2, 2, 1, 2, 2 }, format::bfzyx, 0, data_types::f16, format::bfzyx, data_types::f16, format::bfzyx
+#define CASE_GATHER_5D_FP16_1 { 3, 2, 1, 2, 1 }, { 2, 1, 1, 1 }, { 2, 2, 2, 2, 1 }, format::bfzyx, 0, data_types::f16, format::bfzyx, data_types::f16, format::bfzyx
 #define CASE_GATHER_5D_FP16_2 { 1, 3, 1, 2, 1 }, { 2, 1, 1, 1 }, { 1, 2, 1, 2, 1 }, format::bfzyx, 1, data_types::f16, format::bfzyx, data_types::f16, format::bfzyx
-#define CASE_GATHER_5D_FP16_3 { 2, 3, 1, 3, 3 }, { 1, 2, 1, 1 }, { 2, 3, 3, 2, 1 }, format::bfzyx, 3, data_types::f16, format::bfzyx, data_types::f16, format::bfzyx
+#define CASE_GATHER_5D_FP16_3 { 2, 3, 1, 3, 3 }, { 1, 2, 1, 1 }, { 2, 3, 1, 2, 3 }, format::bfzyx, 3, data_types::f16, format::bfzyx, data_types::f16, format::bfzyx
 #define CASE_GATHER_5D_FP16_4 { 3, 2, 2, 2, 2 }, { 2, 1, 1, 1 }, { 3, 2, 2, 2, 2 }, format::bfzyx, 2, data_types::f16, format::bfzyx, data_types::f16, format::bfzyx
-#define CASE_GATHER_5D_FP16_5 { 1, 1, 2, 1, 1 }, { 3, 1, 1, 1 }, { 1, 1, 1, 1, 3 }, format::bfzyx, 4, data_types::f16, format::bfzyx, data_types::f16, format::bfzyx
+#define CASE_GATHER_5D_FP16_5 { 1, 1, 2, 1, 1 }, { 3, 1, 1, 1 }, { 1, 1, 3, 1, 1 }, format::bfzyx, 4, data_types::f16, format::bfzyx, data_types::f16, format::bfzyx
 
 class gather_quantize : public GatherPrimitiveFusingTest {};
 TEST_P(gather_quantize, basic) {

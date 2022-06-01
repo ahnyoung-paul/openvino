@@ -15,68 +15,52 @@ using namespace cldnn;
 using namespace ::tests;
 
 template <typename T>
-VVVVF<T> one_hot_cpu(VVVVF<T> &input, uint16_t axis,
-    int32_t one_hot_limit, int input_padding_y = 0,
-    int input_padding_x = 0, int output_padding_y = 0,
-    int output_padding_x = 0) {
+VF<T> one_hot_cpu(VF<T> &indices, std::vector<tensor::value_type> &indices_shape,
+        const size_t depth, const int64_t one_hot_axis) {
+    // Step 1: Set off_value(0) to the output
+    const size_t num_ind = [&] {
+        size_t size = 1;
+        for (auto d : indices_shape) {
+            size *= d;
+        }
+        return size;
+    }();
 
-    size_t padding_y = input_padding_y + output_padding_y;
-    size_t padding_x = input_padding_x + output_padding_x;
-    size_t out_sizes[4];
-    out_sizes[0] = input.size();
-    out_sizes[1] = input[0].size();
-    out_sizes[2] = input[0][0].size() + 2 * padding_y;
-    out_sizes[3] = input[0][0][0].size() + 2 * padding_x;
-    for (uint16_t i = 3; i > axis; --i)
-        out_sizes[i] = out_sizes[i - 1];
-    out_sizes[axis] = one_hot_limit;
-    VVVVF<T> output(out_sizes[0], VVVF<T>(out_sizes[1], VVF<T>(out_sizes[2], VF<T>(out_sizes[3]))));
+    VF<T> out(num_ind * depth);
+    std::fill(out.begin(), out.end(), 0);
 
-    switch (axis) {
-    case 0:
-        for (size_t b = 0; b < out_sizes[0]; ++b)
-            for (size_t f = 0; f < out_sizes[1]; ++f)
-                for (size_t y = 0; y < out_sizes[2]; ++y)
-                    for (size_t x = 0; x < out_sizes[3]; ++x)
-                        output[b][f][y][x] = input[f][y][x][0] == (T)b ? 1 : 0;
-        break;
-    case 1:
-        for (size_t b = 0; b < out_sizes[0]; ++b)
-            for (size_t f = 0; f < out_sizes[1]; ++f)
-                for (size_t y = 0; y < out_sizes[2]; ++y)
-                    for (size_t x = 0; x < out_sizes[3]; ++x)
-                        output[b][f][y][x] = input[b][y][x][0] == (T)f ? 1 : 0;
-        break;
-    case 2:
-        for (size_t b = 0; b < out_sizes[0]; ++b)
-            for (size_t f = 0; f < out_sizes[1]; ++f)
-                for (size_t y = 0; y < out_sizes[2]; ++y)
-                    for (size_t x = 0; x < out_sizes[3]; ++x)
-                        output[b][f][y][x] = input[b][f][x][0] == (T)y ? 1 : 0;
-        break;
-    case 3:
-        for (size_t b = 0; b < out_sizes[0]; ++b)
-            for (size_t f = 0; f < out_sizes[1]; ++f)
-                for (size_t y = 0; y < out_sizes[2]; ++y)
-                    for (size_t x = 0; x < out_sizes[3]; ++x)
-                        output[b][f][y][x] = input[b][f][y][0] == (T)x ? 1 : 0;
-        break;
-    default: break;
+    // Step 2: Write on_value(1) at needed positions
+    const size_t inner_block = [&] {
+        size_t mul = 1;
+        for (size_t i = one_hot_axis; i < indices_shape.size(); ++i)
+            mul *= indices_shape[i];
+        return mul;
+    }();
+
+    for (size_t outer_i = 0; outer_i < num_ind; outer_i += inner_block) {
+        for (size_t inner_i = 0; inner_i < inner_block; inner_i++) {
+            auto input_val = indices[outer_i + inner_i];
+            // Negative indices are ignored
+            if ((input_val >= 0) && (static_cast<size_t>(input_val) < depth)) {
+                auto oh_index = static_cast<size_t>(input_val);
+                size_t output_idx = (outer_i * depth + inner_i + oh_index * inner_block);
+                out[output_idx] = 1;
+            }
+        }
     }
-    return output;
+    return out;
 }
+
 
 template <typename T>
 void generic_one_hot_test_int(cldnn::format test_input_fmt, int input_b, int input_f, int input_y, int input_x, tensor shape,
     uint16_t one_hot_axis, int input_padding_y = 0, int input_padding_x = 0, int output_padding_y = 0, int output_padding_x = 0) {
-    std::vector<tensor::value_type> output_dims = { shape.batch[0], shape.feature[0],
-        shape.spatial[1], shape.spatial[0] };
+    std::vector<tensor::value_type> output_dims = shape.sizes(format::get_default_format(test_input_fmt.dimension()+1));
     int32_t one_hot_limit = output_dims[one_hot_axis];
 
     int min_random = 0, max_random = one_hot_limit + 2;
     VVVVF<T> input_rnd = generate_random_4d<T>(input_b, input_f, input_y, input_x, min_random, max_random);
     VF<T> input_rnd_vec = flatten_4d<T>(test_input_fmt, input_rnd);
-
     auto& engine = get_test_engine();
     tensor input_tensor(input_b, input_f, input_x, input_y);
     auto input = engine.allocate_memory({ type_to_data_type<T>::value, test_input_fmt, input_tensor });
@@ -96,20 +80,23 @@ void generic_one_hot_test_int(cldnn::format test_input_fmt, int input_b, int inp
     auto output_layout = output_memory->get_layout();
     cldnn::mem_lock<T> output_ptr(output_memory, get_test_stream());
 
-    VVVVF<T> output_cpu = one_hot_cpu<T>(input_rnd, one_hot_axis, one_hot_limit, input_padding_y, input_padding_x, output_padding_y, output_padding_x);
-    EXPECT_EQ(output_layout.format.value, test_input_fmt.value);
+    auto indice_shape = input_tensor.sizes(format::get_default_format(test_input_fmt.dimension()));
+    VF<T> output_cpu_vec = one_hot_cpu<T>(input_rnd_vec, indice_shape, one_hot_limit, one_hot_axis);
+    EXPECT_EQ(output_layout.format.value, format::get_default_format(test_input_fmt.dimension()+1).value);
     tensor output_tensor = output_layout.get_buffer_size();
+    int z_size = output_tensor.spatial[0];
     int y_size = output_tensor.spatial[1];
-    int x_size = output_tensor.spatial[0];
+    int x_size = output_tensor.spatial[2];
     int f_size = output_tensor.feature[0];
     int b_size = output_tensor.batch[0];
-    EXPECT_EQ(y_size, (int)output_cpu[0][0].size());
-    EXPECT_EQ(x_size, (int)output_cpu[0][0][0].size());
-    EXPECT_EQ(f_size, (int)output_cpu[0].size());
-    EXPECT_EQ(b_size, (int)output_cpu.size());
+
+    EXPECT_EQ(z_size, (int)output_dims[4]);
+    EXPECT_EQ(y_size, (int)output_dims[3]);
+    EXPECT_EQ(x_size, (int)output_dims[2]);
+    EXPECT_EQ(f_size, (int)output_dims[1]);
+    EXPECT_EQ(b_size, (int)output_dims[0]);
 
     bool test_is_correct = true;
-    VF<T> output_cpu_vec = flatten_4d<T>(test_input_fmt, output_cpu);
 
     for (size_t i = 0; i < output_cpu_vec.size(); ++i) {
         if (output_cpu_vec[i] != output_ptr[i]) {
@@ -132,17 +119,17 @@ void generic_one_hot_test_int(cldnn::format test_input_fmt, int input_b, int inp
 }
 
 TEST(one_hot_gpu_i32, generic) {
-    generic_one_hot_test_int<int32_t>(format::bfyx, 2, 2, 1, 1, tensor(5, 2, 1, 2), 0);
-    generic_one_hot_test_int<int32_t>(format::bfyx, 1, 2, 3, 1, tensor(1, 5, 3, 2), 1);
-    generic_one_hot_test_int<int32_t>(format::bfyx, 2, 2, 1, 1, tensor(2, 2, 1, 4), 2);
-    generic_one_hot_test_int<int32_t>(format::bfyx, 2, 2, 1, 1, tensor(2, 2, 4, 1), 3);
+    generic_one_hot_test_int<int32_t>(format::bfyx, 2, 2, 1, 1, tensor(5, 2, 1, 1, 2), 0);
+    generic_one_hot_test_int<int32_t>(format::bfyx, 1, 2, 3, 1, tensor(1, 5, 1, 3, 2), 1);
+    generic_one_hot_test_int<int32_t>(format::bfyx, 2, 2, 1, 1, tensor(2, 2, 1, 1, 4), 2);
+    generic_one_hot_test_int<int32_t>(format::bfyx, 2, 2, 1, 1, tensor(2, 2, 1, 4, 1), 3);
 }
 
 TEST(one_hot_gpu_i64, generic) {
-    generic_one_hot_test_int<int64_t>(format::bfyx, 2, 2, 1, 1, tensor(5, 2, 1, 2), 0);
-    generic_one_hot_test_int<int64_t>(format::bfyx, 1, 2, 3, 1, tensor(1, 5, 3, 2), 1);
-    generic_one_hot_test_int<int64_t>(format::bfyx, 2, 2, 1, 1, tensor(2, 2, 1, 4), 2);
-    generic_one_hot_test_int<int64_t>(format::bfyx, 2, 2, 1, 1, tensor(2, 2, 4, 1), 3);
+    generic_one_hot_test_int<int64_t>(format::bfyx, 2, 2, 1, 1, tensor(5, 2, 1, 1, 2), 0);
+    generic_one_hot_test_int<int64_t>(format::bfyx, 1, 2, 3, 1, tensor(1, 5, 1, 3, 2), 1);
+    generic_one_hot_test_int<int64_t>(format::bfyx, 2, 2, 1, 1, tensor(2, 2, 1, 1, 4), 2);
+    generic_one_hot_test_int<int64_t>(format::bfyx, 2, 2, 1, 1, tensor(2, 2, 1, 4, 1), 3);
 }
 
 TEST(one_hot_gpu_i32, bfzyx_ax4) {

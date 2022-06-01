@@ -55,7 +55,8 @@ struct permute_impl : typed_primitive_impl_ocl<permute> {
         auto permute_optional_params =
             get_default_optional_params<kernel_selector::permute_optional_params>(arg.get_program());
 
-        auto permute_order = convert_permute_order(arg.get_primitive()->permute_order, arg.get_output_layout().get_rank());
+        auto in_rank = arg.get_dependency(0).get_output_layout().get_rank();
+        auto permute_order = convert_permute_order(arg.get_primitive()->permute_order, in_rank);
         permute_params.order = permute_order;
         auto& kernel_selector = kernel_selector::permute_kernel_selector::Instance();
         auto best_kernels = kernel_selector.GetBestKernels(permute_params, permute_optional_params);

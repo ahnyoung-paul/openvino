@@ -177,8 +177,9 @@ public:
         auto shape = calculated_layout.get_dims();
 
         if (inputDesc.axis >= 0) {
-            calculated_layout.get_dims()[inputDesc.axis] = 1; // cropped inputs shape
+            shape[inputDesc.axis] = 1; // cropped inputs shape
         }
+        calculated_layout.size = ov::PartialShape(ov::Shape(shape.begin(), shape.end()));
 
         return calculated_layout;
     }
