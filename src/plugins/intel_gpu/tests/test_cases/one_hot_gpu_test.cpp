@@ -811,14 +811,15 @@ TEST(one_hot_error, basic_error_wrong_axis) {
 // One hot is not modified yet.
 // openvino/src/plugins/intel_gpu/src/graph/one_hot.cpp
 // one_hot_inst::typed_primitive_inst is fully disabled
-TEST(one_hot_error, basic_error_bad_shape) {
-    auto& engine = get_test_engine();
-    auto input = engine.allocate_memory({ data_types::i32, format::bfyx, tensor{ 1, 1, 1, 1 } });
+// TODO : Not used this function because of one_hot_inst::typed_primitive_inst is disabled.
+// TEST(one_hot_error, basic_error_bad_shape) {
+//     auto& engine = get_test_engine();
+//     auto input = engine.allocate_memory({ data_types::i32, format::bfyx, tensor{ 1, 1, 1, 1 } });
 
-    topology topology;
-    topology.add(input_layout("input", input->get_layout()));
-    topology.add(one_hot("output", "input", tensor(1, 5, 1, 50), 2, 2));
+//     topology topology;
+//     topology.add(input_layout("input", input->get_layout()));
+//     topology.add(one_hot("output", "input", tensor(1, 5, 1, 50), 2, 2));
 
-    std::string msg_to_find = "Incorrect parameters configuration: shape does not fit input size.";
-    EXPECT_ANY_THROW(check_exception_massage(engine, topology, msg_to_find));
-}
+//     std::string msg_to_find = "Incorrect parameters configuration: shape does not fit input size.";
+//     EXPECT_ANY_THROW(check_exception_massage(engine, topology, msg_to_find));
+// }

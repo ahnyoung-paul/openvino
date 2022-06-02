@@ -631,7 +631,7 @@ TEST(fc_permute_crop_gpu, basic_0)
         data("weights", weights_mem),
         data("bias", bias_mem),
         fully_connected("fully_connected", "input", "weights", "bias"),  // yxfb {5, 512, 1, 1}
-        reshape("reshape", "fully_connected", ov::PartialShape{ 1, 5, 1, 512 }),           // yxfb {1, 5, 1, 512}
+        reshape("reshape", "fully_connected", ov::PartialShape{ 1, 5, 512, 1 }),           // yxfb {1, 5, 1, 512}
         permute("permute", "reshape", { 1, 0, 2, 3 }),                     // yxfb {5, 1, 1, 512}        --- without permute fix yxfb {1, 5, 512, 1}
         crop("crop", "permute", { 1, 1, 1, 512 }, { 4, 0, 0 ,0 })           // without permute fix it will fail "Tensor pitches didn't set correctly"
     );

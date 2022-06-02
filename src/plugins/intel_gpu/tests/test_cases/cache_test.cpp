@@ -165,10 +165,10 @@ void remove(const std::string& filename) {
 
 class cache_test_helper {
 public:
-    cache_test_helper(cldnn::engine& engine, cache_version v)
+    cache_test_helper(cldnn::engine& engine, cache_version v, std::string cache_filename)
         : _engine(engine)
         , _mode(cldnn::tuning_mode::tuning_disabled)
-        , cache_filename(get_temporary_cache_file())
+        , cache_filename(cache_filename)
     {
         auto cache = get_cache_version(v);
         auto eus = engine.get_device_info().execution_units_count;
@@ -302,7 +302,7 @@ public:
 TEST(cache_test, no_cache_baseline) {
     SCOPED_TRACE("default implementation same as reference, cache tests may provide invalid pass");
     auto& engine = tests::get_test_engine();
-    auto helper = cache_test_helper(engine, cache_version::version_2);
+    auto helper = cache_test_helper(engine, cache_version::version_2, "no_cache_baseline_"+get_temporary_cache_file());
 
     helper.with_mode(cldnn::tuning_mode::tuning_disabled)
         .expect_implementation_not(reference_impl_name)
@@ -312,8 +312,9 @@ TEST(cache_test, no_cache_baseline) {
 TEST_P(cache_version_test, use_only) {
     auto version = GetParam();
     auto& engine = tests::get_test_engine();
+    std::string idx_str = std::to_string(static_cast<int>(version));
 
-    cache_test_helper helper(engine, version);
+    cache_test_helper helper(engine, version, "use_only_" + idx_str + get_temporary_cache_file());
     helper.with_mode(cldnn::tuning_mode::tuning_use_cache)
         .expect_implementation(reference_impl_name)
         .expect_cache(version)
@@ -328,8 +329,9 @@ TEST_P(cache_version_test, update) {
     }
 
     auto& engine = tests::get_test_engine();
+    std::string idx_str = std::to_string(static_cast<int>(version));
 
-    cache_test_helper helper(engine, version);
+    cache_test_helper helper(engine, version, "update_" + idx_str + get_temporary_cache_file());
     helper.with_mode(cldnn::tuning_mode::tuning_use_and_update)
         .expect_implementation(reference_impl_name)
         .expect_cache(ex_version)
@@ -345,7 +347,7 @@ INSTANTIATE_TEST_SUITE_P(
 TEST(cache_test, remove_invalid) {
     auto& engine = tests::get_test_engine();
 
-    cache_test_helper helper(engine, cache_version::version_2_invalid);
+    cache_test_helper helper(engine, cache_version::version_2_invalid, "remove_invalid_" + get_temporary_cache_file());
     helper.with_mode(cldnn::tuning_mode::tuning_use_and_update)
         .expect_implementation_not(reference_impl_name)
         .expect_cache(cache_version::version_2_empty)

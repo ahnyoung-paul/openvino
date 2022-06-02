@@ -23,6 +23,7 @@ struct gather_test_params {
     ov::PartialShape out_shape;
     format out_format;
     int64_t axis;
+    int64_t batch_dims;
     data_types data_type;
     format input_format;
     data_types default_type;
@@ -66,29 +67,21 @@ public:
 /* ------------------------------------------ Gather cases --------------------------------------------- */
 /* ----------------------------------------------------------------------------------------------------- */
 
-#define CASE_GATHER_FP32_1 { 2, 3, 1, 4 }, { 4, 1, 1, 1 }, { 4, 3, 1, 4 }, format::bfyx, 0, data_types::f32, format::bfyx, data_types::f32, format::bfyx
-#define CASE_GATHER_FP32_2 { 3, 2, 1, 2 }, { 2, 3, 1, 1 }, { 2, 3, 2, 2 }, format::bfyx, 0, data_types::f32, format::bfyx, data_types::f32, format::bfyx
-#define CASE_GATHER_FP32_3 { 3, 1, 1, 2 }, { 2, 1, 1, 1 }, { 3, 2, 1, 2 }, format::bfyx, 1, data_types::f32, format::bfyx, data_types::f32, format::bfyx
-#define CASE_GATHER_FP32_4 { 5, 3, 2, 2 }, { 3, 1, 1, 1 }, { 5, 2, 2, 3 }, format::bfyx, 2, data_types::f32, format::bfyx, data_types::f32, format::bfyx
-#define CASE_GATHER_FP32_5 { 2, 3, 1, 2 }, { 1, 3, 1, 1 }, { 2, 3, 3, 1 }, format::bfyx, 2, data_types::f32, format::bfyx, data_types::f32, format::bfyx
+#define CASE_GATHER_FP32_1 { 2, 3, 1, 4 }, { 2, 3, 5, 1 }, { 2, 3, 1, 5, 1 },    format::bfyx, 2, 2,     data_types::f32, format::bfyx, data_types::f32, format::bfzyx
+#define CASE_GATHER_FP32_2 { 5, 3, 2, 2 }, { 5, 3, 1, 2 }, { 5, 3, 1, 2 },       format::bfyx, 3, -1,    data_types::f32, format::bfyx, data_types::f32, format::bfyx
+#define CASE_GATHER_FP32_3 { 3, 2, 1, 2 }, { 3, 2, 1, 1 }, { 3, 2, 1, 1, 1 },    format::bfyx, 2, 2,     data_types::f32, format::bfyx, data_types::f32, format::bfzyx
 
-#define CASE_GATHER_FP16_1 { 2, 3, 1, 4 }, { 4, 1, 1, 1 }, { 4, 3, 1, 4 }, format::bfyx, 0, data_types::f16, format::bfyx, data_types::f16, format::bfyx
-#define CASE_GATHER_FP16_2 { 3, 2, 1, 2 }, { 2, 3, 1, 1 }, { 2, 3, 2, 2 }, format::bfyx, 0, data_types::f16, format::bfyx, data_types::f16, format::bfyx
-#define CASE_GATHER_FP16_3 { 3, 1, 1, 2 }, { 2, 1, 1, 1 }, { 3, 2, 1, 2 }, format::bfyx, 1, data_types::f16, format::bfyx, data_types::f16, format::bfyx
-#define CASE_GATHER_FP16_4 { 5, 3, 2, 2 }, { 3, 1, 1, 1 }, { 5, 2, 3, 2 }, format::bfyx, 2, data_types::f16, format::bfyx, data_types::f16, format::bfyx
-#define CASE_GATHER_FP16_5 { 2, 3, 1, 2 }, { 1, 3, 1, 1 }, { 2, 3, 3, 1 }, format::bfyx, 2, data_types::f16, format::bfyx, data_types::f16, format::bfyx
+#define CASE_GATHER_FP16_1 { 2, 3, 1, 4 }, { 2, 3, 5, 1 }, { 2, 3, 1, 5, 1 },    format::bfyx, 2, 2,     data_types::f16, format::bfyx, data_types::f16, format::bfzyx
+#define CASE_GATHER_FP16_2 { 5, 3, 2, 2 }, { 5, 3, 1, 2 }, { 5, 3, 1, 2 },       format::bfyx, 3, -1,    data_types::f16, format::bfyx, data_types::f16, format::bfyx
+#define CASE_GATHER_FP16_3 { 3, 2, 1, 2 }, { 3, 2, 1, 1 }, { 3, 2, 1, 1, 1 },    format::bfyx, 2, 2,     data_types::f16, format::bfyx, data_types::f16, format::bfzyx
 
-#define CASE_GATHER_5D_FP32_1 { 2, 3, 1, 4, 1 }, { 4, 1, 1, 1 }, { 4, 3, 1, 4, 1 }, format::bfzyx, 0, data_types::f32, format::bfzyx, data_types::f32, format::bfzyx
-#define CASE_GATHER_5D_FP32_2 { 2, 3, 2, 2, 2 }, { 2, 1, 1, 1 }, { 2, 2, 2, 2, 2 }, format::bfzyx, 1, data_types::f32, format::bfzyx, data_types::f32, format::bfzyx
-#define CASE_GATHER_5D_FP32_3 { 5, 3, 2, 2, 2 }, { 3, 1, 1, 1 }, { 5, 3, 2, 3, 2 }, format::bfzyx, 3, data_types::f32, format::bfzyx, data_types::f32, format::bfzyx
-#define CASE_GATHER_5D_FP32_4 { 2, 3, 1, 4, 4 }, { 2, 1, 1, 1 }, { 2, 3, 1, 4, 2 }, format::bfzyx, 2, data_types::f32, format::bfzyx, data_types::f32, format::bfzyx
-#define CASE_GATHER_5D_FP32_5 { 3, 1, 5, 2, 1 }, { 2, 1, 1, 1 }, { 3, 1, 1, 2, 2 }, format::bfzyx, 4, data_types::f32, format::bfzyx, data_types::f32, format::bfzyx
+#define CASE_GATHER_5D_FP32_1 { 2, 3, 1, 4, 2 }, { 2, 3, 1, 2 }, { 2, 3, 1, 1, 2 }, format::bfzyx, 3, -1, data_types::f32, format::bfzyx, data_types::f32, format::bfzyx
+#define CASE_GATHER_5D_FP32_2 { 4, 5, 2, 2, 2 }, { 4, 5, 1, 2 }, { 4, 5, 2, 1, 2 }, format::bfzyx, 3, 3,  data_types::f32, format::bfzyx, data_types::f32, format::bfzyx
+#define CASE_GATHER_5D_FP32_3 { 2, 3, 1, 4, 4 }, { 2, 3, 2, 4 }, { 2, 3, 1, 4, 2 }, format::bfzyx, 3, 3,  data_types::f32, format::bfzyx, data_types::f32, format::bfzyx
 
-#define CASE_GATHER_5D_FP16_1 { 3, 2, 1, 2, 1 }, { 2, 1, 1, 1 }, { 2, 2, 2, 2, 1 }, format::bfzyx, 0, data_types::f16, format::bfzyx, data_types::f16, format::bfzyx
-#define CASE_GATHER_5D_FP16_2 { 1, 3, 1, 2, 1 }, { 2, 1, 1, 1 }, { 1, 2, 1, 2, 1 }, format::bfzyx, 1, data_types::f16, format::bfzyx, data_types::f16, format::bfzyx
-#define CASE_GATHER_5D_FP16_3 { 2, 3, 1, 3, 3 }, { 1, 2, 1, 1 }, { 2, 3, 1, 2, 3 }, format::bfzyx, 3, data_types::f16, format::bfzyx, data_types::f16, format::bfzyx
-#define CASE_GATHER_5D_FP16_4 { 3, 2, 2, 2, 2 }, { 2, 1, 1, 1 }, { 3, 2, 2, 2, 2 }, format::bfzyx, 2, data_types::f16, format::bfzyx, data_types::f16, format::bfzyx
-#define CASE_GATHER_5D_FP16_5 { 1, 1, 2, 1, 1 }, { 3, 1, 1, 1 }, { 1, 1, 3, 1, 1 }, format::bfzyx, 4, data_types::f16, format::bfzyx, data_types::f16, format::bfzyx
+#define CASE_GATHER_5D_FP16_1 { 2, 3, 1, 4, 2 }, { 2, 3, 1, 2 }, { 2, 3, 1, 1, 2 }, format::bfzyx, 3, -1, data_types::f16, format::bfzyx, data_types::f16, format::bfzyx
+#define CASE_GATHER_5D_FP16_2 { 4, 5, 2, 2, 2 }, { 4, 5, 1, 2 }, { 4, 5, 2, 1, 2 }, format::bfzyx, 3, 3,  data_types::f16, format::bfzyx, data_types::f16, format::bfzyx
+#define CASE_GATHER_5D_FP16_3 { 2, 3, 1, 4, 4 }, { 2, 3, 2, 4 }, { 2, 3, 1, 4, 2 }, format::bfzyx, 3, 3,  data_types::f16, format::bfzyx, data_types::f16, format::bfzyx
 
 class gather_quantize : public GatherPrimitiveFusingTest {};
 TEST_P(gather_quantize, basic) {
@@ -100,7 +93,7 @@ TEST_P(gather_quantize, basic) {
         data("in_hi", get_mem(get_per_channel_layout(p), 1, max_random)),
         data("out_lo", get_mem(get_single_element_layout(p), -127)),
         data("out_hi", get_mem(get_single_element_layout(p), 127)),
-        gather("gather_prim", "input", "gather_indices", p.axis, p.out_format, p.out_shape),
+        gather("gather_prim", "input", "gather_indices", p.axis, p.out_format, p.out_shape, p.batch_dims),
         quantize("quantize", "gather_prim", "in_lo", "in_hi", "out_lo", "out_hi", 255, data_types::i8),
         reorder("reorder_bfyx", "quantize", p.default_format, data_types::f32)
     );
@@ -113,26 +106,18 @@ INSTANTIATE_TEST_SUITE_P(fusings_gpu, gather_quantize, ::testing::ValuesIn(std::
     gather_test_params{ CASE_GATHER_FP32_1, 2, 3 },
     gather_test_params{ CASE_GATHER_FP32_2, 2, 3 },
     gather_test_params{ CASE_GATHER_FP32_3, 2, 3 },
-    gather_test_params{ CASE_GATHER_FP32_4, 2, 3 },
-    gather_test_params{ CASE_GATHER_FP32_5, 2, 3 },
 
     gather_test_params{ CASE_GATHER_FP16_1, 2, 3 },
     gather_test_params{ CASE_GATHER_FP16_2, 2, 3 },
     gather_test_params{ CASE_GATHER_FP16_3, 2, 3 },
-    gather_test_params{ CASE_GATHER_FP16_4, 2, 3 },
-    gather_test_params{ CASE_GATHER_FP16_5, 2, 3 },
 
     gather_test_params{ CASE_GATHER_5D_FP32_1, 2, 3 },
     gather_test_params{ CASE_GATHER_5D_FP32_2, 2, 3 },
     gather_test_params{ CASE_GATHER_5D_FP32_3, 2, 3 },
-    gather_test_params{ CASE_GATHER_5D_FP32_4, 2, 3 },
-    gather_test_params{ CASE_GATHER_5D_FP32_5, 2, 3 },
 
     gather_test_params{ CASE_GATHER_5D_FP16_1, 2, 3 },
     gather_test_params{ CASE_GATHER_5D_FP16_2, 2, 3 },
     gather_test_params{ CASE_GATHER_5D_FP16_3, 2, 3 },
-    gather_test_params{ CASE_GATHER_5D_FP16_4, 2, 3 },
-    gather_test_params{ CASE_GATHER_5D_FP16_5, 2, 3 },
 }));
 
 class gather_scale_activation : public GatherPrimitiveFusingTest {};
@@ -142,7 +127,7 @@ TEST_P(gather_scale_activation, basic) {
         input_layout("input", get_input_layout(p)),
         data("gather_indices", get_mem(get_indices_layout(p), 0, static_cast<int>(get_axis_dim(p) - 1))),
         data("scale_data", get_mem(get_per_channel_layout(p), -10, 10)),
-        gather("gather_prim", "input", "gather_indices", p.axis, p.out_format, p.out_shape),
+        gather("gather_prim", "input", "gather_indices", p.axis, p.out_format, p.out_shape, p.batch_dims),
         activation("activation", "gather_prim", activation_func::abs),
         scale("scale", "activation", "scale_data"),
         reorder("reorder_bfyx", "scale", p.default_format, data_types::f32)
@@ -156,24 +141,16 @@ INSTANTIATE_TEST_SUITE_P(fusings_gpu, gather_scale_activation, ::testing::Values
     gather_test_params{ CASE_GATHER_FP32_1, 2, 4 },
     gather_test_params{ CASE_GATHER_FP32_2, 2, 4 },
     gather_test_params{ CASE_GATHER_FP32_3, 2, 4 },
-    gather_test_params{ CASE_GATHER_FP32_4, 2, 4 },
-    gather_test_params{ CASE_GATHER_FP32_5, 2, 4 },
 
     gather_test_params{ CASE_GATHER_FP16_1, 2, 4 },
     gather_test_params{ CASE_GATHER_FP16_2, 2, 4 },
     gather_test_params{ CASE_GATHER_FP16_3, 2, 4 },
-    gather_test_params{ CASE_GATHER_FP16_4, 2, 4 },
-    gather_test_params{ CASE_GATHER_FP16_5, 2, 4 },
 
     gather_test_params{ CASE_GATHER_5D_FP32_1, 2, 4 },
     gather_test_params{ CASE_GATHER_5D_FP32_2, 2, 4 },
     gather_test_params{ CASE_GATHER_5D_FP32_3, 2, 4 },
-    gather_test_params{ CASE_GATHER_5D_FP32_4, 2, 4 },
-    gather_test_params{ CASE_GATHER_5D_FP32_5, 2, 4 },
 
     gather_test_params{ CASE_GATHER_5D_FP16_1, 2, 4 },
     gather_test_params{ CASE_GATHER_5D_FP16_2, 2, 4 },
     gather_test_params{ CASE_GATHER_5D_FP16_3, 2, 4 },
-    gather_test_params{ CASE_GATHER_5D_FP16_4, 2, 4 },
-    gather_test_params{ CASE_GATHER_5D_FP16_5, 2, 4 },
 }));
