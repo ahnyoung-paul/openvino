@@ -24,11 +24,62 @@ layout gather_inst::calc_output_layout(gather_node const& node) {
     auto output_type = input_layout.data_type;
     auto output_format = desc->output_format;
 
+    auto convert_format = [](cldnn::format input_format, size_t dim_size)->cldnn::format {
+        auto out_format = input_format;
+        if (dim_size == 5) {
+            switch (input_format) {
+            case format::bfyx:
+                out_format = format::get_default_format(dim_size);
+                break;
+            case format::b_fs_yx_fsv16:
+                out_format = format::b_fs_zyx_fsv16;
+                break;
+            case format::b_fs_yx_fsv32:
+                out_format = format::b_fs_zyx_fsv32;
+                break;
+            case format::bs_fs_yx_bsv16_fsv16:
+                out_format = format::bs_fs_zyx_bsv16_fsv16;
+                break;
+            default:
+                break;
+            }
+        } else if (dim_size == 6) {
+            switch (input_format) {
+            case format::bfyx:
+            case format::bfzyx:
+                out_format = format::get_default_format(dim_size);
+                break;
+            default:
+                break;
+            }
+        }
+        return out_format;
+    };
+
     if (node.has_fused_primitives()) {
         output_type = node.get_fused_output_layout().data_type;
     }
 
     {
+        int64_t axis = desc->axis;
+        auto eliminate_one_dim = [&](ov::PartialShape in)->ov::PartialShape {
+            if (in.is_dynamic()) {
+                return in;
+            }
+
+            auto in_shape = in.to_shape();
+            std::vector<tensor::value_type> dims(in_shape.begin(), in_shape.end());
+
+            while (!dims.empty() && dims.back() == 1) {
+                if (dims.size() <= (axis + 1)) {
+                    break;
+                }
+                dims.pop_back();
+            }
+
+            ov::Shape out_shape(dims.begin(), dims.end());
+            return std::move(ov::PartialShape(out_shape));
+        };
         ov::op::v8::Gather op;
         op.set_batch_dims(desc->batch_dim);
         std::vector<ov::PartialShape> output_shapes = {ov::PartialShape()};
@@ -38,48 +89,25 @@ layout gather_inst::calc_output_layout(gather_node const& node) {
             ov::PartialShape{1} // axis input is removed on gather primitive creation, so we can't use get_dependency(2)
         };
 
-        int64_t axis = desc->axis;
-
         auto axis_tensor = std::make_shared<ngraph::runtime::HostTensor>(ov::element::i64, ov::Shape{1}, static_cast<void*>(&axis));
         std::map<size_t, std::shared_ptr<ngraph::runtime::HostTensor>> const_data = {{2, axis_tensor}};
         ov::op::util::shape_infer(&op, input_shapes, output_shapes, const_data);
+
+        if (output_shapes[0].is_static()) {
+            auto shape = output_shapes[0].to_shape();
+            std::vector<tensor::value_type> dims_converted(shape.begin(), shape.end());
+            output_format = convert_format(input_layout.format, dims_converted.size());
+        }
         return layout{output_type, output_format, output_shapes[0]};
     }
 
     auto shape = desc->output_shape.to_shape();
     std::vector<tensor::value_type> dims_converted(shape.begin(), shape.end());
     // extend shape to 4d
+    for (size_t i = dims_converted.size(); i < 4; i++)
         dims_converted.push_back(1);
 
-    output_format = input_layout.format;
-    if (dims_converted.size() == 5) {
-        switch (input_layout.format) {
-        case format::bfyx:
-            output_format = format::get_default_format(dims_converted.size());
-            break;
-        case format::b_fs_yx_fsv16:
-            output_format = format::b_fs_zyx_fsv16;
-            break;
-        case format::b_fs_yx_fsv32:
-            output_format = format::b_fs_zyx_fsv32;
-            break;
-        case format::bs_fs_yx_bsv16_fsv16:
-            output_format = format::bs_fs_zyx_bsv16_fsv16;
-            break;
-        default:
-            break;
-        }
-    } else if (dims_converted.size() == 6) {
-        switch (input_layout.format) {
-        case format::bfyx:
-        case format::bfzyx:
-            output_format = format::get_default_format(dims_converted.size());
-            break;
-        default:
-            break;
-        }
-    }
-
+    output_format = convert_format(input_layout.format, dims_converted.size());
     return layout{output_type,
                   output_format,
                   tensor(format::get_default_format(dims_converted.size()), dims_converted)};
