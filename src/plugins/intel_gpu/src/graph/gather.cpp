@@ -84,8 +84,8 @@ layout gather_inst::calc_output_layout(gather_node const& node) {
         op.set_batch_dims(desc->batch_dim);
         std::vector<ov::PartialShape> output_shapes = {ov::PartialShape()};
         std::vector<ov::PartialShape> input_shapes = {
-            node.get_dependency(0).get_output_layout().size,
-            node.get_dependency(1).get_output_layout().size,
+            eliminate_one_dim(node.get_dependency(0).get_output_layout().size),
+            eliminate_one_dim(node.get_dependency(1).get_output_layout().size),
             ov::PartialShape{1} // axis input is removed on gather primitive creation, so we can't use get_dependency(2)
         };
 
