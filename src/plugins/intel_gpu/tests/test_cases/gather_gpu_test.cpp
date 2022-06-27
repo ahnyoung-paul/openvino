@@ -215,7 +215,7 @@ INSTANTIATE_TEST_SUITE_P(gather8_b_fs_yx_fsv16_bd0_dim4_to_dim5,
                                           testing::Values(format::type::b_fs_yx_fsv16),
                                           testing::Values(format::type::b_fs_yx_fsv4),
                                           testing::Values(std::vector<int>{3, 77, 44, 3}),
-                                          testing::Values(std::vector<int>{3, 77, 55, 2})));
+                                          testing::Values(std::vector<int>{3, 77, 44, 2})));
 INSTANTIATE_TEST_SUITE_P(gather8_bfyx_bd0_dim4_to_dim6,
                          gather8_test_f16i32,
                          testing::Combine(testing::Values(2),
@@ -231,15 +231,15 @@ INSTANTIATE_TEST_SUITE_P(gather8_bd0_d4_i1,
                                           testing::Values(format::type::bs_fs_yx_bsv16_fsv16),
                                           testing::Values(format::type::bs_fs_yx_bsv32_fsv16),
                                           testing::Values(std::vector<int>{5, 44, 7, 8}),
-                                          testing::Values(std::vector<int>{4, 1, 1, 1})));
+                                          testing::Values(std::vector<int>{4})));
 INSTANTIATE_TEST_SUITE_P(gather8_bd0_d3_i3,
                          gather8_test_f32i8,
                          testing::Combine(testing::Values(0),
                                           testing::Values(1),
                                           testing::Values(format::type::b_fs_zyx_fsv16),
                                           testing::Values(format::type::bfzyx),
-                                          testing::Values(std::vector<int>{8, 67, 3, 1, 1}),
-                                          testing::Values(std::vector<int>{3, 56, 9, 1, 1})));
+                                          testing::Values(std::vector<int>{8, 67, 3}),
+                                          testing::Values(std::vector<int>{3, 56, 9})));
 INSTANTIATE_TEST_SUITE_P(gather8_b_fs_zyx_fsv32,
                          gather8_test_f32i8,
                          testing::Combine(testing::Values(1),
@@ -274,12 +274,12 @@ INSTANTIATE_TEST_SUITE_P(gather8_byxf,
                                           testing::Values(std::vector<int>{3, 5, 1, 1})));
 INSTANTIATE_TEST_SUITE_P(gather8_fs_b_yx_fsv32_2,
                          gather8_test_i32i32,
-                         testing::Combine(testing::Values(0),
-                                          testing::Values(0),
+                         testing::Combine(testing::Values(3),
+                                          testing::Values(3),
                                           testing::Values(format::type::fs_b_yx_fsv32),
                                           testing::Values(format::type::fs_b_yx_fsv32),
-                                          testing::Values(std::vector<int>{4, 6, 2, 3}),
-                                          testing::Values(std::vector<int>{3, 1, 1, 1})));
+                                          testing::Values(std::vector<int>{4, 6, 5, 3}),
+                                          testing::Values(std::vector<int>{4, 6, 5, 4})));
 
 // Disabled tests for faster CI
 // Remove DISABLED_ prefix to test these cases

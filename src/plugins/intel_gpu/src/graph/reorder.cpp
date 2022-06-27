@@ -167,10 +167,10 @@ layout reorder_inst::calc_output_layout(reorder_node const& node) {
         ofmt == format::bs_fs_zyx_bsv16_fsv32 || ifmt == format::bs_fs_zyx_bsv16_fsv32 ||
         ofmt == format::b_fs_zyx_fsv32 || ifmt == format::b_fs_zyx_fsv32 ||
         ofmt == format::bs_fs_yx_bsv16_fsv16 || ifmt == format::bs_fs_yx_bsv16_fsv16) && input_layout.is_static()) {
-        return layout(odt, ofmt, input_layout.get_tensor().transform(ofmt, 1), op);
+        return layout(odt, ofmt, input_layout.transform(ofmt), op);
     } else if (ofmt != ifmt && (ofmt == format::bfwzyx || ifmt == format::bfwzyx)) {
         // TODO Shouldn't transform be called every time ifmt != ofmt?
-        return layout(odt, ofmt, input_layout.get_tensor().transform(ofmt, 1), op);
+        return layout(odt, ofmt, input_layout.transform(ofmt), op);
     } else {
         return layout(odt, ofmt, input_layout.size, op);
     }

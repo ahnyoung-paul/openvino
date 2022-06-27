@@ -442,6 +442,8 @@ struct layout {
     bool is_static() const;
 
     tensor get_tensor() const;
+
+    ov::PartialShape transform(cldnn::format new_fmt) const;
 };
 
 /// @}
