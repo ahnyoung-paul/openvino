@@ -313,23 +313,18 @@ tensor layout::get_tensor() const {
     return t;
 }
 
-std::vector<cldnn::tensor::value_type> convert_dimensions(const std::vector<cldnn::tensor::value_type>& sizes, format fmt) {
-    auto in_order   = fmt.order();
-    auto out_order  = fmt.internal_order();
-
-    std::vector<cldnn::tensor::value_type> new_sizes(fmt.dimension(), {-1});
-
+std::vector<cldnn::tensor::value_type> convert_dimensions(const std::vector<cldnn::tensor::value_type>& sizes, std::string in_order, std::string out_order) {
+    std::vector<cldnn::tensor::value_type> new_sizes(out_order.size(), {-1});
     for (size_t out_idx = 0; out_idx < out_order.size(); ++out_idx) {
         auto channel = out_order[out_idx];
         if (channel == '?')
             continue;
 
         auto in_idx = in_order.find(channel);
-        if (in_idx == in_order.npos)
-            throw std::runtime_error("Internal order of a format contains channel which does not appear in external order.");
-
-        if (in_idx < sizes.size())
-            new_sizes[out_idx] = sizes[in_idx];
+        if (in_idx != in_order.npos) {
+            if (in_idx < sizes.size())
+                new_sizes[out_idx] = sizes[in_idx];
+        }
     }
     return new_sizes;
 }
@@ -339,21 +334,39 @@ ov::PartialShape layout::transform(cldnn::format new_fmt) const {
     auto shape = size.to_shape();
     std::vector<tensor::value_type> dims(shape.begin(), shape.end());
 
-    cldnn::format default_fmt = cldnn::format::bfwzyx;
-    auto old_sizes = convert_dimensions(dims, default_fmt); // convert to internal order (bfxyzw)
+    const cldnn::format default_fmt = cldnn::format::bfwzyx;
+    auto old_sizes = convert_dimensions(dims, format.order(), default_fmt.internal_order()); // convert to internal order (bfxyzw)
 
     auto val_order = default_fmt.internal_order();
     auto new_order = new_fmt.internal_order();
 
-    std::vector<tensor::value_type> new_sizes(old_sizes.size(), {-1});
+    std::vector<tensor::value_type> new_sizes(old_sizes.size(), {default_size});
     auto tmp = 1;
     auto tmp_z = 1;
     auto tmp_w = 1;
 
+#define DEBUG_TRANSFORM
+#ifdef DEBUG_TRANSFORM
+    std::cout << "*******************************************************" << std::endl;
+    std::cout << "dims[0] [" << dims.size() << "] = {";
+    for (auto& v : dims) {
+        std::cout << v << ",";
+    }
+    std::cout << "}" << std::endl;
+    std::cout << "old_sizes[0] [" << old_sizes.size() << "] = {";
+    for (auto& v : old_sizes) {
+        std::cout << v << ",";
+    }
+    std::cout << "}" << std::endl;
+
+    std::cout << "val_order : " << val_order << std::endl;
+    std::cout << "new_order : " << new_order << std::endl;
+#endif
+
     for (size_t i = 0; i < default_fmt.order().size(); i++) {
         auto c = val_order[i];//bfxywz
 
-        // skip f and y, z for the formats that do not have it
+        // skip f, y, z, and w for the formats that do not have it
         if (((new_fmt == format::bs_xs_xsv8_bsv8) ||
                 (new_fmt == format::bs_xs_xsv8_bsv16) ||
                 (new_fmt == format::os_i_osv8__ai8) ||
@@ -405,6 +418,17 @@ ov::PartialShape layout::transform(cldnn::format new_fmt) const {
         new_sizes[new_pos] = old_sizes[i];
     }
 
+#ifdef DEBUG_TRANSFORM
+    std::cout << "new_sizes[0] [" << new_sizes.size() << "] = {";
+    for (auto& v : new_sizes) {
+        std::cout << v << ",";
+    }
+    std::cout << "}" << std::endl;
+    std::cout << "- tmp     : " << tmp << std::endl;
+    std::cout << "- tmp_z   : " << tmp_z << std::endl;
+    std::cout << "- tmp_w   : " << tmp_w << std::endl;
+#endif
+
     // in case of formats with smaller number of dimensions than input, flatten is performed below
     if (tmp != 1 || tmp_z != 1 || tmp_w != 1) {
         for (size_t i = 0; i < default_fmt.order().size(); i++) {
@@ -428,7 +452,14 @@ ov::PartialShape layout::transform(cldnn::format new_fmt) const {
         }
     }
 
-    auto new_dims = convert_dimensions(new_sizes, default_fmt);
+#ifdef DEBUG_TRANSFORM
+    std::cout << "new_sizes[1] [" << new_sizes.size() << "] = {";
+    for (auto& v : new_sizes) {
+        std::cout << v << ",";
+    }
+    std::cout << "}" << std::endl;
+#endif
+    auto new_dims = convert_dimensions(new_sizes, default_fmt.internal_order(), new_fmt.order());
 
     for (int idx = (new_dims.size() - 1); idx >= 0; idx--) {
         if (new_dims[idx] == -1)
@@ -440,5 +471,4 @@ ov::PartialShape layout::transform(cldnn::format new_fmt) const {
     ov::Shape new_shape(new_dims.begin(), new_dims.end());
     return ov::PartialShape(new_shape);
 }
-
 }  // namespace cldnn

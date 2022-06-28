@@ -136,6 +136,9 @@ public:
         auto reorder_output = reorder_network.execute().at("reorder2").get_memory();
         cldnn::mem_lock<T_dat> reorder_output_ptr(reorder_output, get_test_stream());
 
+        std::cout << "////////////////////////////////////////////////////" << std::endl;
+        std::cout << "////////////////////////////////////////////////////" << std::endl;
+
         topology planar_topo;
         planar_topo.add(input_layout("input0", input0->get_layout()));
         planar_topo.add(input_layout("input1", input1->get_layout()));
@@ -202,12 +205,12 @@ INSTANTIATE_TEST_SUITE_P(gather8_fs_b_yx_fsv32_bd2,
                                           testing::Values(std::vector<int>{3, 4, 5, 1})));
 INSTANTIATE_TEST_SUITE_P(gather8_bs_fs_yx_bsv16_fsv16_bd0_dim4_to_dim5,
                          gather8_test_f16i32,
-                         testing::Combine(testing::Values(2),
-                                          testing::Values(2),
+                         testing::Combine(testing::Values(0),
+                                          testing::Values(0, 2),
                                           testing::Values(format::type::bs_fs_yx_bsv16_fsv16),
                                           testing::Values(format::type::b_fs_yx_fsv32),
-                                          testing::Values(std::vector<int>{3, 77, 44, 5}),
-                                          testing::Values(std::vector<int>{3, 77, 55, 2})));
+                                          testing::Values(std::vector<int>{3, 77, 44}),
+                                          testing::Values(std::vector<int>{3, 66, 55})));
 INSTANTIATE_TEST_SUITE_P(gather8_b_fs_yx_fsv16_bd0_dim4_to_dim5,
                          gather8_test_f16i32,
                          testing::Combine(testing::Values(2),
@@ -227,7 +230,7 @@ INSTANTIATE_TEST_SUITE_P(gather8_bfyx_bd0_dim4_to_dim6,
 INSTANTIATE_TEST_SUITE_P(gather8_bd0_d4_i1,
                          gather8_test_f32i8,
                          testing::Combine(testing::Values(0),
-                                          testing::Values(0),
+                                          testing::Values(2),
                                           testing::Values(format::type::bs_fs_yx_bsv16_fsv16),
                                           testing::Values(format::type::bs_fs_yx_bsv32_fsv16),
                                           testing::Values(std::vector<int>{5, 44, 7, 8}),
@@ -246,8 +249,8 @@ INSTANTIATE_TEST_SUITE_P(gather8_b_fs_zyx_fsv32,
                                           testing::Values(2),
                                           testing::Values(format::type::b_fs_zyx_fsv32),
                                           testing::Values(format::type::b_fs_zyx_fsv16),
-                                          testing::Values(std::vector<int>{8, 66, 3, 1, 1}),
-                                          testing::Values(std::vector<int>{8, 56, 9, 1, 1})));
+                                          testing::Values(std::vector<int>{8, 66, 3}),
+                                          testing::Values(std::vector<int>{8, 56, 9})));
 INSTANTIATE_TEST_SUITE_P(gather8_b_fs_yx_fsv4,
                          gather8_test_i32i32,
                          testing::Combine(testing::Values(0),
