@@ -49,6 +49,12 @@ void remove_redundant_reorders::run(program& p) {
                 continue;
 
             auto& node = node_ptr->as<reorder>();
+            {
+                std::string id = node.id();
+                if (id.find("Gather_3810_") != std::string::npos) {
+                    std::cout << id << " is checking to remove " << std::endl;
+                }
+            }
 
             auto& input = node.input();
             auto output_layout = node.get_output_layout();
@@ -120,6 +126,12 @@ void remove_redundant_reorders::run(program& p) {
 
             node.can_be_optimized(true);
             LOG_NODE_REMOVAL(node.id());
+            {
+                std::string id = node.id();
+                if (id.find("Gather_3810_") != std::string::npos) {
+                    std::cout << id << " is removed " << std::endl;
+                }
+            }
             p.extract_and_remove(node);
 
             for (auto rl : recalc_list) {
@@ -563,6 +575,22 @@ void remove_redundant_reorders::run(program& p) {
         // Validate fused layout when onednn is enable in post_optimize_graph
         if (!enable_reorder_fusing && n->get_preferred_impl_type() == impl_types::onednn && !lo.are_layouts_suitable_for_onednn(*n)) {
             throw std::runtime_error("Onednn doesnot support padded input or output");
+        }
+    }
+
+    {
+        itr = p.get_processing_order().begin();
+        while (itr != p.get_processing_order().end()) {
+            auto pnode = *itr++;
+            if (!pnode->is_type<reorder>())
+                continue;
+            auto& node = pnode->as<reorder>();
+            {
+                std::string id = node.id();
+                if (id.find("Gather_3810_") != std::string::npos) {
+                    std::cout << id << " is alived after remove_redundant_reorder ...................................................." << std::endl;
+                }
+            }
         }
     }
 }

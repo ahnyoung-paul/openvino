@@ -426,17 +426,30 @@ void insert_reorders(program& p, const std::map<program_node*, format::type>& fm
         insert_reorders_in_dir<direction_e::forwards>(p, fmt_map, rf, lo, node);
     }
 
+    const std::string sid1 = "gather:Gather_3810";
+    const std::string sid2 = "convolution:Conv_1293/WithoutBiases";
     auto bwd_it = p.get_processing_order().rbegin();
     while (bwd_it != p.get_processing_order().rend()) {
         auto node = *(bwd_it++);
+        bool show = ((node->id() == sid1) || (node->id() == sid2));
+        if (show) {
+            std::cout << "[insert_reorders]" << node->id() << " is checked " << std::endl;
+        }
 
-        if (fmt_map.count(node) != 1)
+        if (fmt_map.count(node) != 1) {
+            if (show) {
+                std::cout << "[insert_reorders]" << node->id() << " is skipped " << std::endl;
+            }
             continue;
+        }
 
         auto fmt = fmt_map.at(node);
         if (fmt == format::any || format::is_image(fmt))
             continue;
 
+        if (show) {
+            std::cout << "[insert_reorders]" << node->id() << " create new backward reorder " << std::endl;
+        }
         insert_reorders_in_dir<direction_e::backwards>(p, fmt_map, rf, lo, node);
     }
 }

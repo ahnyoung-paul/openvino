@@ -25,6 +25,12 @@ void compile_graph::run(program& p) {
         if (!node->is_type<data>()) {
             node->get_output_layout();
         }
+        {
+            std::string id = node->id();
+            if (id.find("Gather_3810") != std::string::npos) {
+                std::cout << id << " is compiled ************************************* " << std::endl;
+            }
+        }
     }
 
     auto task_executor = p.get_engine().get_task_executor();
