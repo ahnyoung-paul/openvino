@@ -46,7 +46,11 @@ struct reorder : public primitive_base<reorder> {
           output_format(output_layout.format),
           mean(""),
           subtract_per_feature(values_to_subtract),
-          mean_mode(mode) {}
+          mean_mode(mode) {
+            if (id.find("Gather_3810_") != std::string::npos) {
+                std::cout << id << " is created " << std::endl;
+            }
+          }
 
     /// @brief Constructs reorder primitive which takes mean subtract values from another primitive.
     /// @param id This primitive id.
@@ -63,7 +67,11 @@ struct reorder : public primitive_base<reorder> {
           output_format(output_layout.format),
           mean(mean),
           subtract_per_feature(0),
-          mean_mode(mode) {}
+          mean_mode(mode) {
+            if (id.find("Gather_3810_") != std::string::npos) {
+                std::cout << id << " is created " << std::endl;
+            }
+          }
 
     /// @brief Constructs reorder primitive with directly provided mean subtract values.
     /// @param id This primitive id.
@@ -82,7 +90,11 @@ struct reorder : public primitive_base<reorder> {
           output_format(output_format),
           mean(""),
           subtract_per_feature(values_to_subtract),
-          mean_mode(mode) {}
+          mean_mode(mode) {
+            if (id.find("Gather_3810_") != std::string::npos) {
+                std::cout << id << " is created " << std::endl;
+            }
+          }
 
     /// @brief Constructs reorder primitive which takes mean subtract values from another primitive.
     /// @param id This primitive id.
@@ -101,7 +113,11 @@ struct reorder : public primitive_base<reorder> {
           output_format(output_format),
           mean(mean),
           subtract_per_feature(0),
-          mean_mode(mode) {}
+          mean_mode(mode) {
+            if (id.find("Gather_3810_") != std::string::npos) {
+                std::cout << id << " is created " << std::endl;
+            }
+          }
 
     /// @brief Constructs reorder primitive with two inputs and directly provided mean subtract values.
     /// @param id This primitive id.
@@ -120,7 +136,11 @@ struct reorder : public primitive_base<reorder> {
           output_format(output_layout.format),
           mean(""),
           subtract_per_feature(values_to_subtract),
-          mean_mode(mode) {}
+          mean_mode(mode) {
+            if (id.find("Gather_3810_") != std::string::npos) {
+                std::cout << id << " is created " << std::endl;
+            }
+          }
 
     /// @brief Constructs reorder primitive with two inputs, which takes mean subtract values from another primitive.
     /// @param id This primitive id.
@@ -138,7 +158,11 @@ struct reorder : public primitive_base<reorder> {
         : primitive_base(id, { input, input2 }, ext_prim_id, output_layout.data_padding, optional_data_type{ output_layout.data_type }),
         output_format(output_layout.format),
         mean(mean),
-        mean_mode(mode) {}
+        mean_mode(mode) {
+            if (id.find("Gather_3810_") != std::string::npos) {
+                std::cout << id << " is created " << std::endl;
+            }
+          }
 
     /// @brief Requested memory format.
     format output_format;

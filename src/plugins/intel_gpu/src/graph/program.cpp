@@ -440,8 +440,43 @@ void program::build_program(bool is_internal) {
     init_graph();
     { pre_optimize_graph(is_internal); }
     run_graph_compilation();
+    {
+        for (auto& node : get_processing_order()) {
+            std::string id = node->id();
+            if (id.find("Gather_3810") != std::string::npos) {
+                std::cout << "[ before post_optimized_graph ]" << id << " is alived ";
+                if (node->optimized) {
+                    std::cout << " node is optimized ....." << std::endl;
+                } else {
+                    std::cout << "......................." << std::endl;
+                }
+            }
+        }
+        for (auto& op_prim : optimized_out) {
+            if (op_prim.find("Gather_3810") != std::string::npos) {
+                std::cout << "[ after post_optimized_graph ]" << op_prim << " is optimized out....." << std::endl;
+            }
+        }
+    }
     { post_optimize_graph(is_internal); }
-
+    {
+        for (auto& node : get_processing_order()) {
+            std::string id = node->id();
+            if (id.find("Gather_3810") != std::string::npos) {
+                std::cout << "[ after post_optimized_graph ]" << id << " is alived ";
+                if (node->optimized) {
+                    std::cout << " node is optimized ....." << std::endl;
+                } else {
+                    std::cout << "......................." << std::endl;
+                }
+            }
+        }
+        for (auto& op_prim : optimized_out) {
+            if (op_prim.find("Gather_3810") != std::string::npos) {
+                std::cout << "[ after post_optimized_graph ]" << op_prim << " is optimized out....." << std::endl;
+            }
+        }
+    }
     GPU_DEBUG_GET_INSTANCE(debug_config);
 #ifdef GPU_DEBUG_CONFIG
     if (debug_config->dry_run_path.empty() || is_internal) {
@@ -464,6 +499,24 @@ void program::build_program(bool is_internal) {
     }
 
     cleanup();
+    {
+        for (auto& node : get_processing_order()) {
+            std::string id = node->id();
+            if (id.find("Gather_3810") != std::string::npos) {
+                std::cout << "[ end post_optimized_graph ]" << id << " is alived ";
+                if (node->optimized) {
+                    std::cout << " node is optimized ....." << std::endl;
+                } else {
+                    std::cout << "......................." << std::endl;
+                }
+            }
+        }
+        for (auto& op_prim : optimized_out) {
+            if (op_prim.find("Gather_3810") != std::string::npos) {
+                std::cout << "[ end post_optimized_graph ]" << op_prim << " is optimized out....." << std::endl;
+            }
+        }
+    }
 }
 
 void program::init_graph() {
@@ -559,15 +612,27 @@ void program::pre_optimize_graph(bool is_internal) {
 
 void program::post_optimize_graph(bool is_internal) {
     OV_ITT_SCOPED_TASK(itt::domains::CLDNN, "ProgramImpl::PostOptimizeGraph");
+    auto check_gather = [&](std::string title) {
+        for (auto& node : get_processing_order()) {
+            std::string id = node->id();
+            if (id.find("Gather_3810") != std::string::npos) {
+                std::cout << "[" << title << "]" << id << " is alived ************************************* " << std::endl;
+            }
+        }
+    };
+    check_gather("step01");
     // input reorder for fully connected if necessary
     apply_opt_pass<post_input_reorder>();
 
+    check_gather("step02");
     reorder_factory rf;
     layout_optimizer lo;
     apply_opt_pass<post_optimize_weights>(rf);
 
+    check_gather("step03");
     apply_opt_pass<remove_redundant_reorders>(lo, false, true);  // TODO: do we need it at this place also?
 
+    check_gather("step04");
 #ifdef GPU_DEBUG_CONFIG
     GPU_DEBUG_GET_INSTANCE(debug_config);
     if (!is_internal && (!options.get<build_option_type::partial_build_program>()->enabled() || !debug_config->dry_run_path.empty())) {
@@ -578,11 +643,14 @@ void program::post_optimize_graph(bool is_internal) {
         apply_opt_pass<propagate_constants>();
     }
 
+    check_gather("step05");
     if (options.get<build_option_type::optimize_data>()->enabled())
         apply_opt_pass<remove_redundant_reorders>(lo, false, true, true); // pass to remove output reorders while all others graph optimizations were done
 
+    check_gather("step06");
     // update loop input/output primitive mappings
     apply_opt_pass<update_loop_primitive_map>();
+    check_gather("step07");
 }
 
 // mark if the node is constant assuming that all dependencies are marked properly
@@ -1037,6 +1105,17 @@ bool program::move_node(program_node& node,
 void program::fuse_nodes(program_node &fused_node,
                          program_node &peer_node,
                          std::map<primitive_id, std::vector<std::pair<primitive_id, size_t>>>* fusing_history) {
+    {
+        std::string id = peer_node.id();
+        if (id.find("Gather_3810") != std::string::npos) {
+            std::cout << "[Fused nodes] " << id << " is fused to " << fused_node.id() << std::endl;
+        }
+
+        id = fused_node.id();
+        if (id.find("Gather_3810") != std::string::npos) {
+            std::cout << "[Fused nodes] " << id << " is fused to " << peer_node.id() << std::endl;
+        }
+    }
     auto peer_layout = peer_node.get_output_layout();
     fused_primitive_desc local_desc;
     local_desc.node = get_node_ptr(peer_node.id());
