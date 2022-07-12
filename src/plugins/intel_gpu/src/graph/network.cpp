@@ -133,6 +133,7 @@ static void dump(memory::ptr mem, stream& stream, std::ofstream& file_stream) {
     auto x_pitch = get_x_pitch(mem->get_layout());
     std::stringstream buffer;
 
+    size_t idx = 0;
     for (cldnn::tensor::value_type g = 0; g < size.group[0]; ++g) {
         for (cldnn::tensor::value_type b = 0; b < batch_size; ++b) {
             for (cldnn::tensor::value_type f = 0; f < size.feature[0]; ++f) {
@@ -143,7 +144,19 @@ static void dump(memory::ptr mem, stream& stream, std::ofstream& file_stream) {
                             size_t input_it = mem->get_layout().get_linear_offset(t);
 
                             for (cldnn::tensor::value_type x = 0; x < size.spatial[0]; ++x, input_it += x_pitch) {
-                                buffer << std::fixed << std::setprecision(6) << convert_element(mem_ptr[input_it]) << std::endl;
+                                // buffer << std::fixed << std::setprecision(6) << convert_element(mem_ptr[input_it]) << std::endl;
+                                if (std::is_integral<T>::value) {
+                                    buffer << static_cast<int64_t>(convert_element(mem_ptr[input_it])) << ",";
+                                    if (idx != 0 && idx % 20 == 0) {
+                                        buffer << std::endl;
+                                    }
+                                } else {
+                                    buffer << std::fixed << std::setprecision(3) << convert_element(mem_ptr[input_it]) << "f, ";
+                                    if (idx != 0 && idx % 10 == 0) {
+                                        buffer << std::endl;
+                                    }
+                                }
+                                idx++;
                             }
                         }
                     }
@@ -167,6 +180,7 @@ void dump<uint32_t>(memory::ptr mem, stream& stream, std::ofstream& file_stream)
     mem_lock<uint32_t, mem_lock_type::read> lock(mem, stream);
     auto mem_ptr = lock.data();
 
+    size_t idx = 0;
     for (cldnn::tensor::value_type b = 0; b < l.batch(); ++b) {
         for (cldnn::tensor::value_type f = 0; f < (cldnn::tensor::value_type)ceil_div(l.feature(), 32); ++f) {
             for (cldnn::tensor::value_type z = 0; z < l.spatial(2); ++z) {
@@ -174,7 +188,11 @@ void dump<uint32_t>(memory::ptr mem, stream& stream, std::ofstream& file_stream)
                     for (cldnn::tensor::value_type x = 0; x < l.spatial(0); ++x) {
                         cldnn::tensor t(cldnn::batch(b), cldnn::feature(f), cldnn::spatial(x, y, z, 0));
                         size_t input_it = mem->get_layout().get_linear_offset(t);
-                        file_stream << mem_ptr[input_it] << std::endl;
+                        file_stream << mem_ptr[input_it] << ",";
+                        if (idx != 0 && idx % 20 == 0) {
+                            file_stream << std::endl;
+                        }
+                        idx++;
                     }
                 }
             }

@@ -74,13 +74,14 @@ layout gather_inst::calc_output_layout(gather_node const& node) {
         auto axis_tensor = std::make_shared<ngraph::runtime::HostTensor>(ov::element::i64, ov::Shape{1}, static_cast<void*>(&axis));
         std::map<size_t, std::shared_ptr<ngraph::runtime::HostTensor>> const_data = {{2, axis_tensor}};
         ov::op::util::shape_infer(&op, input_shapes, output_shapes, const_data);
-        std::cout << "*****************************************************" << std::endl;
-        std::cout << "[Gather][input_shape0] : " << node.get_dependency(0).get_output_layout().size << std::endl;
-        std::cout << "[Gather][input_shape1] : " << node.get_dependency(1).get_output_layout().size << std::endl;
-        std::cout << "[Gather][axis]         : " << axis << std::endl;
-        std::cout << "[Gather][batch_dims]   : " << desc->batch_dim << std::endl;
-        std::cout << "[Gather][output_shape] : " << output_shapes[0] << std::endl;
-        std::cout << "*****************************************************" << std::endl;
+        //PaulDebug
+        // std::cout << "*****************************************************" << std::endl;
+        // std::cout << "[Gather][input_shape0] : " << node.get_dependency(0).get_output_layout().size << std::endl;
+        // std::cout << "[Gather][input_shape1] : " << node.get_dependency(1).get_output_layout().size << std::endl;
+        // std::cout << "[Gather][axis]         : " << axis << std::endl;
+        // std::cout << "[Gather][batch_dims]   : " << desc->batch_dim << std::endl;
+        // std::cout << "[Gather][output_shape] : " << output_shapes[0] << std::endl;
+        // std::cout << "*****************************************************" << std::endl;
 
         if (output_shapes[0].is_static()) {
             auto shape = output_shapes[0].to_shape();

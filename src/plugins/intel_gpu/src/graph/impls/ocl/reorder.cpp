@@ -105,10 +105,11 @@ public:
 
         auto& kernel_selector = kernel_selector::reorder_kernel_selector::Instance();
         auto best_kernels = kernel_selector.GetBestKernels(reorder_params, reorder_optional_params);
-        std::cout << "****************************************************************" << std::endl;
-        std::cout << "[Reorder][" << arg.id() << "] " << best_kernels[0].kernelName << std::endl;
-        std::cout << "[Reorder][" << arg.id() << "] " << reorder_params.to_cache_string_v2() << std::endl;
-        std::cout << "****************************************************************" << std::endl;
+        //PaulDebug
+        // std::cout << "****************************************************************" << std::endl;
+        // std::cout << "[Reorder][" << arg.id() << "] " << best_kernels[0].kernelName << std::endl;
+        // std::cout << "[Reorder][" << arg.id() << "] " << reorder_params.to_cache_string_v2() << std::endl;
+        // std::cout << "****************************************************************" << std::endl;
 
         CLDNN_ERROR_BOOL(arg.id(),
                          "Best_kernel.empty()",

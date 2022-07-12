@@ -28,7 +28,8 @@ layout reorder_inst::calc_output_layout(reorder_node const& node) {
     auto ofmt = node.get_primitive()->output_format;
     auto op = node.get_primitive()->output_padding;
 
-    std::cout << "reorder " << ifmt.to_string() << " to " << ofmt.to_string() << std::endl;
+    //PaulDebug
+    // std::cout << "reorder " << ifmt.to_string() << " to " << ofmt.to_string() << std::endl;
 
     if (ofmt == format::any) {
         ofmt = ifmt;
@@ -170,19 +171,22 @@ layout reorder_inst::calc_output_layout(reorder_node const& node) {
         ofmt == format::b_fs_zyx_fsv32 || ifmt == format::b_fs_zyx_fsv32 ||
         ofmt == format::bs_fs_yx_bsv16_fsv16 || ifmt == format::bs_fs_yx_bsv16_fsv16) && input_layout.is_static()) {
         auto l = layout(odt, ofmt, input_layout.transform(ofmt), op);
-        std::cout << node.id() << " [0] input : " << input_layout.to_string() << std::endl;
-        std::cout << node.id() << " [0] output: " << l.to_string() << std::endl;
+        //PaulDebug
+        // std::cout << node.id() << " [0] input : " << input_layout.to_string() << std::endl;
+        // std::cout << node.id() << " [0] output: " << l.to_string() << std::endl;
         return l;
     } else if (ofmt != ifmt && (ofmt == format::bfwzyx || ifmt == format::bfwzyx)) {
         // TODO Shouldn't transform be called every time ifmt != ofmt?
         auto l = layout(odt, ofmt, input_layout.transform(ofmt), op);
-        std::cout << node.id() << " [1] input : " << input_layout.to_string() << std::endl;
-        std::cout << node.id() << " [1] output: " << l.to_string() << std::endl;
+        //PaulDebug
+        // std::cout << node.id() << " [1] input : " << input_layout.to_string() << std::endl;
+        // std::cout << node.id() << " [1] output: " << l.to_string() << std::endl;
         return l;
     } else {
         auto l = layout(odt, ofmt, input_layout.size, op);
-        std::cout << node.id() << " [2] input : " << input_layout.to_string() << std::endl;
-        std::cout << node.id() << " [2] output: " << l.to_string() << std::endl;
+        //PaulDebug
+        // std::cout << node.id() << " [2] input : " << input_layout.to_string() << std::endl;
+        // std::cout << node.id() << " [2] output: " << l.to_string() << std::endl;
         return l;
     }
 }

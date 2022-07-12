@@ -254,9 +254,10 @@ inline uint8 FUNC(reshape_dims)(
     uint dst_size_f, uint dst_size_w, uint dst_size_z, uint dst_size_y, uint dst_size_x,
     uint src_dims, uint dst_dims)
 {
-    if (o == 0 && i == 0 && w == 0 && z == 0 && y == 0 && x == 0) {
-        printf("KERNEL:::: reshape_dims from %d to %d\n", src_dims, dst_dims);
-    }
+    //PaulDebug
+    // if (o == 0 && i == 0 && w == 0 && z == 0 && y == 0 && x == 0) {
+    //     printf("KERNEL:::: reshape_dims from %d to %d\n", src_dims, dst_dims);
+    // }
     if (src_dims == 4 && dst_dims == 2)
     {
         return FUNC_CALL(reshape_4_to_2)(o,i,y,x,src_size_y,src_size_x);
@@ -312,9 +313,10 @@ inline uint8 FUNC(reshape_dims_with_groups)(
     uint dst_size_ofm, uint dst_size_ifm, uint dst_size_w, uint dst_size_z, uint dst_size_y, uint dst_size_x,
     uint src_dims, uint dst_dims, uint src_size_groups, uint dst_size_groups)
 {
-    if (o == 0 && i == 0 && w == 0 && z == 0 && y == 0 && x == 0) {
-        printf("KERNEL:::: reshape_dims_with_groups from %d to %d\n", src_dims, dst_dims);
-    }
+    //PaulDebug
+    // if (o == 0 && i == 0 && w == 0 && z == 0 && y == 0 && x == 0) {
+    //     printf("KERNEL:::: reshape_dims_with_groups from %d to %d\n", src_dims, dst_dims);
+    // }
     if (src_dims == 5 && dst_dims == 4)  // goiyx -> oiyx
     {
         return FUNC_CALL(reshape_grouped)(g, o, i, 0, y, x, src_size_ofm, dst_size_ofm);
@@ -393,9 +395,10 @@ inline uint8 FUNC(reshape_dims_with_groups)(
 
 inline uint8 FUNC(reshape_dims3d)(uint o, uint i, uint z, uint y, uint x, uint src_size_z, uint src_size_y, uint src_size_x, uint dst_size_z, uint dst_size_y, uint dst_size_x, uint src_dims, uint dst_dims)
 {
-    if (o == 0 && i == 0 && z == 0 && y == 0 && x == 0) {
-        printf("KERNEL:::: reshape_dims3d from %d to %d\n", src_dims, dst_dims);
-    }
+    //PaulDebug
+    // if (o == 0 && i == 0 && z == 0 && y == 0 && x == 0) {
+    //     printf("KERNEL:::: reshape_dims3d from %d to %d\n", src_dims, dst_dims);
+    // }
     if (src_dims == 4 && dst_dims == 5)
     {
         return (uint8)(0,o,i,1,y,x,0,0);

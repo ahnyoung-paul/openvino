@@ -345,7 +345,8 @@ ov::PartialShape layout::transform(cldnn::format new_fmt) const {
     auto tmp_z = 1;
     auto tmp_w = 1;
 
-#define DEBUG_TRANSFORM
+//PaulDebug
+// #define DEBUG_TRANSFORM
 #ifdef DEBUG_TRANSFORM
     std::cout << "*******************************************************" << std::endl;
     std::cout << "dims[0] [" << dims.size() << "] = {";
