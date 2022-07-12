@@ -67,6 +67,15 @@ KERNEL (reorder_data_b_fs_yx_fsv16_fsv32_to_bfyx)(
     const uint input_idx_tile = (b * b_pitch) + (fs * fs_pitch) + (z * z_pitch) + (y * y_pitch) + (x * x_pitch);
 #endif
 
+//     if (input_idx_tile == 0) {
+//         printf("INPUT0_FEATURE_SLICE_NUM    : %d\n", INPUT0_FEATURE_SLICE_NUM);
+//         printf("INPUT0_SIZE_X               : %d\n", INPUT0_SIZE_X);
+//         printf("INPUT0_SIZE_Y               : %d\n", INPUT0_SIZE_Y);
+//         printf("FSV_ALIGNMENT               : %d\n", FSV_ALIGNMENT);
+// #if INPUT0_DIMS != 4
+//         printf("INPUT0_SIZE_Z               : %d\n", INPUT0_SIZE_Z);
+// #endif
+//     }
 
 #if (TILE_SIZE == DEFAULT_TILE_SIZE)
     // read

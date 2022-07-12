@@ -164,6 +164,7 @@ bool ReorderKernel_b_fs_yx_fsv16_fsv32_to_bfyx::Validate(const Params& p, const 
     const reorder_params& params = static_cast<const reorder_params&>(p);
     const auto& input = params.inputs[0];
     const auto& output = params.outputs[0];
+    if (input.GetLayout() != kernel_selector::DataLayout::b_fs_yx_fsv16)
 
     // decreamental-dims are not supported
     if (input.GetDims().size() > output.GetDims().size()) {

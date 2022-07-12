@@ -60,11 +60,19 @@ public:
         for (int i = axis + 1; i < get_not_one_dim(shape_in[0]); i++)  // after axis = shape_in[0][..]
             shape_out[axis + get_not_one_dim(shape_in[1], axis) - batch_dim + (i - axis - 1)] = shape_in[0][i];
 
+        format input_format  = fmt[0];
+        format indice_format = fmt[1];
+        format output_format = fmt[2];
+
         auto dat = generate_random_1d<T_dat>(get_linear_size(shape_in[0]), -99, 99);
         std::vector<int64_t> input_shape(shape_in[0].begin(), shape_in[0].end());
+        {
+            auto f = format::get_default_format(input_format.dimension());
+            std::cout << "input0 format " << input_format.to_string() << " => " << f.to_string() << std::endl;
+        }
         auto input0 =
             engine.allocate_memory(layout(T_dat_dt,
-                                          format::get_default_format(shape_in[0].size()),
+                                          format::get_default_format(input_format.dimension()),
                                           ov::PartialShape(input_shape)));
         set_values(input0, dat);
 
@@ -73,19 +81,22 @@ public:
         std::vector<int64_t> indices_shape(shape_in[1].begin(), shape_in[1].end());
         auto input1 =
             engine.allocate_memory(layout(T_ind_dt,
-                                          format::get_default_format(shape_in[1].size()),
+                                          format::get_default_format(indice_format.dimension()),
                                           ov::PartialShape(indices_shape)));
         set_values(input1, ind);
 
         auto shape = ov::Shape(shape_out.begin(), shape_out.end());
-        format input_format = fmt[0];
-        format output_format = fmt[2];
+
         {
             std::vector<tensor::value_type> dims_converted(shape.begin(), shape.end());
+            std::cout << "***** dims_converted[0] : " << dims_converted.size() << std::endl;
+            std::cout << "***** input_format      : " << input_format.dimension() << std::endl;
+            std::cout << "***** output_format     : " << output_format.dimension() << std::endl;
             // extend shape to 4d
-            for (size_t i = dims_converted.size(); i < 4; i++)
+            for (size_t i = dims_converted.size(); i < input_format.dimension(); i++)
                 dims_converted.push_back(1);
 
+            std::cout << "***** dims_converted[1] : " << dims_converted.size() << std::endl;
 
             if (dims_converted.size() == 5) {
                 switch (input_format) {
