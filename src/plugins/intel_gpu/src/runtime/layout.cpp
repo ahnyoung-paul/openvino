@@ -330,6 +330,10 @@ std::vector<cldnn::tensor::value_type> convert_dimensions(const std::vector<cldn
 }
 
 ov::PartialShape layout::transform(cldnn::format new_fmt) const {
+    if (format == new_fmt) {
+        return size;
+    }
+
     cldnn::tensor::value_type default_size = -1;
     auto shape = size.to_shape();
     std::vector<tensor::value_type> dims(shape.begin(), shape.end());
@@ -425,9 +429,6 @@ ov::PartialShape layout::transform(cldnn::format new_fmt) const {
         std::cout << v << ",";
     }
     std::cout << "}" << std::endl;
-    std::cout << "- tmp     : " << tmp << std::endl;
-    std::cout << "- tmp_z   : " << tmp_z << std::endl;
-    std::cout << "- tmp_w   : " << tmp_w << std::endl;
 #endif
 
     // in case of formats with smaller number of dimensions than input, flatten is performed below
@@ -460,6 +461,25 @@ ov::PartialShape layout::transform(cldnn::format new_fmt) const {
     }
     std::cout << "}" << std::endl;
 #endif
+    for (size_t i = 0; i < new_order.size(); i++) {
+        auto c = new_order[i];//bfxywz
+        if (c == '?')
+            continue;
+        if (new_sizes[i] == -1) {
+            new_sizes[i] = 1;
+        }
+    }
+#ifdef DEBUG_TRANSFORM
+    std::cout << "new_sizes[0] [" << new_sizes.size() << "] = {";
+    for (auto& v : new_sizes) {
+        std::cout << v << ",";
+    }
+    std::cout << "}" << std::endl;
+    std::cout << "- tmp     : " << tmp << std::endl;
+    std::cout << "- tmp_z   : " << tmp_z << std::endl;
+    std::cout << "- tmp_w   : " << tmp_w << std::endl;
+#endif
+
     auto new_dims = convert_dimensions(new_sizes, default_fmt.internal_order(), new_fmt.order());
 
     for (int idx = (new_dims.size() - 1); idx >= 0; idx--) {

@@ -1608,6 +1608,15 @@ struct TiledPermuteParam {
     cldnn::format format_fsv;
 };
 
+std::ostream& operator << (std::ostream& o, const TiledPermuteParam& a) {
+    o << "{";
+    for (auto& v : a.sizes) {
+        o << v << ",";
+    }
+    o << "}, " << a.format_fsv.to_string();
+    return o;
+}
+
 class TiledPermuteTest : public ::testing::TestWithParam<TiledPermuteParam> {
 public:
     cldnn::engine& engine = get_test_engine();
@@ -1663,7 +1672,8 @@ void TiledPermuteTest::run_test(const std::vector<cldnn::tensor::value_type>& si
 
     std::vector<cldnn::tensor::value_type> internal_sizes(sizes);
     std::swap(internal_sizes.at(2), internal_sizes.back());
-    cldnn::tensor tensor(internal_sizes);
+    ov::Shape shape(internal_sizes.begin(), internal_sizes.end());
+    ov::PartialShape tensor(shape);
 
     cldnn::format format = sizes.size() == 4 ? cldnn::format::bfyx : cldnn::format::bfzyx;
 

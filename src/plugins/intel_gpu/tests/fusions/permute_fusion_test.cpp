@@ -60,6 +60,27 @@ struct permute_reorder_params {
     size_t expected_not_fused_primitives;
 };
 
+std::ostream& operator << (std::ostream& o, const permute_reorder_params& a) {
+    o << a.in_shape << ",";
+    o << "{";
+    for (auto i : a.permute_order1) {
+        o << i << ",";
+    }
+    o << "},";
+    o << "{";
+    for (auto i : a.permute_order2) {
+        o << i << ",";
+    }
+    o << "},";
+    o << data_type_traits::name(a.permute_type) << ",";
+    o << data_type_traits::name(a.output_type) << ",";
+    o << a.permute_format.to_string() << ",";
+    o << a.output_format.to_string() << ",";
+    o << a.expected_fused_primitives << ",";
+    o << a.expected_not_fused_primitives;
+    return o;
+}
+
 class PermuteFusingTest : public ::BaseFusingTest<permute_params> {
 public:
 
