@@ -19,6 +19,9 @@ layout scale_inst::calc_output_layout(scale_node const& node) {
     auto result = node.input().get_non_padded_output_layout();
     auto scale_layout = node.scale_in().get_non_padded_output_layout();
 
+    std::cout << "[scale] *result       : " << result.to_string() << std::endl;
+    std::cout << "[scale] *scale_layout : " << scale_layout.to_string() << std::endl;
+
     auto scale_x_size = scale_layout.spatial(0);
     auto scale_y_size = scale_layout.spatial(1);
     auto scale_z_size = scale_layout.spatial(2);
@@ -79,6 +82,12 @@ scale_inst::typed_primitive_inst(network& network, scale_node const& node) : par
 
     auto input_batch_size = node.input().get_output_layout().batch();
     auto input_feature_size = node.input().get_output_layout().feature();
+
+    {
+        std::cout << "[scale_inst::typed_primitive_inst] input node     : " << node.input().id() << std::endl;
+        std::cout << "[scale_inst::typed_primitive_inst] input layout   : " << node.input().get_output_layout().to_string() << std::endl;
+        std::cout << "[scale_inst::typed_primitive_inst] scale layout   : " << scale_layout.to_string() << std::endl;
+    }
 
     if (scale_batch_size != 1) {
         CLDNN_ERROR_NOT_EQUAL(node.id(),
