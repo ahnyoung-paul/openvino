@@ -76,6 +76,9 @@ layout gather_inst::calc_output_layout(gather_node const& node) {
         ov::op::util::shape_infer(&op, input_shapes, output_shapes, const_data);
         //PaulDebug
         // std::cout << "*****************************************************" << std::endl;
+        // std::cout << "[Gather][id]           : " << node.id() << std::endl;
+        // std::cout << "[Gather][input0]       : " << node.get_dependency(0).id() << std::endl;
+        // std::cout << "[Gather][input1]       : " << node.get_dependency(1).id() << std::endl;
         // std::cout << "[Gather][input_shape0] : " << node.get_dependency(0).get_output_layout().size << std::endl;
         // std::cout << "[Gather][input_shape1] : " << node.get_dependency(1).get_output_layout().size << std::endl;
         // std::cout << "[Gather][axis]         : " << axis << std::endl;

@@ -28,9 +28,6 @@ layout reorder_inst::calc_output_layout(reorder_node const& node) {
     auto ofmt = node.get_primitive()->output_format;
     auto op = node.get_primitive()->output_padding;
 
-    //PaulDebug
-    // std::cout << "reorder " << ifmt.to_string() << " to " << ofmt.to_string() << std::endl;
-
     if (ofmt == format::any) {
         ofmt = ifmt;
     }
@@ -164,6 +161,13 @@ layout reorder_inst::calc_output_layout(reorder_node const& node) {
                             "Conversion of weights from winograd to standard domain is currently unsupported");
     }
 
+    //PaulDebug
+    // std::cout << "&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&" << std::endl;
+    // std::cout << "[reorder] " << node.id() << " : " << ifmt.to_string()  << " to " << ofmt.to_string() << std::endl;
+    // for (auto dep : node.get_dependencies_ids()) {
+    //     std::cout << "[reorder] " << node.id() << " * input : " << dep << std::endl;
+    // }
+
     if ((ofmt == format::bs_xs_xsv8_bsv8 || ofmt == format::os_i_osv8__ai8 || ofmt == format::os_i_osv16__ai8 || ofmt == format::bs_x_bsv16 ||
         ofmt == format::bfzyx || ifmt == format::bfzyx || ofmt == format::b_fs_zyx_fsv16 || ifmt == format::b_fs_zyx_fsv16 ||
         ofmt == format::bs_fs_zyx_bsv16_fsv16 || ifmt == format::bs_fs_zyx_bsv16_fsv16 ||
@@ -172,21 +176,24 @@ layout reorder_inst::calc_output_layout(reorder_node const& node) {
         ofmt == format::bs_fs_yx_bsv16_fsv16 || ifmt == format::bs_fs_yx_bsv16_fsv16) && input_layout.is_static()) {
         auto l = layout(odt, ofmt, input_layout.transform(ofmt), op);
         //PaulDebug
-        // std::cout << node.id() << " [0] input : " << input_layout.to_string() << std::endl;
-        // std::cout << node.id() << " [0] output: " << l.to_string() << std::endl;
+        // std::cout << "[reorder] " << node.id() << " [0] input : " << input_layout.to_string() << std::endl;
+        // std::cout << "[reorder] " << node.id() << " [0] output: " << l.to_string() << std::endl;
+        // std::cout << "&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&" << std::endl;
         return l;
     } else if (ofmt != ifmt && (ofmt == format::bfwzyx || ifmt == format::bfwzyx)) {
         // TODO Shouldn't transform be called every time ifmt != ofmt?
         auto l = layout(odt, ofmt, input_layout.transform(ofmt), op);
         //PaulDebug
-        // std::cout << node.id() << " [1] input : " << input_layout.to_string() << std::endl;
-        // std::cout << node.id() << " [1] output: " << l.to_string() << std::endl;
+        // std::cout << "[reorder] " << node.id() << " [1] input : " << input_layout.to_string() << std::endl;
+        // std::cout << "[reorder] " << node.id() << " [1] output: " << l.to_string() << std::endl;
+        // std::cout << "&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&" << std::endl;
         return l;
     } else {
         auto l = layout(odt, ofmt, input_layout.size, op);
         //PaulDebug
-        // std::cout << node.id() << " [2] input : " << input_layout.to_string() << std::endl;
-        // std::cout << node.id() << " [2] output: " << l.to_string() << std::endl;
+        // std::cout << "[reorder] " << node.id() << " [2] input : " << input_layout.to_string() << std::endl;
+        // std::cout << "[reorder] " << node.id() << " [2] output: " << l.to_string() << std::endl;
+        // std::cout << "&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&" << std::endl;
         return l;
     }
 }

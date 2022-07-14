@@ -227,12 +227,12 @@ INSTANTIATE_TEST_SUITE_P(gather8_fs_b_yx_fsv32_bd2,
                                           testing::Values(std::vector<int>{3, 4, 5, 1})));
 INSTANTIATE_TEST_SUITE_P(gather8_bs_fs_yx_bsv16_fsv16_bd0_dim4_to_dim5,
                          gather8_test_f16i32,
-                         testing::Combine(testing::Values(0),
-                                          testing::Values(0, 2),
+                         testing::Combine(testing::Values(1),
+                                          testing::Values(1),
                                           testing::Values(format::type::bs_fs_yx_bsv16_fsv16),
                                           testing::Values(format::type::b_fs_yx_fsv32),
-                                          testing::Values(std::vector<int>{3, 77, 44}),
-                                          testing::Values(std::vector<int>{3, 66, 55})));
+                                          testing::Values(std::vector<int>{3, 77, 44, 2}),
+                                          testing::Values(std::vector<int>{3, 77, 55})));
 INSTANTIATE_TEST_SUITE_P(gather8_b_fs_yx_fsv16_bd0_dim4_to_dim5,
                          gather8_test_f16i32,
                          testing::Combine(testing::Values(2),
