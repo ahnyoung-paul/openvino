@@ -24,31 +24,31 @@ namespace ov {
 namespace runtime {
 namespace intel_gpu {
 
-static cldnn::tensor getConstTensor(const ngraph::Shape constDims) {
-    cldnn::tensor constTensor;
+static ov::PartialShape getConstPartialShape(const ngraph::Shape& constDims) {
+    ov::PartialShape constPartialShape;
     switch (constDims.size()) {
-    case 6: constTensor = cldnn::tensor(TensorValue(constDims[0]), TensorValue(constDims[1]),
-                                        TensorValue(constDims[5]), TensorValue(constDims[4]),
-                                        TensorValue(constDims[3]), TensorValue(constDims[2]));
+    case 6: constPartialShape = ov::PartialShape{TensorValue(constDims[0]), TensorValue(constDims[1]),
+                                        TensorValue(constDims[2]), TensorValue(constDims[3]),
+                                        TensorValue(constDims[4]), TensorValue(constDims[5])};
         break;
-    case 5: constTensor = cldnn::tensor(TensorValue(constDims[0]), TensorValue(constDims[1]),
-                                        TensorValue(constDims[4]), TensorValue(constDims[3]), TensorValue(constDims[2]));
+    case 5: constPartialShape = ov::PartialShape{TensorValue(constDims[0]), TensorValue(constDims[1]),
+                                        TensorValue(constDims[2]), TensorValue(constDims[3]), TensorValue(constDims[4])};
         break;
-    case 4: constTensor = cldnn::tensor(TensorValue(constDims[0]), TensorValue(constDims[1]),
-                                        TensorValue(constDims[3]), TensorValue(constDims[2]));
+    case 4: constPartialShape = ov::PartialShape{TensorValue(constDims[0]), TensorValue(constDims[1]),
+                                        TensorValue(constDims[2]), TensorValue(constDims[3])};
         break;
-    case 3: constTensor = cldnn::tensor(TensorValue(constDims[0]), TensorValue(constDims[1]),
-                                        1, TensorValue(constDims[2]));
+    case 3: constPartialShape = ov::PartialShape{TensorValue(constDims[0]), TensorValue(constDims[1]),
+                                        TensorValue(constDims[2]), 1};
         break;
-    case 2: constTensor = cldnn::tensor(TensorValue(constDims[0]), TensorValue(constDims[1]), 1, 1);
+    case 2: constPartialShape = ov::PartialShape{TensorValue(constDims[0]), TensorValue(constDims[1]), 1, 1};
         break;
-    case 1: constTensor = cldnn::tensor(1, TensorValue(constDims[0]), 1, 1);
+    case 1: constPartialShape = ov::PartialShape{1, TensorValue(constDims[0]), 1, 1};
         break;
-    case 0: constTensor = cldnn::tensor(1, 1, 1, 1);
+    case 0: constPartialShape = ov::PartialShape{1, 1, 1, 1};
         break;
     default: IE_THROW() << "Invalid constant blob dimensions";
     }
-    return constTensor;
+    return constPartialShape;
 }
 
 struct ConstProperties {
@@ -148,15 +148,21 @@ static void CreateConstantOp(Program& p, const std::shared_ptr<ngraph::op::v0::C
 
 void createClDnnConstant(Program& p, const ngraph::Shape& constDims, const std::shared_ptr<ngraph::op::v0::Constant>& op, const ConstProperties& props) {
     auto constFormat = DefaultFormatForDims(constDims.size());
+    auto constParitalShape = getConstPartialShape(constDims);
+    auto newDims = constParitalShape.to_shape();
+    if (props.needsBatchInterpretation) {
+        newDims[0] = ov::shape_size(newDims);
+        newDims[1] = 1;
+    }
 
     // Swap O and I dimensions to match expected deconvolution weights format
     size_t inputFeatureElements = 1;
     size_t outputFeatureElements = 1;
     size_t groups = 1;
-    auto newDims = constDims;
+
     if (props.swapOI) {
         size_t expected_min_rank = 2 + (props.hasGroupDimension ? 1 : 0);
-        if (expected_min_rank > constDims.size())
+        if (expected_min_rank > newDims.size())
             IE_THROW() << "Invalid constant properties or shape";
 
         if (props.hasGroupDimension) {
