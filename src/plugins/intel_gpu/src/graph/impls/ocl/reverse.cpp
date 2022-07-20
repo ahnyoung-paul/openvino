@@ -24,6 +24,33 @@ struct reverse_impl : typed_primitive_impl_ocl<reverse> {
     }
 
 public:
+    static ov::PartialShape getConstPartialShape(const ov::Shape constDims) {
+        ov::PartialShape constPartialShape;
+        switch (constDims.size()) {
+        case 6: constPartialShape = ov::PartialShape{TensorValue(constDims[0]), TensorValue(constDims[1]),
+                                            TensorValue(constDims[2]), TensorValue(constDims[3]),
+                                            TensorValue(constDims[4]), TensorValue(constDims[5])};
+            break;
+        case 5: constPartialShape = ov::PartialShape{TensorValue(constDims[0]), TensorValue(constDims[1]),
+                                            TensorValue(constDims[2]), TensorValue(constDims[3]), TensorValue(constDims[4])};
+            break;
+        case 4: constPartialShape = ov::PartialShape{TensorValue(constDims[0]), TensorValue(constDims[1]),
+                                            TensorValue(constDims[2]), TensorValue(constDims[3])};
+            break;
+        case 3: constPartialShape = ov::PartialShape{TensorValue(constDims[0]), TensorValue(constDims[1]),
+                                            TensorValue(constDims[2]), 1};
+            break;
+        case 2: constPartialShape = ov::PartialShape{TensorValue(constDims[0]), TensorValue(constDims[1]), 1, 1};
+            break;
+        case 1: constPartialShape = ov::PartialShape{1, TensorValue(constDims[0]), 1, 1};
+            break;
+        case 0: constPartialShape = ov::PartialShape{1, 1, 1, 1};
+            break;
+        default: IE_THROW() << "Invalid constant blob dimensions";
+        }
+        return constPartialShape;
+    }
+
     static primitive_impl* create(const reverse_node& arg) {
         const auto& prim = arg.get_primitive();
         const auto& param_info = kernel_impl_params(arg.get_program(), prim, arg.get_unique_id(),
@@ -35,7 +62,13 @@ public:
         const auto optional_params =
             get_default_optional_params<kernel_selector::reverse_optional_params>(arg.get_program());
 
-        params.inputs.push_back(convert_data_tensor(arg.input(1).get_output_layout()));
+        auto constLayout = arg.input(1).get_output_layout();
+        auto oldShape = constLayout.size;
+        auto newShape = getConstPartialShape(oldShape.to_shape());
+        if (oldShape != newShape) {
+            constLayout = layout{constLayout.data_type, constLayout.format, newShape};
+        }
+        params.inputs.push_back(convert_data_tensor(constLayout));
         params.reverseMode = arg.get_primitive()->mode == reverse_mode::index ? kernel_selector::reverse_mode::index
                                                                               : kernel_selector::reverse_mode::mask;
 
