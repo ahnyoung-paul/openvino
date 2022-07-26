@@ -37,4 +37,16 @@ protected:
     void SetUp() override;
 };
 
+
+using KernelParams = std::tuple<std::size_t, std::size_t>;
+
+class CLKernelTest : public testing::WithParamInterface<KernelParams>,
+                                virtual public LayerTestsUtils::LayerTestsCommon {
+public:
+    static std::string getTestCaseName(testing::TestParamInfo<KernelParams> obj);
+    void SetUp() override;
+    void TearDown() override;
+    void Run() override;
+};
+
 }  // namespace SubgraphTestsDefinitions

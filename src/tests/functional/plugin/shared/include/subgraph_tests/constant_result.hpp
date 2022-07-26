@@ -12,5 +12,10 @@ TEST_P(ConstantResultSubgraphTest, CompareWithRefs) {
     Run();
 }
 
+TEST_P(CLKernelTest, CompareWithRefs) {
+    Run();
+}
+
+
 }  // namespace SubgraphTestsDefinitions
 

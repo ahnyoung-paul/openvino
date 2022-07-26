@@ -22,6 +22,7 @@
 namespace LayerTestsUtils {
 
 LayerTestsCommon::LayerTestsCommon() : threshold(1e-2f), abs_threshold(-1.f) {
+    std::cout << "Get core from PluginCache .... targetDevice: " << targetDevice << std::endl;
     core = PluginCache::get().ie(targetDevice);
 }
 

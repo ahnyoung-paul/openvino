@@ -42,5 +42,15 @@ INSTANTIATE_TEST_SUITE_P(smoke_Check, ConstantResultSubgraphTest,
                             ::testing::Values(CommonTestUtils::DEVICE_GPU)),
                         ConstantResultSubgraphTest::getTestCaseName);
 
+const std::vector<size_t> kernel_params = {
+    1
+};
+
+INSTANTIATE_TEST_SUITE_P(smoke_Check, CLKernelTest,
+                        ::testing::Combine(
+                            ::testing::ValuesIn(kernel_params),
+                            ::testing::ValuesIn(kernel_params)),
+                        CLKernelTest::getTestCaseName);
+
 }  // namespace
 
