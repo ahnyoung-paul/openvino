@@ -60,6 +60,11 @@ struct generic_layer_impl : typed_primitive_impl<generic_layer> {
         stream& stream = instance.get_network().get_stream();
         kernel_arguments_data args;
         args.scalars = &_cl_kernel_data.params.scalars;
+        if (outer.id() == "constant:detect.reg_convs.1.conv.weight_compressed_generic_layer_44") {
+            std::cout << "gpu::general_layer:  " << outer.id() << ", ";
+            std::cout << "layerID: " << _cl_kernel_data.params.layerID << ",";
+            std::cout << "entry_point: " << _cl_kernel_data.code.kernelString->entry_point << std::endl;
+        }
 
         for (size_t i = 0; i < instance.inputs_memory_count(); i++) {
             args.inputs.push_back(instance.input_memory_ptr(i));
@@ -80,6 +85,7 @@ struct generic_layer_cpu : typed_primitive_impl<generic_layer> {
     explicit generic_layer_cpu(const generic_layer_node& arg) : outer(arg) {}
 
     event::ptr execute_impl(const std::vector<event::ptr>& events, generic_layer_inst& instance) override {
+        // std::cout << "cpu::general_layer:  " << outer.id() << std::endl;
         stream& stream = instance.get_network().get_stream();
         auto input_mem = instance.input_memory_ptr();
         auto output_mem = instance.output_memory_ptr();

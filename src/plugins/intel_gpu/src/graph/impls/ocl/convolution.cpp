@@ -149,7 +149,13 @@ public:
                          best_kernels.empty(),
                          "Cannot find a proper kernel with these arguments");
         auto conv = new convolution_impl(arg, best_kernels[0]);
-
+        if (arg.id() == "convolution:Convolution_2614") {
+            std::cout << "************************************************************" << std::endl;
+            std::cout << "* Node : " << arg.id() << std::endl;
+            std::cout << "* Kernel is selected to " << best_kernels[0].kernelName << std::endl;
+            std::cout << "* Kernel param : " << conv_params.to_cache_string_v2() << std::endl;
+            std::cout << "************************************************************" << std::endl;
+        }
         return conv;
     }
 };

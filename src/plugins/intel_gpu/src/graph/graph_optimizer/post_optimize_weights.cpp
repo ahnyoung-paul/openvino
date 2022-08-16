@@ -36,6 +36,14 @@ void post_optimize_weights::optimize_weights(T& node, program& p) {
     for (auto i = offsets.weights_offset; i < offsets.bias_offset; i++) {
         auto& weights_node = node.get_dependency(i);
         auto weights_layout = weights_node.get_output_layout();
+        std::string old_weight_info_str = " * old_weight_node : " + weights_node.id();
+        old_weight_info_str += " node type : " + weights_node.desc->type_string() + ", ";
+        if (node.id() == "convolution:Convolution_2614") {
+            if (weights_node.selected_impl)
+                old_weight_info_str += weights_node.selected_impl->get_kernel_name();
+            else
+                old_weight_info_str += "kernel is null";
+        }
 
         auto reorders = _rf.get_weights_reorder(weights_node.id(), weights_layout, weights_reorder_params);
 
@@ -45,11 +53,24 @@ void post_optimize_weights::optimize_weights(T& node, program& p) {
             // set generic_layer's node output layout and implementation
             auto& g_node = node.get_dependency(i);
             g_node.get_output_layout(false);
+            if (node.id() == "convolution:Convolution_2614") {
+                std::cout << "In post_optimize_weights [" << node.id() << "] " << std::endl;
+            }
 
             // Don't run impl selection to avoid double compilation of reorder kernels
             // in main program and internal program for constant propagation
             if (!g_node.is_constant())
                 g_node.selected_impl = g_node.type()->choose_impl(g_node);
+
+            if (node.id() == "convolution:Convolution_2614") {
+                std::cout << "[" << node.id() << "] " << std::endl;
+                std::cout << old_weight_info_str << std::endl;
+                std::cout << " * new_weight_node : " << g_node.id() << " , node type : " << g_node.desc->type_string() << ", ";
+                if (g_node.selected_impl)
+                    std::cout << g_node.selected_impl->get_kernel_name() << std::endl;
+                else
+                    std::cout << "kernel is null" << std::endl;
+            }
         }
     }
 
