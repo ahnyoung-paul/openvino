@@ -450,6 +450,7 @@ bool should_use_winograd_2x3_s1(std::shared_ptr<const convolution> const& prim,
                                 layout const& input_layout,
                                 layout const& weights_layout,
                                 bool output_size_handling_enabled) {
+#if 1
     // cases when NOT to use winograd
     if (input_layout.data_type != data_types::f16
         || input_layout.size.feature[0] % 64 != 0  // current algorithm is effective for ifm to be multiply of 64
@@ -469,6 +470,9 @@ bool should_use_winograd_2x3_s1(std::shared_ptr<const convolution> const& prim,
         return false;
     }
     return true;
+#else
+    return false;
+#endif
 }
 }  // namespace
 
