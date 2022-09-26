@@ -59,13 +59,6 @@ void input_layout_inst::set_data(memory::ptr mem) {
 
     _has_valid_input = true;
     _output_changed = true;
-    _shape_changed = mem->get_layout() != ol;
-
-    if (_shape_changed) {
-        auto il_prim = std::const_pointer_cast<input_layout>(node.get_primitive());
-        il_prim->change_layout(mem->get_layout());
-        _impl_params->output_layout = mem->get_layout();
-    }
 }
 
 void input_layout_inst::update_shape() {

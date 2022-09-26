@@ -161,53 +161,12 @@ Blob::Ptr InferRequest::GetBlob(const std::string& name) {
     bool isDynamic = (node && node->get_output_partial_shape(0).is_dynamic());
 
     if (is_input) {
-        // ROI blob is returned only if it was set previously. Otherwise default blob is returned.
-        auto it = _preProcData.find(name);
-        if (it != _preProcData.end()) {
-            data = it->second->getRoiBlob();
-        } else {
-            data = _inputs[name];
-            if (!isDynamic) {
-                checkInputBlob(data, name, foundInput);
-            } else {
-                auto inputNode = modelInputsMap.find(name);
-                if (inputNode != modelInputsMap.end()) {
-                    if (!inputNode->second) {
-                        IE_THROW() << "Can't get blob with name: " << name << ", because has null pointer to input node";
-                    }
-
-                    const auto shape = inputNode->second->get_output_partial_shape(0);
-                    const bool isDynamic = shape.is_dynamic();
-                    InferenceEngine::SizeVector dims;
-                    if (isDynamic) {
-                        dims = InferenceEngine::SizeVector(shape.rank().get_length(), 0);
-                    } else {
-                        dims = shape.to_shape();
-                    }
-
-                    InferenceEngine::TensorDesc desc(InferenceEngine::details::convertPrecision(inputNode->second->get_output_element_type(0)),
-                            dims, InferenceEngine::TensorDesc::getLayoutByRank(dims.size()));
-
-                    _inputs[name] = make_blob_with_precision(desc);
-                    _inputs[name]->allocate();
-                } else {
-                    IE_THROW() << "Blob with name: " << name << " exists in CPU plugin graph, but absents in network inputs";
-                }
-            }
-            data = _inputs[name];
-        }
+        data = _inputs[name];
+        if (!isDynamic)
+            checkInputBlob(data, name, foundInput);
     } else {
         data = _outputs[name];
-        if (isDynamic) {
-            auto outputNode = modelOutputsMap.find(name);
-            if (!data) {
-                auto dims = InferenceEngine::SizeVector(outputNode->second->get_input_partial_shape(0).rank().get_length(), 0);
-                InferenceEngine::TensorDesc desc(InferenceEngine::details::convertPrecision(outputNode->second->get_input_element_type(0)),
-                                                 dims, InferenceEngine::TensorDesc::getLayoutByRank(dims.size()));
-                data = make_blob_with_precision(desc);
-                data->allocate();
-            }
-        } else {
+        if (!isDynamic) {
             checkOutputBlob(data, name, foundOutput);
         }
     }
@@ -445,13 +404,6 @@ InferRequest::InferRequest(const std::vector<std::shared_ptr<const ov::Node>>& i
                                      const CompiledModel::Ptr& execNetwork)
         : IInferRequestInternal(inputs, outputs) {
     IE_ASSERT(nullptr != execNetwork);
-    for (const std::shared_ptr<const ov::Node>& in : inputs) {
-        modelInputsMap[ngraph::op::util::get_ie_output_name(ngraph::Output<const ngraph::Node>(in))] = in;
-    }
-    for (const std::shared_ptr<const ov::Node>& out : outputs) {
-        modelOutputsMap[ngraph::op::util::get_ie_output_name(out->input_value(0))] = out;
-    }
-
     streamExecutor = dynamic_cast<InferenceEngine::IStreamsExecutor*>(execNetwork->m_taskExecutor.get());
 }
 

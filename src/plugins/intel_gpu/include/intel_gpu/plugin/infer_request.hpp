@@ -91,9 +91,6 @@ private:
 
     std::map<cldnn::primitive_id, cldnn::network_output> internal_outputs;
     Graph::variable_states_map variables_states_;
-
-    std::unordered_map<std::string, std::shared_ptr<const ov::Node>> modelInputsMap;
-    std::unordered_map<std::string, std::shared_ptr<const ov::Node>> modelOutputsMap;
 };
 
 }  // namespace intel_gpu
