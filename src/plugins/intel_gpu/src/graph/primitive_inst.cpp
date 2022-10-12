@@ -319,35 +319,40 @@ event::ptr primitive_inst::execute(const std::vector<event::ptr>& events) {
 
     std::vector<event::ptr> dependencies;
     if (is_dynamic()) {
-        update_shape();
-        if (!is_valid_fusion()) {
-            auto subgraph = get_unfused_subgraph();
+        try {
+            update_shape();
+            if (!is_valid_fusion()) {
+                auto subgraph = get_unfused_subgraph();
 
-            for (auto& d : _deps) {
-                if (!d->get_node().is_type<data>()) {
-                    subgraph->set_input_data(d->id(), d->output_memory_ptr());
+                for (auto& d : _deps) {
+                    if (!d->get_node().is_type<data>()) {
+                        subgraph->set_input_data(d->id(), d->output_memory_ptr());
+                    }
                 }
+
+                auto outputs = subgraph->execute(events);
+
+                auto last_fd = _impl_params->fused_desc.back();
+                auto last_prim_id = last_fd.desc->id;
+
+                OPENVINO_ASSERT(outputs.find(last_prim_id) != outputs.end(), "[GPU] Can't find output primitive ", last_prim_id, " for unfused subgraph");
+
+                _output = outputs.at(last_prim_id).get_memory();
+
+                _impl_params->output_layout = _output->get_layout();
+                return outputs.at(last_prim_id).get_event();
             }
 
-            auto outputs = subgraph->execute(events);
-
-            auto last_fd = _impl_params->fused_desc.back();
-            auto last_prim_id = last_fd.desc->id;
-
-            OPENVINO_ASSERT(outputs.find(last_prim_id) != outputs.end(), "[GPU] Can't find output primitive ", last_prim_id, " for unfused subgraph");
-
-            _output = outputs.at(last_prim_id).get_memory();
-
-            _impl_params->output_layout = _output->get_layout();
-            return outputs.at(last_prim_id).get_event();
-        }
-
-        if (shape_changed() || !_impl) {
-            update_impl();
-            auto ev = update_weights();
-            if (ev)
-                dependencies.push_back(ev);
-            realloc_if_needed();
+            if (shape_changed() || !_impl) {
+                update_impl();
+                auto ev = update_weights();
+                if (ev)
+                    dependencies.push_back(ev);
+                realloc_if_needed();
+            }
+        } catch (std::exception& ex) {
+            std::cerr << ex.what() << std::endl;
+            throw ex;
         }
     }
 
