@@ -9,6 +9,8 @@
 #include "json_object.h"
 #include <string>
 
+#include "select_shape_inference.hpp"
+
 namespace cldnn {
 primitive_type_id select::type_id() {
     static primitive_type_base<select> instance;
@@ -29,6 +31,28 @@ layout select_inst::calc_output_layout(select_node const& node, kernel_impl_para
     }
 
     return layout(in_layout.data_type, in_layout.format, output_size);
+}
+
+template<typename ShapeType>
+std::vector<layout> select_inst::calc_output_layouts(const select_node& /*node*/, const kernel_impl_params& impl_param) {
+    auto input0_layout = impl_param.get_input_layout(0);
+    auto input1_layout = impl_param.get_input_layout(1);
+    auto input2_layout = impl_param.get_input_layout(2);
+
+    auto desc = impl_param.typed_desc<select>();
+    auto dt = desc->output_data_type.value_or(input1_layout.data_type);
+
+    ov::op::v1::Select op;
+    std::vector<ShapeType> output_shapes = { ShapeType{} };
+    std::vector<ShapeType> input_shapes = {
+        input0_layout.get_partial_shape(),
+        input1_layout.get_partial_shape(),
+        input2_layout.get_partial_shape()
+    };
+
+    ov::op::v1::shape_infer(&op, input_shapes, output_shapes);
+
+    return {{output_shapes[0], dt, format::get_default_format(output_shapes[0].size())}};
 }
 
 std::string select_inst::to_string(select_node const& node) {
