@@ -35,7 +35,15 @@ std::vector<layout> range_inst::calc_output_layouts(range_node const& /*node*/, 
     ov::op::v4::Range op;
     op.set_output_type(data_type_to_element_type(output_data_type));
     std::vector<ShapeType> output_shapes = {ShapeType::dynamic(1)};
+#if 0
     std::vector<ShapeType> input_shapes = {ov::Shape(), ov::Shape(), ov::Shape()};
+#else
+    std::vector<ShapeType> input_shapes;
+
+    for (size_t idx = 0; idx < 3; idx++) {
+        input_shapes.push_back(impl_param.get_input_layout(idx).get<ShapeType>());
+    }
+#endif
 
     std::map<size_t, ngraph::HostTensorPtr> const_data;
     auto& memory_deps = impl_param.memory_deps;
