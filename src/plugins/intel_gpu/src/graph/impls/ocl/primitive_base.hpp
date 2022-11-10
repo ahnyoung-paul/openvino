@@ -110,6 +110,22 @@ protected:
         }
     }
 
+    std::string get_debug_str() const override {
+        std::stringstream ss;
+        ss << "kernel_name: " << (_kernel_data.kernelName.empty()? " empty kernel name" : _kernel_data.kernelName) << ";;";
+        ss << "_kernel_ids: " << _kernel_ids.size() << " {";
+        for (auto& id : _kernel_ids) {
+            ss << id << ",";
+        }
+        ss << "};; ";
+        if (_kernel_data.params) {
+            ss << _kernel_data.params->to_cache_string_v2();
+        } else {
+            ss << "_kernel_data.params is empty";
+        }
+        return ss.str();
+    }
+
     std::vector<std::string> get_kernel_ids() override {
         return _kernel_ids;
     }

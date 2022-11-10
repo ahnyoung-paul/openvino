@@ -407,7 +407,7 @@ event::ptr primitive_inst::execute(const std::vector<event::ptr>& events) {
         }
     }
 
-    {
+    try {
         GPU_DEBUG_PROFILED_STAGE(instrumentation::pipeline_stage::inference);
         auto ev = _impl->execute(dependencies, *this);
 
@@ -416,6 +416,9 @@ event::ptr primitive_inst::execute(const std::vector<event::ptr>& events) {
         }
 
         return ev;
+    } catch(std::exception& ex) {
+        std::cout << "[primitive_inst::execute] " << ex.what() << std::endl;
+        throw ex;
     }
 }
 

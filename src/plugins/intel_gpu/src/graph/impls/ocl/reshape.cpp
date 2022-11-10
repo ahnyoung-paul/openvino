@@ -24,11 +24,18 @@ struct reshape_impl : public typed_primitive_impl_ocl<reshape> {
 public:
     static primitive_impl* create(reshape_node const& arg, const kernel_impl_params& impl_param) {
         if (arg.can_be_optimized()) {
+            std::cout << arg.id() << " return empty so that it will be optimized out ...." << std::endl;
             return new reshape_impl(arg, {});
         }
         auto reorder_params = get_default_params<kernel_selector::reshape_params>(impl_param);
         auto reorder_optional_params =
             get_default_optional_params<kernel_selector::reshape_optional_params>(arg.get_program());
+        if (arg.id() == "reshape:812") {
+            std::cout << "[" << arg.id() << "] check reshpae param " << std::endl;
+            std::cout << "[" << arg.id() << "] " << reorder_params.to_cache_string_v2() << std::endl;
+        } else {
+            std::cout << arg.id() << " create impl" << std::endl;
+        }
 
         auto& kernel_selector = kernel_selector::reshape_kernel_selector::Instance();
         auto best_kernels = kernel_selector.GetBestKernels(reorder_params, reorder_optional_params);

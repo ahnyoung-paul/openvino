@@ -810,7 +810,23 @@ struct detection_output_impl : typed_primitive_impl<detection_output> {
     }
 
     event::ptr execute_impl(const std::vector<event::ptr>& events, detection_output_inst& instance) override {
+        auto id = instance.desc()->id;
+        for (auto& dep : instance.dependencies()) {
+            if (dep->get_impl()) {
+                std::cout << " * " << dep->id() << "(" << dep->desc()->id << "," << dep->desc()->type_string();
+                std::cout << ") has " << dep->get_impl()->get_debug_str() << std::endl;
+            } else {
+                std::cout << " * " << dep->id() << "(" << dep->desc()->id << "," << dep->desc()->type_string();
+                std::cout << ") doesn't has impl " << std::endl;
+            }
+        }
+
+        for (auto dep_id : instance.desc()->dependencies()) {
+            std::cout << " - " <<  id << " - " << dep_id << std::endl;
+        }
+
         for (auto& a : events) {
+            std::cout << id << " - wait " << std::endl;
             a->wait();
         }
 

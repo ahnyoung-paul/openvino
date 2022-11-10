@@ -172,6 +172,7 @@ public:
                 try {
                     std::rethrow_exception(inferenceException);
                 } catch (const std::exception& ex) {
+                    std::cout << "[get_idle_request]: " << ex.what() << std::endl;
                     throw ex;
                 }
             }
@@ -190,6 +191,7 @@ public:
                 try {
                     std::rethrow_exception(inferenceException);
                 } catch (const std::exception& ex) {
+                    std::cout << "[wait_all]: " << ex.what() << std::endl;
                     throw ex;
                 }
             }

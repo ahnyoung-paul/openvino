@@ -703,7 +703,12 @@ void network::add_to_exec_order(const primitive_id& id) {
 }
 
 std::map<primitive_id, network_output> network::execute(const std::vector<event::ptr>& dependencies) {
-    execute_impl(dependencies);
+    try {
+        execute_impl(dependencies);
+    } catch(std::exception& ex) {
+        std::cout << "[network::execute] " << ex.what() << std::endl;
+        throw ex;
+    }
 
     auto output_ids = get_output_ids();
     std::map<primitive_id, network_output> result;
@@ -722,6 +727,7 @@ void network::execute_impl(const std::vector<event::ptr>& events) {
     GPU_DEBUG_IF(debug_config->verbose >= 1)
         GPU_DEBUG_COUT << "----------------------------------------------" << std::endl;
 
+    std::cout << "[START][network] execute ........" << std::endl;
     std::vector<memory::ptr> in_out_mem;
     bool shared_mem_found = std::any_of(_in_out_shared_mem_types.begin(),
                                         _in_out_shared_mem_types.end(),
@@ -750,6 +756,7 @@ void network::execute_impl(const std::vector<event::ptr>& events) {
     // in some cases.
     auto surf_lock = surfaces_lock::create(get_engine().type(), in_out_mem, get_stream());
 
+    std::cout << "[WIP01][network] execute ........" << std::endl;
     set_arguments();
     for (auto& inst : _exec_order) {
         GPU_DEBUG_IF(debug_config->dump_layers_path.length() > 0) {
@@ -779,7 +786,7 @@ void network::execute_impl(const std::vector<event::ptr>& events) {
             }
         }
     }
-
+    std::cout << "[WIP02][network] execute ........" << std::endl;
     // Store events only in case of OOO queue or enabled Profiling
     auto store_events = get_stream().get_queue_type() == queue_types::out_of_order ||
                         get_engine().configuration().enable_profiling;
@@ -815,14 +822,17 @@ void network::execute_impl(const std::vector<event::ptr>& events) {
         }
     }
 
+    std::cout << "[WIP03][network] execute ........" << std::endl;
     for (auto& prim : _primitives) {
         prim.second->reset_output_change();
     }
 
+    std::cout << "[STOP_][network] execute ........" << std::endl;
     // Using output of previous network as input to another one may cause hazard (in OOOQ mode) if user would not
     // provide proper event to execution. Flushing pipeline should prevent this kind of issues.
     // In scenarios with a big number of very small networks it can provide performance drop.
     get_stream().flush();
+    std::cout << "[END__][network] execute ........" << std::endl;
 }
 
 std::vector<primitive_id> network::get_input_ids() const {

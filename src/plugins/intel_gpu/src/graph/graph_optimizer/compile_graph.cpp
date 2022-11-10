@@ -7,6 +7,7 @@
 #include "pass_manager.h"
 #include "data_inst.h"
 #include "mutable_data_inst.h"
+#include "reshape_inst.h"
 #include "program_node.h"
 #include "intel_gpu/runtime/engine.hpp"
 #include "runtime/cldnn_itt.hpp"
@@ -34,6 +35,9 @@ void compile_graph::run(program& p) {
     for (size_t idx = 0; idx < proc_order.size(); idx++) {
         auto& node = *(std::next(proc_order.begin(), idx));
         if (!node->is_type<data>() && !(node->is_type<mutable_data>() && node->get_dependencies().empty()) && !node->is_dynamic()) {
+            if (node->is_type<reshape>()) {
+                std::cout << "[" << node->id() << "] compile graph " << std::endl;
+            }
             tasks.push_back([node, &exception] {
                 try {
                     node->selected_impl = node->type()->choose_impl(*node);
@@ -41,6 +45,12 @@ void compile_graph::run(program& p) {
                     exception = std::current_exception();
                 }
             });
+        } else {
+            if (node->is_type<reshape>()) {
+                std::cout << "[" << node->id() << "] doesn't compile graph ";
+                std::cout << " # of deps: " << node->get_dependencies().size();
+                std::cout << " " << (node->is_dynamic() ? "dynamic" : "static") << std::endl;
+            }
         }
     }
 

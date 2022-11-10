@@ -54,6 +54,7 @@ struct primitive_impl {
     virtual std::vector<std::string> get_kernel_ids() {
         return {};
     }
+    virtual std::string get_debug_str() const { return ""; }
 
     // If this flag is set as false, the memory allocated for this primitive is not allowed to be reused
     bool can_reuse_memory = true;
