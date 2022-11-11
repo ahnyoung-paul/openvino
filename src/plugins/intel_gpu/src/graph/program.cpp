@@ -458,6 +458,7 @@ void program::build_program(bool is_internal) {
     run_graph_compilation();
     { post_optimize_graph(is_internal); }
 
+    check_node("[After post_optimize_graph");
     GPU_DEBUG_GET_INSTANCE(debug_config);
 #ifdef GPU_DEBUG_CONFIG
     if (debug_config->dry_run_path.empty() || is_internal) {
@@ -465,6 +466,7 @@ void program::build_program(bool is_internal) {
     {
 #endif
         prepare_memory_dependencies();
+        check_node("[After prepare_memory_dependencies");
 
         if (options.get<build_option_type::partial_build_program>()->enabled()) {
             return;
@@ -472,6 +474,7 @@ void program::build_program(bool is_internal) {
 
         compile();
         init_kernels();
+        check_node("[After init_kernels");
     }
 
     if (!is_internal) {
@@ -573,18 +576,37 @@ void program::pre_optimize_graph(bool is_internal) {
 
     // add optimization attributes for onednn primitives
     apply_opt_pass<add_onednn_optimization_attributes>();
+
+    check_node("pre_optimize_graph][ after add_onednn_optimization_attributes");
+}
+
+void program::check_node(std::string msg) {
+    const std::string issued_node = "reshape:812";
+    for (auto& node : processing_order) {
+        if (node->id() == issued_node) {
+            std::cout << "******" << msg << "][" << issued_node << "] is NOT optimized out ... can_be_optimized";
+            std::cout << (node->can_be_optimized() ? "(True)" : "(False)") << std::endl;
+            return;
+        }
+    }
+    std::cout << "******" << msg << "][" << issued_node << "] is optimized out .................." << std::endl;
 }
 
 void program::post_optimize_graph(bool is_internal) {
     OV_ITT_SCOPED_TASK(itt::domains::CLDNN, "ProgramImpl::PostOptimizeGraph");
+    std::string checking_str = is_internal? "*****[post_optimize_graph_internal_" : "[post_optimize_graph_external_";
     // input reorder for fully connected if necessary
+    check_node(checking_str +"][ init");
     apply_opt_pass<post_input_reorder>();
+    check_node(checking_str +"][ after post_input_reorder");
 
     reorder_factory rf;
     layout_optimizer lo;
     apply_opt_pass<post_optimize_weights>(rf);
+    check_node(checking_str +"][ after post_optimize_weights");
 
     apply_opt_pass<remove_redundant_reorders>(lo, false, true);  // TODO: do we need it at this place also?
+    check_node(checking_str +"][ after remove_redundant_reorders");
 
 #ifdef GPU_DEBUG_CONFIG
     GPU_DEBUG_GET_INSTANCE(debug_config);
@@ -594,13 +616,16 @@ void program::post_optimize_graph(bool is_internal) {
 #endif
         // ToDo remove hidden dependencies from propagate_constants pass
         apply_opt_pass<propagate_constants>();
+        check_node(checking_str +"][ after propagate_constants");
     }
 
-    if (options.get<build_option_type::optimize_data>()->enabled())
+    if (options.get<build_option_type::optimize_data>()->enabled()) {
         apply_opt_pass<remove_redundant_reorders>(lo, false, true, true); // pass to remove output reorders while all others graph optimizations were done
-
+        check_node(checking_str +"][ after remove_redundant_reorders");
+    }
     // update loop input/output primitive mappings
     apply_opt_pass<update_loop_primitive_map>();
+    check_node(checking_str +"][ after update_loop_primitive_map");
 }
 
 // mark if the node is constant assuming that all dependencies are marked properly

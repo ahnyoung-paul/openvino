@@ -47,6 +47,9 @@ void handle_reshape::run(program& p) {
             } else if (input_lay.compatible(output_lay)) {
                 p.add_optimized_primitive_info(node.id());
                 node.can_be_optimized(true);
+                if (node.id() == "reshape:812") {
+                    std::cout << "[handle_reshape] " << node.id() << " is set to can_be_optimized ...." << std::endl;
+                }
             }
         });
     }
@@ -61,8 +64,12 @@ void handle_reshape::run(program& p) {
                 return;
 
             auto& out_node = node.get_users().front();
-            if (out_node->is_type<reshape>())
+            if (out_node->is_type<reshape>()) {
+                if (out_node->id() == "reshape:812") {
+                    std::cout << "[handle_reshape] " << out_node->id() << " is eliminiated ...." << std::endl;
+                }
                 p.extract_and_remove(node);
+            }
         });
     }
 

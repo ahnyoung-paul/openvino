@@ -810,6 +810,10 @@ struct detection_output_impl : typed_primitive_impl<detection_output> {
     }
 
     event::ptr execute_impl(const std::vector<event::ptr>& events, detection_output_inst& instance) override {
+        for (auto& dep : instance.dependencies()) {
+            std::cout << "primitive_inst : " << dep->id() << (dep->can_be_optimized() ? " optimized" : " not optimized") << std::endl;
+        }
+        std::cout << "Number of events : " << events.size() << std::endl;
         for (auto& a : events) {
             a->wait();
         }

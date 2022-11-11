@@ -153,49 +153,65 @@ protected:
         }
     }
 
-    event::ptr execute_impl(const std::vector<event::ptr>& events,
-                            typed_primitive_inst<PType>& instance) override {
-        stream& stream = instance.get_network().get_stream();
-        if (optimized_out(instance)) {
-            return aggregate_events(events, stream, false, instance.is_output());
+event::ptr execute_impl(const std::vector<event::ptr>& events,
+                        typed_primitive_inst<PType>& instance) override {
+    stream& stream = instance.get_network().get_stream();
+    auto primitive_id = instance.node.id();
+    if (optimized_out(instance)) {
+        if (primitive_id == "reshape:812") {
+            std::cout << "[reshape:812] return optimized_out => aggregate_events(events, stream, false, instance.is_output())" << std::endl;
         }
+        return aggregate_events(events, stream, false, instance.is_output());
+    }
 
-        std::vector<event::ptr> tmp_events(events);
-        std::vector<event::ptr> all_events;
+    std::vector<event::ptr> tmp_events(events);
+    std::vector<event::ptr> all_events;
 
-        // TODO - split should be handle in kernel selector by providing multiple kernels.
-        auto split = get_split();
+    // TODO - split should be handle in kernel selector by providing multiple kernels.
+    auto split = get_split();
 
-        // we iterate over split first in order to be able parallelism with OOOQ mechanism.
-        for (size_t k = 0; k < _kernels.size(); ++k) {
-            std::vector<event::ptr> new_events;
-            for (decltype(split) i = 0; i < split; i++) {
-                // is any user of the prim's users is an detecion output, set prim as a output event (event won't be nullptr)
-                auto users = instance.node.get_users();
-                bool is_output_event = is_any_user_cpu(users) || instance.node.is_output();
+    // we iterate over split first in order to be able parallelism with OOOQ mechanism.
+    for (size_t k = 0; k < _kernels.size(); ++k) {
+        std::vector<event::ptr> new_events;
+        for (decltype(split) i = 0; i < split; i++) {
+            // is any user of the prim's users is an detecion output, set prim as a output event (event won't be nullptr)
+            auto users = instance.node.get_users();
+            bool is_output_event = is_any_user_cpu(users) || instance.node.is_output();
 
-                auto args = get_arguments(instance, i);
-                args.scalars = &_kernel_data.kernels[k].params.scalars;
-                args.split = i;
+            auto args = get_arguments(instance, i);
+            args.scalars = &_kernel_data.kernels[k].params.scalars;
+            args.split = i;
 
-                for (const auto& m : instance.get_intermediates_memories()) {
-                    args.intermediates.push_back(m);
-                }
-
-                auto ev = stream.enqueue_kernel(*_kernels[k], _kernel_data.kernels[k].params, args, tmp_events, is_output_event);
-                new_events.push_back(ev);
-                all_events.push_back(ev);
+            for (const auto& m : instance.get_intermediates_memories()) {
+                args.intermediates.push_back(m);
             }
 
-            tmp_events = new_events;
+            auto ev = stream.enqueue_kernel(*_kernels[k], _kernel_data.kernels[k].params, args, tmp_events, is_output_event);
+            new_events.push_back(ev);
+            all_events.push_back(ev);
         }
 
-        if ((all_events.size() == 0) && (tmp_events.size() > 0))
-            return aggregate_events(tmp_events, stream);
-
-        bool group_events = (all_events.size() > 1);
-        return aggregate_events(all_events, stream, group_events);
+        tmp_events = new_events;
     }
+
+    if (primitive_id == "reshape:812") {
+        std::cout << "[reshape:812] all_events: " << all_events.size() << ", tmp_events: " << tmp_events.size() << std::endl;
+    }
+
+    if ((all_events.size() == 0) && (tmp_events.size() > 0)) {
+        if (primitive_id == "reshape:812") {
+            std::cout << "[reshape:812] return aggregate_events(tmp_events, stream); " << std::endl;
+        }
+        return aggregate_events(tmp_events, stream);
+    } else {
+        if (primitive_id == "reshape:812") {
+            std::cout << "[reshape:812] return aggregate_events(all_events, stream, group_events); " << std::endl;
+        }
+    }
+
+    bool group_events = (all_events.size() > 1);
+    return aggregate_events(all_events, stream, group_events);
+}
 };
 
 }  // namespace ocl
