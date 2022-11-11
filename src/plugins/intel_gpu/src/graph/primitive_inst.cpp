@@ -296,6 +296,9 @@ void primitive_inst::update_impl() {
 event::ptr primitive_inst::execute(const std::vector<event::ptr>& events) {
     const auto primitive_id = id();
     OPENVINO_ASSERT(_has_valid_input, primitive_id, " has invalid/unset input");
+    if (primitive_id == "reshape:812") {
+        std::cout << "[" << primitive_id << "] is excuted ......." << std::endl;
+    }
 
     GPU_DEBUG_GET_INSTANCE(debug_config);
 
@@ -374,6 +377,9 @@ event::ptr primitive_inst::execute(const std::vector<event::ptr>& events) {
             dependencies.reserve(dependencies.size() + _exec_deps.size());
             for (auto& input : _exec_deps) {
                 auto id = input->id();
+                if (primitive_id == "result:868/sink_port_0") {
+                    std::cout << "[" << primitive_id << "] set event for input : " << id << std::endl;
+                }
                 try {
                     // if the requested event does not exists it means that it has not been executed, so the processing_order is
                     // wrong or synchronization failed.
@@ -387,6 +393,9 @@ event::ptr primitive_inst::execute(const std::vector<event::ptr>& events) {
     }
 
     {
+        if (primitive_id == "reshape:812") {
+            std::cout << "[" << primitive_id << "] calls primtive_impl::execute() ......." << std::endl;
+        }
         GPU_DEBUG_PROFILED_STAGE(instrumentation::pipeline_stage::inference);
         auto ev = _impl->execute(dependencies, *this);
 

@@ -24,6 +24,9 @@ struct reshape_impl : public typed_primitive_impl_ocl<reshape> {
 public:
     static primitive_impl* create(reshape_node const& arg, const kernel_impl_params& impl_param) {
         if (arg.can_be_optimized()) {
+            if (arg.id() == "reshape:812") {
+                std::cout << "[" << arg.id() << "] create empty impl " << std::endl;
+            }
             return new reshape_impl(arg, {});
         }
         auto reorder_params = get_default_params<kernel_selector::reshape_params>(impl_param);
@@ -32,6 +35,12 @@ public:
 
         auto& kernel_selector = kernel_selector::reshape_kernel_selector::Instance();
         auto best_kernels = kernel_selector.GetBestKernels(reorder_params, reorder_optional_params);
+
+        if (arg.id() == "reshape:812") {
+            std::cout << "[" << arg.id() << "], get kernel params " << reorder_params.to_cache_string_v2();
+            std::cout << ", kernel_name " << best_kernels[0].kernelName;
+            std::cout << ", can_be_optimized(" << (arg.can_be_optimized()? "True)" : "False)") << std::endl;
+        }
 
         CLDNN_ERROR_BOOL(arg.id(),
                          "Best_kernel.empty()",
