@@ -383,6 +383,7 @@ public:
 
     virtual std::string to_string() const;
     virtual std::string to_cache_string_v2() const;
+    virtual size_t hash() const;
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -597,6 +598,7 @@ struct base_params : public Params {
     MultiDataTensor outputs;
     std::string to_string() const override;
     std::string to_cache_string_v2() const override;
+    size_t hash() const override;
     ParamsKey GetParamsKey() const override;
 
     bool has_dynamic_inputs() const {

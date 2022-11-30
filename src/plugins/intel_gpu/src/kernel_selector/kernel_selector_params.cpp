@@ -4,6 +4,7 @@
 
 #include "kernel_selector_params.h"
 #include "kernel_selector_common.h"
+#include "kernel_selector_utils.h"
 #include <sstream>
 #include <string>
 
@@ -11,6 +12,8 @@
 #include "jitter.h"
 
 namespace kernel_selector {
+
+using namespace cldnn;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // ParamsKey
@@ -444,6 +447,10 @@ std::string Params::to_cache_string_v2() const {
     return "";
 }
 
+size_t Params::hash() const {
+    return 0;
+}
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // optional_params
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -573,4 +580,27 @@ std::string base_params::to_cache_string_v2() const {
     return s.str();
 }
 
+
+size_t base_params::hash() const {
+    size_t seed = 0;
+    seed = hash_combine(seed, kType);
+
+    if (!activations.empty()) {
+        auto& act = activations[0];
+        seed = hash_combine(seed, act.m);
+        seed = hash_combine(seed, act.n);
+        seed = hash_combine(seed, static_cast<size_t>(act.function));
+    }
+
+    for (auto& input : inputs)
+        seed = hash_combine_dt(seed, input);
+
+    for (auto& output : outputs)
+        seed = hash_combine_dt(seed, output);
+
+    for (auto& fused : fused_ops)
+        seed = hash_combine(seed, fused.GetType());
+
+    return seed;
+}
 }  // namespace kernel_selector
