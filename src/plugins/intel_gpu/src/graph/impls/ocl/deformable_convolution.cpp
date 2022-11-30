@@ -97,6 +97,14 @@ public:
         return {params, optional_params};
     }
 
+    static size_t update_hash(size_t seed, const kernel_selector::convolution_params& params) {
+        seed = hash_combine(seed, params.depthwise_separable_opt);
+        seed = hash_combine(seed, params.split);
+        seed = hash_combine(seed, params.groups);
+        seed = hash_combine_usize(seed, params.filterSize);
+        return seed;
+    }
+
 private:
     int32_t _split;
     uint32_t _groups;
@@ -170,6 +178,17 @@ public:
                               (uint32_t)kernel_size.spatial[2] };
         return {params, optional_params};
     }
+
+    static size_t update_hash(size_t seed, const kernel_selector::convolution_params& params) {
+        seed = hash_combine(seed, params.bilinear_interpolation_pad);
+        seed = hash_combine(seed, params.deformable_groups);
+        seed = hash_combine(seed, params.deformable_mask_enabled);
+        seed = hash_combine_usize(seed, params.padding);
+        seed = hash_combine_usize(seed, params.stride);
+        seed = hash_combine_usize(seed, params.dilation);
+        seed = hash_combine_usize(seed, params.kernelSize);
+        return seed;
+    }
 };
 
 namespace detail {
@@ -179,6 +198,7 @@ attach_deformable_conv_impl::attach_deformable_conv_impl() {
         std::make_tuple(data_types::f32, format::bfyx),
         std::make_tuple(data_types::f16, format::bfyx),
     });
+    impl_hash_key<deformable_conv>::add(typed_primitive_impl_ocl<deformable_conv>::get_impl_key<deformable_conv_impl>);
 }
 
 attach_deformable_interp_impl::attach_deformable_interp_impl() {
@@ -186,6 +206,7 @@ attach_deformable_interp_impl::attach_deformable_interp_impl() {
         std::make_tuple(data_types::f32, format::bfyx),
         std::make_tuple(data_types::f16, format::bfyx),
     });
+    impl_hash_key<deformable_interp>::add(typed_primitive_impl_ocl<deformable_interp>::get_impl_key<deformable_interp_impl>);
 }
 
 }  // namespace detail

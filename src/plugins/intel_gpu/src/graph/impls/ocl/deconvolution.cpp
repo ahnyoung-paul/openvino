@@ -131,6 +131,17 @@ public:
         return {params, optional_params};
     }
 
+    static size_t update_hash(size_t seed, const kernel_selector::deconvolution_params& params) {
+        seed = hash_combine_usize(seed, params.filterSize);
+        seed = hash_combine_usize(seed, params.stride);
+        seed = hash_combine_usize(seed, params.dilation);
+        seed = hash_combine_usize(seed, params.padding);
+        seed = hash_combine(seed, params.split);
+        seed = hash_combine(seed, params.groups);
+        seed = hash_combine(seed, params.depthwise_separable_opt);
+        return seed;
+    }
+
 private:
     int32_t _split;
     uint32_t _groups;
@@ -161,6 +172,8 @@ attach_deconvolution_impl::attach_deconvolution_impl() {
     };
 
     implementation_map<deconvolution>::add(impl_types::ocl, typed_primitive_impl_ocl<deconvolution>::create<deconvolution_impl>, types, formats);
+
+    impl_hash_key<deconvolution>::add(typed_primitive_impl_ocl<deconvolution>::get_impl_key<deconvolution_impl>);
 }
 
 }  // namespace detail

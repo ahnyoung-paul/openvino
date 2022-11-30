@@ -77,6 +77,14 @@ public:
 
         return {params, optional_params};
     }
+
+    static size_t update_hash(size_t seed, const kernel_selector::roi_align_params& params) {
+        seed = hash_combine(seed, params.sampling_ratio);
+        seed = hash_combine(seed, params.spatial_scale);
+        seed = hash_combine(seed, params.pooling_mode);
+        seed = hash_combine(seed, params.aligned_mode);
+        return seed;
+    }
 };
 
 namespace detail {
@@ -92,6 +100,8 @@ attach_roi_align_impl::attach_roi_align_impl() {
                     format::bs_fs_yx_bsv32_fsv32};
 
     implementation_map<roi_align>::add(impl_types::ocl, typed_primitive_impl_ocl<roi_align>::create<roi_align_impl>, types, formats);
+
+    impl_hash_key<roi_align>::add(typed_primitive_impl_ocl<roi_align>::get_impl_key<roi_align_impl>);
 }
 
 }  // namespace detail

@@ -54,6 +54,12 @@ struct embedding_bag_impl : typed_primitive_impl_ocl<embedding_bag> {
         params.default_index = primitive->default_index;
         return {params, optional_params};
     }
+
+    static size_t update_hash(size_t seed, const kernel_selector::embedding_bag_params& params) {
+        seed = hash_combine(seed, params.type);
+        seed = hash_combine(seed, params.default_index);
+        return seed;
+    }
 };
 
 namespace detail {
@@ -63,6 +69,8 @@ attach_embedding_bag_impl::attach_embedding_bag_impl() {
         std::make_tuple(data_types::f32, format::bfyx),
         std::make_tuple(data_types::f16, format::bfyx),
     });
+
+    impl_hash_key<embedding_bag>::add(typed_primitive_impl_ocl<embedding_bag>::get_impl_key<embedding_bag_impl>);
 }
 
 }  // namespace detail

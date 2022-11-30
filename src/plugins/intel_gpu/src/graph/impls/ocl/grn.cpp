@@ -39,6 +39,11 @@ public:
 
         return {params, optional_params};
     }
+
+    static size_t update_hash(size_t seed, const kernel_selector::grn_params& params) {
+        seed = hash_combine(seed, params.bias);
+        return seed;
+    }
 };
 
 namespace detail {
@@ -48,6 +53,8 @@ attach_grn_impl::attach_grn_impl() {
         std::make_tuple(data_types::f32, format::bfyx),
         std::make_tuple(data_types::f16, format::bfyx),
     });
+
+    impl_hash_key<grn>::add(typed_primitive_impl_ocl<grn>::get_impl_key<grn_impl>);
 }
 
 }  // namespace detail

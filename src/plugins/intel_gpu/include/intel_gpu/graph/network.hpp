@@ -277,6 +277,7 @@ private:
     // Move from cldnn::program to cldnn::network for multi-threads issue.
     std::unique_ptr<ImplementationsCache> _impls_cache;
     std::unique_ptr<KernelsCache> _in_mem_kernels_cache;
+
     const size_t _impls_cache_capacity = 10000;
     const size_t _in_mem_kernels_cache_capacity = 10000;
 };

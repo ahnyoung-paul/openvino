@@ -39,6 +39,11 @@ struct eye_impl : typed_primitive_impl_ocl<eye> {
 
         return {params, {}};
     }
+
+    static size_t update_hash(size_t seed, const kernel_selector::eye_params& params) {
+        seed = hash_combine(seed, params.diagonal_index);
+        return seed;
+    }
 };
 
 namespace detail {
@@ -67,6 +72,8 @@ attach_eye_impl::attach_eye_impl() {
         format::bs_fs_zyx_bsv32_fsv16,
     };
     implementation_map<eye>::add(impl_types::ocl, typed_primitive_impl_ocl<eye>::create<eye_impl>, types, formats);
+
+    impl_hash_key<eye>::add(typed_primitive_impl_ocl<eye>::get_impl_key<eye_impl>);
 }
 
 }  // namespace detail

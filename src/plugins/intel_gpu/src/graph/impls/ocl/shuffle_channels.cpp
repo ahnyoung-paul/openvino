@@ -43,6 +43,12 @@ struct shuffle_channels_impl : typed_primitive_impl_ocl<shuffle_channels> {
 
         return {params, optional_params};
     }
+
+    static size_t update_hash(size_t seed, const kernel_selector::shuffle_channels_params& params) {
+        seed = hash_combine(seed, params.group);
+        seed = hash_combine(seed, params.axis);
+        return seed;
+    }
 };
 
 namespace detail {
@@ -68,6 +74,8 @@ attach_shuffle_channels_impl::attach_shuffle_channels_impl() {
         std::make_tuple(data_types::f32, format::fs_b_yx_fsv32),
         std::make_tuple(data_types::f16, format::fs_b_yx_fsv32),
     });
+
+    impl_hash_key<shuffle_channels>::add(typed_primitive_impl_ocl<shuffle_channels>::get_impl_key<shuffle_channels_impl>);
 }
 
 }  // namespace detail

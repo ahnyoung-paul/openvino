@@ -12,7 +12,6 @@
 
 namespace cldnn {
 namespace ocl {
-
 struct reorder_impl : typed_primitive_impl_ocl<reorder> {
     using parent = typed_primitive_impl_ocl<reorder>;
     using parent::parent;
@@ -142,6 +141,22 @@ public:
         (_kernel_data.update_dispatch_data_func)(kernel_params.first, _kernel_data);
     }
 
+    static size_t update_hash(size_t seed, const kernel_selector::reorder_params& params) {
+        seed = hash_combine(seed, params.has_padded_output);
+        seed = hash_combine(seed, params.surface_input);
+        seed = kernel_selector::hash_combine_dt(seed, params.mean);
+        seed = hash_combine(seed, params.mode);
+        for (auto& mean_value : params.meanValues)
+            seed = hash_combine(seed, mean_value);
+        seed = hash_combine(seed, params.mean_op);
+        if (params.winograd) {
+            seed = hash_combine(seed, params.winograd_input_offset_x);
+            seed = hash_combine(seed, params.winograd_input_offset_y);
+            seed = hash_combine(seed, params.winograd_nr_tiles_x);
+        }
+        return seed;
+    }
+
 private:
     bool _can_be_optimized;
     bool _has_mean;
@@ -167,6 +182,8 @@ attach_reorder_impl::attach_reorder_impl() {
         format::bfwzyx,
     };
     implementation_map<reorder>::add(impl_types::ocl, shape_types::dynamic_shape, typed_primitive_impl_ocl<reorder>::create<reorder_impl>, types, formats);
+
+    impl_hash_key<reorder>::add(typed_primitive_impl_ocl<reorder>::get_impl_key<reorder_impl>);
 }
 
 }  // namespace detail

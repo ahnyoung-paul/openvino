@@ -97,6 +97,13 @@ struct reduce_impl : typed_primitive_impl_ocl<reduce> {
 
         return {params, optional_params};
     }
+
+    static size_t update_hash(size_t seed, const kernel_selector::reduce_params& params) {
+        seed = hash_combine(seed, params.reduceMode);
+        seed = hash_combine_vec(seed, params.reduceAxes);
+        seed = hash_combine(seed, params.keepDims);
+        return seed;
+    }
 };
 
 namespace detail {
@@ -139,6 +146,8 @@ attach_reduce_impl::attach_reduce_impl() {
         std::make_tuple(data_types::i8, format::b_fs_yx_fsv32),
         std::make_tuple(data_types::u8, format::b_fs_yx_fsv32),
     });
+
+    impl_hash_key<reduce>::add(typed_primitive_impl_ocl<reduce>::get_impl_key<reduce_impl>);
 }
 
 }  // namespace detail

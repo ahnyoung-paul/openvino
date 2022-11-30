@@ -96,7 +96,7 @@ public:
         ib >> _depthwise_sep_opt;
     }
 
-    static std::unique_ptr<primitive_impl> create(const convolution_node& arg, const kernel_impl_params& impl_param) {
+    static kernel_params_t get_kernel_params(const convolution_node& arg, const kernel_impl_params& impl_param) {
         const auto& primitive = impl_param.typed_desc<convolution>();
 
         const auto &split = primitive->split();
@@ -173,8 +173,6 @@ public:
             format == format::b_fs_zyx_fsv32)
             conv_optional_params.allowInputReordering = true;
 
-        auto& kernel_selector = kernel_selector::convolution_kernel_selector::Instance();
-
         const auto& tuning_config = arg.get_program().get_options().get<build_option_type::tuning_config>();
 
         if (tuning_config->config.mode == tuning_mode::tuning_tune_and_cache ||
@@ -183,9 +181,38 @@ public:
                 std::make_shared<gpu::kernel_runner>(arg.get_program().get_engine(), arg.get_program().get_id(), true, true);
         }
 
-        auto best_kernel = kernel_selector.get_best_kernel(conv_params, conv_optional_params);
+        return {conv_params, conv_optional_params};
+    }
+
+    static std::unique_ptr<primitive_impl> create(const convolution_node& arg, const kernel_impl_params& impl_param) {
+        auto kernel_params = get_kernel_params(arg, impl_param);
+        auto& kernel_selector = kernel_selector::convolution_kernel_selector::Instance();
+        auto best_kernel = kernel_selector.get_best_kernel(kernel_params.first, kernel_params.second);
 
         return make_unique<convolution_impl>(arg, best_kernel);
+    }
+
+    static size_t get_impl_key(const convolution_node& arg, const kernel_impl_params& impl_param) {
+        auto kernel_params = get_kernel_params(arg, impl_param);
+        auto params = kernel_params.first;
+        auto seed = params.hash();
+        using namespace kernel_selector;
+        seed = hash_combine_usize(seed, params.filterSize);
+        seed = hash_combine_usize(seed, params.stride);
+        seed = hash_combine_usize(seed, params.dilation);
+        seed = hash_combine_usize(seed, params.padding);
+
+        seed = hash_combine(seed, params.split);
+        seed = hash_combine(seed, params.depthwise_separable_opt);
+        seed = hash_combine(seed, params.transposed);
+        seed = hash_combine(seed, params.quantization);
+        seed = hash_combine(seed, params.deformable_mode);
+        seed = hash_combine(seed, params.groups);
+        seed = hash_combine_usize(seed, params.kernelSize);
+        seed = hash_combine(seed, params.deformable_groups);
+        seed = hash_combine(seed, params.bilinear_interpolation_pad);
+        seed = hash_combine(seed, params.deformable_mask_enabled);
+        return seed;
     }
 
 private:
@@ -275,6 +302,8 @@ attach_convolution_impl::attach_convolution_impl() {
         std::make_tuple(data_types::u8, format::bs_fs_yx_bsv4_fsv2),
         std::make_tuple(data_types::i8, format::bs_fs_yx_bsv4_fsv2),
     });
+
+    impl_hash_key<convolution>::add(convolution_impl::get_impl_key);
 }
 
 }  // namespace detail

@@ -33,6 +33,11 @@ struct bucketize_impl : typed_primitive_impl_ocl<bucketize> {
 
         return {params, optional_params};
     }
+
+    static size_t update_hash(size_t seed, const kernel_selector::bucketize_params& params) {
+        seed = hash_combine(seed, params.with_right_bound);
+        return seed;
+    }
 };
 
 namespace detail {
@@ -64,6 +69,8 @@ attach_bucketize_impl::attach_bucketize_impl() {
         }
     }
     implementation_map<bucketize>::add(impl_types::ocl, typed_primitive_impl_ocl<bucketize>::create<bucketize_impl>, keys);
+
+    impl_hash_key<bucketize>::add(typed_primitive_impl_ocl<bucketize>::get_impl_key<bucketize_impl>);
 }
 }  // namespace detail
 

@@ -383,6 +383,7 @@ public:
 
     virtual std::string to_string() const;
     virtual std::string to_cache_string_v2() const;
+    virtual size_t hash() const;
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -585,6 +586,7 @@ struct base_params : public Params {
     MultiDataTensor outputs;
     std::string to_string() const override;
     std::string to_cache_string_v2() const override;
+    size_t hash() const override;
     ParamsKey GetParamsKey() const override;
 
     bool has_dynamic_inputs() const {
@@ -642,5 +644,16 @@ protected:
     explicit optional_params(KernelType kt) : kType(kt) {}
     KernelType kType;
 };
+
+template<typename T = std::uint32_t>
+size_t hash_combine_dim_tensor(size_t seed, const DimTensor<T>& dt);
+
+size_t hash_combine_dim(size_t seed, const Tensor::Dim& dim);
+
+size_t hash_combine_dt(size_t seed, const DataTensor& dt);
+
+size_t hash_combine_wt(size_t seed, const WeightsTensor& wt);
+
+size_t hash_combine_usize(size_t s, const kernel_selector::uSize& u_size);
 
 }  // namespace kernel_selector

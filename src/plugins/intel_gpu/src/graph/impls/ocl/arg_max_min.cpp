@@ -60,7 +60,7 @@ protected:
     }
 
 public:
-    static std::unique_ptr<primitive_impl> create(const arg_max_min_node& arg, const kernel_impl_params& impl_param) {
+    static kernel_params_t get_kernel_params(const arg_max_min_node& arg, const kernel_impl_params& impl_param) {
         const auto& primitive = impl_param.typed_desc<arg_max_min>();
         const auto& axis = primitive->axis;
         const auto& top_k = primitive->top_k;
@@ -99,10 +99,29 @@ public:
 
         argm_params.values_first = values_first;
 
+        return {argm_params, argm_optional_params};
+    }
+
+    static std::unique_ptr<primitive_impl> create(const arg_max_min_node& arg, const kernel_impl_params& impl_param) {
+        auto kernel_params = get_kernel_params(arg, impl_param);
         auto& kernel_selector = kernel_selector::arg_max_min_kernel_selector::Instance();
-        auto best_kernel = kernel_selector.get_best_kernel(argm_params, argm_optional_params);
+        auto best_kernel = kernel_selector.get_best_kernel(kernel_params.first, kernel_params.second);
 
         return make_unique<arg_max_min_impl>(arg, best_kernel);
+    }
+
+    static size_t get_impl_key(const arg_max_min_node& arg, const kernel_impl_params& impl_param) {
+        auto kernel_params = get_kernel_params(arg, impl_param);
+        auto params = kernel_params.first;
+        auto seed = params.hash();
+        seed = hash_combine(seed, params.argMaxMinAxis);
+        seed = hash_combine(seed, params.argMaxMinOut);
+        seed = hash_combine(seed, params.argMaxMinSortType);
+        seed = hash_combine(seed, params.topK);
+        seed = hash_combine(seed, params.values_first);
+        seed = hash_combine(seed, params.has_second_output);
+        seed = hash_combine(seed, params.use_multiple_outputs);
+        return seed;
     }
 };
 
@@ -121,6 +140,8 @@ attach_arg_max_min_impl::attach_arg_max_min_impl() {
                     format::bfzyx};
 
     implementation_map<arg_max_min>::add(impl_types::ocl, arg_max_min_impl::create, types, formats);
+
+    impl_hash_key<arg_max_min>::add(arg_max_min_impl::get_impl_key);
 }
 }  // namespace detail
 }  // namespace ocl

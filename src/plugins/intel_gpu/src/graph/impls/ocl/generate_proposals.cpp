@@ -54,6 +54,17 @@ public:
 
         return {params, optional_params};
     }
+
+    static size_t update_hash(size_t seed, const kernel_selector::generate_proposals_params& params) {
+        seed = hash_combine(seed, params.min_size);
+        seed = hash_combine(seed, params.nms_threshold);
+        seed = hash_combine(seed, params.pre_nms_count);
+        seed = hash_combine(seed, params.post_nms_count);
+        seed = hash_combine(seed, params.normalized);
+        seed = hash_combine(seed, params.nms_eta);
+        seed = hash_combine(seed, params.roi_num_type);
+        return seed;
+    }
 };
 
 namespace detail {
@@ -73,6 +84,8 @@ namespace detail {
                                                             std::make_tuple(data_types::f32, format::bs_fs_yx_bsv16_fsv16),
                                                             std::make_tuple(data_types::f32, format::bs_fs_yx_bsv32_fsv16),
                                                             std::make_tuple(data_types::f32, format::bs_fs_yx_bsv32_fsv32)});
+
+        impl_hash_key<generate_proposals>::add(typed_primitive_impl_ocl<generate_proposals>::get_impl_key<generate_proposals_impl>);
     }
 }  // namespace detail
 }  // namespace ocl

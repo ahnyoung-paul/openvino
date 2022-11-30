@@ -35,6 +35,12 @@ struct random_uniform_impl : typed_primitive_impl_ocl<random_uniform> {
 
         return {params, {}};
     }
+
+    static size_t update_hash(size_t seed, const kernel_selector::random_uniform_params& params) {
+        seed = hash_combine(seed, params.global_seed);
+        seed = hash_combine(seed, params.op_seed);
+        return seed;
+    }
 };
 
 namespace detail {
@@ -54,6 +60,8 @@ attach_random_uniform_impl::attach_random_uniform_impl() {
             std::make_tuple(data_types::i64, format::bfzyx),
             std::make_tuple(data_types::i64, format::bfwzyx),
     });
+
+    impl_hash_key<random_uniform>::add(typed_primitive_impl_ocl<random_uniform>::get_impl_key<random_uniform_impl>);
 }
 
 }  // namespace detail

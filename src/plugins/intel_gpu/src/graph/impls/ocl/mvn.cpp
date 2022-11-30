@@ -48,6 +48,14 @@ struct mvn_impl : typed_primitive_impl_ocl<mvn> {
         auto kernel_params = get_kernel_params(impl_param);
         (_kernel_data.update_dispatch_data_func)(kernel_params.first, _kernel_data);
     }
+
+    static size_t update_hash(size_t seed, const kernel_selector::mvn_params& params) {
+        seed = hash_combine(seed, params.mvnMode);
+        seed = hash_combine(seed, params.mvnNormalizeVariance);
+        seed = hash_combine(seed, params.epsilon);
+        seed = hash_combine(seed, params.mvnEpsMode);
+        return seed;
+    }
 };
 
 namespace detail {
@@ -119,6 +127,8 @@ attach_mvn_impl::attach_mvn_impl() {
 
         std::make_tuple(data_types::f16, format::bs_fs_yx_bsv32_fsv16),
     });
+
+    impl_hash_key<mvn>::add(typed_primitive_impl_ocl<mvn>::get_impl_key<mvn_impl>);
 }
 
 }  // namespace detail

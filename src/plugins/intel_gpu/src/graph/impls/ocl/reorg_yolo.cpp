@@ -33,6 +33,11 @@ struct reorg_yolo_impl : typed_primitive_impl_ocl<reorg_yolo> {
         params.stride = primitive->stride;
         return {params, optional_params};
     }
+
+    static size_t update_hash(size_t seed, const kernel_selector::reorg_yolo_params& params) {
+        seed = hash_combine(seed, params.stride);
+        return seed;
+    }
 };
 
 namespace detail {
@@ -51,6 +56,8 @@ attach_reorg_yolo_impl::attach_reorg_yolo_impl() {
     };
 
     implementation_map<reorg_yolo>::add(impl_types::ocl, typed_primitive_impl_ocl<reorg_yolo>::create<reorg_yolo_impl>, types, formats);
+
+    impl_hash_key<reorg_yolo>::add(typed_primitive_impl_ocl<reorg_yolo>::get_impl_key<reorg_yolo_impl>);
 }
 
 }  // namespace detail

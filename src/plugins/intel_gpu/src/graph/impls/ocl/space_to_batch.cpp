@@ -39,6 +39,14 @@ struct space_to_batch_impl : typed_primitive_impl_ocl<space_to_batch> {
 
         return {params, optional_params};
     }
+
+    static size_t update_hash(size_t seed, const kernel_selector::space_to_batch_params& params) {
+        using namespace kernel_selector;
+        hash_combine_dim_tensor<uint32_t>(seed, params.block_shape);
+        hash_combine_dim_tensor<uint32_t>(seed, params.pads_begin);
+        hash_combine_dim_tensor<uint32_t>(seed, params.pads_end);
+        return seed;
+    }
 };
 
 namespace detail {
@@ -62,6 +70,8 @@ attach_space_to_batch_impl::attach_space_to_batch_impl() {
         std::make_tuple(data_types::u8, format::b_fs_zyx_fsv16),
         std::make_tuple(data_types::i8, format::b_fs_zyx_fsv16),
     });
+
+    impl_hash_key<space_to_batch>::add(typed_primitive_impl_ocl<space_to_batch>::get_impl_key<space_to_batch_impl>);
 }
 
 }  // namespace detail

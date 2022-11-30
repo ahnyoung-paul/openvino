@@ -95,6 +95,21 @@ public:
 
         return {params, optional_params};
     }
+
+    static size_t update_hash(size_t seed, const kernel_selector::multiclass_nms_params& params) {
+        seed = hash_combine(seed, params.sort_result_type);
+        seed = hash_combine(seed, params.sort_result_across_batch);
+        seed = hash_combine(seed, params.indices_output_type);
+        seed = hash_combine(seed, params.iou_threshold);
+        seed = hash_combine(seed, params.score_threshold);
+        seed = hash_combine(seed, params.nms_top_k);
+        seed = hash_combine(seed, params.keep_top_k);
+        seed = hash_combine(seed, params.background_class);
+        seed = hash_combine(seed, params.normalized);
+        seed = hash_combine(seed, params.nms_eta);
+        seed = hash_combine(seed, params.has_roisnum);
+        return seed;
+    }
 };
 
 namespace detail {
@@ -111,6 +126,8 @@ attach_multiclass_nms_impl::attach_multiclass_nms_impl() {
     };
 
     implementation_map<multiclass_nms>::add(impl_types::ocl, typed_primitive_impl_ocl<multiclass_nms>::create<multiclass_nms_impl>, types, formats);
+
+    impl_hash_key<multiclass_nms>::add(typed_primitive_impl_ocl<multiclass_nms>::get_impl_key<multiclass_nms_impl>);
 }
 }  // namespace detail
 }  // namespace ocl

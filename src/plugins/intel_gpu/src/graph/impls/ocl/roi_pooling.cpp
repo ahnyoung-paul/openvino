@@ -87,6 +87,21 @@ public:
 
         return {params, optional_params};
     }
+
+    static size_t update_hash(size_t seed, const kernel_selector::roi_pooling_params& params) {
+        seed = hash_combine(seed, params.mode);
+        seed = hash_combine(seed, params.position_sensitive);
+        seed = hash_combine(seed, params.pooled_width);
+        seed = hash_combine(seed, params.pooled_height);
+        seed = hash_combine(seed, params.spatial_bins_x);
+        seed = hash_combine(seed, params.spatial_bins_y);
+        seed = hash_combine(seed, params.spatial_scale);
+        seed = hash_combine(seed, params.trans_std);
+        seed = hash_combine(seed, params.no_trans);
+        seed = hash_combine(seed, params.part_size);
+        seed = hash_combine(seed, params.group_size);
+        return seed;
+    }
 };
 
 namespace detail {
@@ -102,6 +117,8 @@ attach_roi_pooling_impl::attach_roi_pooling_impl() {
     auto types = {data_types::f16, data_types::f32};
 
     implementation_map<roi_pooling>::add(impl_types::ocl, typed_primitive_impl_ocl<roi_pooling>::create<roi_pooling_impl>, types, formats);
+
+    impl_hash_key<roi_pooling>::add(typed_primitive_impl_ocl<roi_pooling>::get_impl_key<roi_pooling_impl>);
 }
 
 }  // namespace detail

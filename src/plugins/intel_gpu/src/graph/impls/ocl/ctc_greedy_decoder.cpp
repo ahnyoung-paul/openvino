@@ -45,6 +45,13 @@ struct ctc_greedy_decoder_impl : typed_primitive_impl_ocl<ctc_greedy_decoder> {
         }
         return {params, optional_params};
     }
+
+    static size_t update_hash(size_t seed, const kernel_selector::ctc_greedy_decoder_params& params) {
+        seed = hash_combine(seed, params.merge_repeated);
+        seed = hash_combine(seed, params.blank_index);
+        seed = hash_combine(seed, params.outputs_num);
+        return seed;
+    }
 };
 
 namespace detail {
@@ -56,6 +63,8 @@ attach_ctc_greedy_decoder_impl::attach_ctc_greedy_decoder_impl() {
         std::make_tuple(data_types::i32, format::bfyx),
         std::make_tuple(data_types::i64, format::bfyx),
     });
+
+    impl_hash_key<ctc_greedy_decoder>::add(typed_primitive_impl_ocl<ctc_greedy_decoder>::get_impl_key<ctc_greedy_decoder_impl>);
 }
 
 }  // namespace detail

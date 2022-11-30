@@ -66,6 +66,13 @@ struct grid_sample_impl : public typed_primitive_impl_ocl<grid_sample> {
 
         return {params, optional_params};
     }
+
+    static size_t update_hash(size_t seed, const kernel_selector::grid_sample_params& params) {
+        seed = hash_combine(seed, params.align_corners);
+        seed = hash_combine(seed, params.interpolation_mode);
+        seed = hash_combine(seed, params.padding_mode);
+        return seed;
+    }
 };
 
 namespace detail {
@@ -81,6 +88,8 @@ attach_grid_sample_impl::attach_grid_sample_impl() {
                     format::bs_fs_yx_bsv32_fsv16};
 
     implementation_map<grid_sample>::add(impl_types::ocl, typed_primitive_impl_ocl<grid_sample>::create<grid_sample_impl>, types, formats);
+
+    impl_hash_key<grid_sample>::add(typed_primitive_impl_ocl<grid_sample>::get_impl_key<grid_sample_impl>);
 }
 
 }  // namespace detail

@@ -303,23 +303,23 @@ void primitive_inst::update_impl() {
         return l.transform(format::bfwzyx).to_shape();
     };
 
-    auto get_layout_key = [&](const kernel_impl_params& params) -> size_t {
-        size_t seed = 0;
-        auto& id = params.desc->id;
-        for (size_t i = 0; i < id.size(); i++) {
-            seed = hash_combine(seed, id[i]);
-        }
-        seed = hash_combine(seed, _node->get_unique_id());
-        for (auto& layout : params.input_layouts) {
-            for (auto& d : layout.get_shape()) {
-                seed = hash_combine(seed, d);
-            }
-        }
-        for (auto& d : params.get_output_layout().get_shape()) {
-            seed = hash_combine(seed, d);
-        }
-        return seed;
-    };
+    // auto get_layout_key = [&](const kernel_impl_params& params) -> size_t {
+    //     size_t seed = 0;
+    //     auto& id = params.desc->id;
+    //     for (size_t i = 0; i < id.size(); i++) {
+    //         seed = hash_combine(seed, id[i]);
+    //     }
+    //     seed = hash_combine(seed, _node->get_unique_id());
+    //     for (auto& layout : params.input_layouts) {
+    //         for (auto& d : layout.get_shape()) {
+    //             seed = hash_combine(seed, d);
+    //         }
+    //     }
+    //     for (auto& d : params.get_output_layout().get_shape()) {
+    //         seed = hash_combine(seed, d);
+    //     }
+    //     return seed;
+    // };
 
     auto update_shape_info = [this, extend_to_6d, debug_config, prev_impl_str](const kernel_impl_params& params) {
         mem_lock<int32_t> lock(_shape_info_memory, _network.get_stream());
@@ -350,7 +350,8 @@ void primitive_inst::update_impl() {
         GPU_DEBUG_GET_INSTANCE(debug_config);
         // Update param if fake_alignment is available
         auto updated_params = _node->type()->get_fake_aligned_params(*_impl_params);
-        auto layout_key = get_layout_key(updated_params);
+        // auto layout_key = get_layout_key(updated_params);
+        auto layout_key = _node->type()->get_impl_hash_key(*_node, updated_params);
         auto& cache = get_network().get_implementations_cache();
         bool has_cached_impl = false;
         {
@@ -358,6 +359,7 @@ void primitive_inst::update_impl() {
             has_cached_impl = cache.has(layout_key);
             if (has_cached_impl) {
                 _impl = cache.get(layout_key)->clone();
+                _impl->set_node_params(*_node);
                 GPU_DEBUG_PROFILED_STAGE_CACHE_HIT(true);
 
                 GPU_DEBUG_IF(debug_config->verbose >= 4) {

@@ -41,6 +41,16 @@ struct lrn_impl : typed_primitive_impl_ocl<lrn> {
 
         return {params, optional_params};
     }
+
+    static size_t update_hash(size_t seed, const kernel_selector::lrn_params& params) {
+        seed = hash_combine(seed, params.alpha);
+        seed = hash_combine(seed, params.beta);
+        seed = hash_combine(seed, params.k);
+        seed = hash_combine(seed, params.localSize);
+        seed = hash_combine(seed, params.divMode);
+        seed = hash_combine(seed, params.normMode);
+        return seed;
+    }
 };
 
 namespace detail {
@@ -87,6 +97,8 @@ attach_lrn_impl::attach_lrn_impl() {
         std::make_tuple(data_types::i8, format::bs_fs_yx_bsv32_fsv16),
         std::make_tuple(data_types::u8, format::bs_fs_yx_bsv32_fsv16),
     });
+
+    impl_hash_key<lrn>::add(typed_primitive_impl_ocl<lrn>::get_impl_key<lrn_impl>);
 }
 
 }  // namespace detail

@@ -82,6 +82,14 @@ struct activation_impl : typed_primitive_impl_ocl<activation> {
         return {params, optional_params};
     }
 
+    static size_t update_hash(size_t seed, const kernel_selector::activation_params& params) {
+        using namespace kernel_selector;
+        for (auto& tensor : params.inputActivationParams) {
+            seed = hash_combine_dt(seed, tensor);
+        }
+        return seed;
+    }
+
 private:
     bool _is_parameterized;
 };
@@ -150,6 +158,8 @@ attach_activation_impl::attach_activation_impl() {
         // fs_b_yx_fsv32
         std::make_tuple(data_types::f16, format::fs_b_yx_fsv32),
     });
+
+    impl_hash_key<activation>::add(typed_primitive_impl_ocl<activation>::get_impl_key<activation_impl>);
 }
 
 }  // namespace detail

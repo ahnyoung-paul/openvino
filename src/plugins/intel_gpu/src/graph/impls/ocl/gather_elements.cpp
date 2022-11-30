@@ -69,6 +69,11 @@ struct gather_elements_impl : typed_primitive_impl_ocl<gather_elements> {
         params.inputs.push_back(convert_data_tensor(impl_param.get_input_layout(1)));
         return {params, optional_params};
     }
+
+    static size_t update_hash(size_t seed, const kernel_selector::gather_elements_params& params) {
+        seed = hash_combine(seed, params.axis);
+        return seed;
+    }
 };
 
 namespace detail {
@@ -87,6 +92,8 @@ attach_gather_elements_impl::attach_gather_elements_impl() {
         std::make_tuple(data_types::f16, format::bfwzyx),
         std::make_tuple(data_types::i32, format::bfwzyx),
     });
+
+    impl_hash_key<gather_elements>::add(typed_primitive_impl_ocl<gather_elements>::get_impl_key<gather_elements_impl>);
 }
 
 }  // namespace detail

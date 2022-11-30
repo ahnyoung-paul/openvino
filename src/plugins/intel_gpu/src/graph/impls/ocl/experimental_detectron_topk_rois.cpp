@@ -34,6 +34,11 @@ struct experimental_detectron_topk_rois_impl : typed_primitive_impl_ocl<experime
 
         return {params, {}};
     }
+
+    static size_t update_hash(size_t seed, const kernel_selector::experimental_detectron_topk_roi_params& params) {
+        seed = hash_combine(seed, params.max_rois);
+        return seed;
+    }
 };
 
 namespace detail {
@@ -51,6 +56,9 @@ attach_experimental_detectron_topk_rois_impl::attach_experimental_detectron_topk
         typed_primitive_impl_ocl<experimental_detectron_topk_rois>::create<experimental_detectron_topk_rois_impl>,
         types,
         formats);
+
+    impl_hash_key<experimental_detectron_topk_rois>::add(
+        typed_primitive_impl_ocl<experimental_detectron_topk_rois>::get_impl_key<experimental_detectron_topk_rois_impl>);
 }
 
 }  // namespace detail

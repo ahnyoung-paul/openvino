@@ -51,6 +51,13 @@ public:
 
         return {params, optional_params};
     }
+
+    static size_t update_hash(size_t seed, const kernel_selector::convert_color_params& params) {
+        seed = hash_combine(seed, params.input_color_format);
+        seed = hash_combine(seed, params.output_color_format);
+        seed = hash_combine(seed, params.mem_type);
+        return seed;
+    }
 };
 
 namespace detail {
@@ -64,6 +71,8 @@ attach_convert_color_impl::attach_convert_color_impl() {
         std::make_tuple(data_types::f16, format::byxf),
         std::make_tuple(data_types::u8,  format::byxf),
     });
+
+    impl_hash_key<convert_color>::add(typed_primitive_impl_ocl<convert_color>::get_impl_key<convert_color_impl>);
 }
 
 }  // namespace detail
