@@ -131,6 +131,14 @@ public:
     }
 };
 
+static size_t get_hash_key(const fully_connected_node& arg, const kernel_impl_params& impl_param) {
+    auto kernel_params = fully_connected_impl::get_kernel_params(impl_param);
+    auto params = kernel_params.first;
+    auto seed = params.hash();
+    seed = hash_combine(seed, static_cast<size_t>(params.quantization));
+    return seed;
+}
+
 namespace detail {
 
 attach_fully_connected_impl::attach_fully_connected_impl() {

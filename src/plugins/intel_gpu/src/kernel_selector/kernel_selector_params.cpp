@@ -4,6 +4,7 @@
 
 #include "kernel_selector_params.h"
 #include "kernel_selector_common.h"
+#include "intel_gpu/runtime/utils.hpp"
 #include <sstream>
 #include <string>
 
@@ -444,6 +445,10 @@ std::string Params::to_cache_string_v2() const {
     return "";
 }
 
+size_t Params::hash() const {
+    return 0;
+}
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // optional_params
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -573,4 +578,26 @@ std::string base_params::to_cache_string_v2() const {
     return s.str();
 }
 
+size_t base_params::hash() const {
+    size_t seed = 0;
+    seed = cldnn::hash_combine(seed, kType);
+
+    if (!activations.empty()) {
+        auto& act = activations[0];
+        seed = cldnn::hash_combine(seed, act.m);
+        seed = cldnn::hash_combine(seed, act.n);
+        seed = cldnn::hash_combine(seed, static_cast<size_t>(act.function));
+    }
+
+    for (auto& input : inputs)
+        seed = cldnn::hash_combine(seed, toString(input));
+
+    for (auto& output : outputs)
+        seed = cldnn::hash_combine(seed, toString(output));
+
+    for (auto& fused : fused_ops)
+        seed = cldnn::hash_combine(seed, fused.GetType());
+
+    return seed;
+}
 }  // namespace kernel_selector
