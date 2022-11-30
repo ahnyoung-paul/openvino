@@ -352,6 +352,7 @@ void primitive_inst::update_impl() {
         auto updated_params = _node->type()->get_fake_aligned_params(*_impl_params);
         auto layout_key = get_layout_key(updated_params);
         auto& cache = get_network().get_implementations_cache();
+        auto& cache_test = get_network().get_implementations_cache_test();
         bool has_cached_impl = false;
         {
             std::lock_guard<std::mutex> lock(get_network().get_impl_cache_mutex());
@@ -402,6 +403,15 @@ void primitive_inst::update_impl() {
                 kernels_cache.reset();
                 std::lock_guard<std::mutex> lock(get_network().get_impl_cache_mutex());
                 cache.add(layout_key, _impl->clone());
+                if (_node->is_type<fully_connected>()) {
+                    size_t key = _node->type()->get_impl_hash_key(*_node, updated_params);
+                    if (cache_test.has(key)) {
+                        auto saved_one = cache_test.get(key);
+                        std::cout << "saved one : " << saved_one->get_kernel_name() << std::endl;
+                    } else {
+                        cache_test.add(key, _impl->clone());
+                    }
+                }
                 GPU_DEBUG_IF(debug_config->verbose >= 4) {
                     auto new_impl_str = _impl != nullptr ? _impl->get_kernel_name() : "nullptr";
                     GPU_DEBUG_COUT << id() << ": update impl from " << prev_impl_str << " to " << new_impl_str << std::endl;

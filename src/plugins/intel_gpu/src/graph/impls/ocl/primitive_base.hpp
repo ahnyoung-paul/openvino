@@ -99,6 +99,14 @@ struct typed_primitive_impl_ocl : public typed_primitive_impl<PType> {
         return make_unique<ImplType>(arg, best_kernel);
     }
 
+    template<typename ImplType>
+    static size_t get_hash_key(const typed_program_node<PType>& /*arg*/, const kernel_impl_params& impl_param) {
+        auto kernel_params = ImplType::get_kernel_params(impl_param);
+        auto params = kernel_params.first;
+        auto seed = params.hash();
+        return ImplType::combine_hash_v(seed, params);
+    }
+
 protected:
     virtual bool optimized_out(typed_primitive_inst<PType>&) const { return false; }
 

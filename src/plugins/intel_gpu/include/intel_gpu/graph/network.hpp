@@ -236,6 +236,8 @@ public:
     ICompilationContext& get_compilation_context() const { return *_compilation_context; }
     std::mutex& get_impl_cache_mutex() const { return _in_mem_cache_mutex; }
 
+    ImplementationsCache& get_implementations_cache_test() const { return *_impls_cache_test; }
+
 private:
     using output_chains_map = std::map<primitive_id, std::vector<std::shared_ptr<primitive_inst>>>;
     uint32_t net_id = 0;
@@ -277,7 +279,9 @@ private:
     // Move from cldnn::program to cldnn::network for multi-threads issue.
     std::unique_ptr<ImplementationsCache> _impls_cache;
     std::unique_ptr<KernelsCache> _in_mem_kernels_cache;
+
     const size_t _impls_cache_capacity = 10000;
     const size_t _in_mem_kernels_cache_capacity = 10000;
+    std::unique_ptr<ImplementationsCache> _impls_cache_test;
 };
 }  // namespace cldnn

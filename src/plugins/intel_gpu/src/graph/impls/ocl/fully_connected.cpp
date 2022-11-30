@@ -129,15 +129,12 @@ public:
         auto kernel_params = get_kernel_params(impl_param);
         (_kernel_data.update_dispatch_data_func)(kernel_params.first, _kernel_data);
     }
-};
 
-static size_t get_hash_key(const fully_connected_node& arg, const kernel_impl_params& impl_param) {
-    auto kernel_params = fully_connected_impl::get_kernel_params(impl_param);
-    auto params = kernel_params.first;
-    auto seed = params.hash();
-    seed = hash_combine(seed, static_cast<size_t>(params.quantization));
-    return seed;
-}
+    static size_t combine_hash_v(size_t seed, const kernel_selector::fully_connected_params& params) {
+        seed = hash_combine(seed, static_cast<size_t>(params.quantization));
+        return seed;
+    }
+};
 
 namespace detail {
 
@@ -172,6 +169,8 @@ attach_fully_connected_impl::attach_fully_connected_impl() {
         std::make_tuple(data_types::u8, format::bs_fs_yx_bsv16_fsv16),
         std::make_tuple(data_types::f16, format::fs_b_yx_fsv32),
     });
+
+    impl_hash<fully_connected>::add(typed_primitive_impl_ocl<fully_connected>::get_hash_key<fully_connected_impl>);
 }
 
 }  // namespace detail

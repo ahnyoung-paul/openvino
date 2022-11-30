@@ -310,6 +310,7 @@ network::network(program::ptr program, stream::ptr stream, bool is_internal, boo
         _impls_cache = std::unique_ptr<ImplementationsCache>(new ImplementationsCache(_impls_cache_capacity));
         _in_mem_kernels_cache = std::unique_ptr<KernelsCache>(new KernelsCache(_in_mem_kernels_cache_capacity));
         _compilation_context = std::move(ICompilationContext::create(program->get_engine(), program->get_id()));
+        _impls_cache_test = std::unique_ptr<ImplementationsCache>(new ImplementationsCache(_impls_cache_capacity));
     }
 }
 
