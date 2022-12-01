@@ -33,6 +33,11 @@
 #include <vector>
 #include <memory>
 #include <algorithm>
+// my debug
+#include <regex>
+#include <sstream>
+#include <fstream>
+#include <sys/stat.h>
 
 namespace {
 
@@ -367,33 +372,34 @@ void primitive_inst::update_impl() {
             }
         }
         if (!has_cached_impl) {
-            if (_dynamic_impl) {
-                auto& compilation_context = get_network().get_compilation_context();
-                compilation_context.push_task([this, updated_params, layout_key](kernels_cache& kc) {
-                    auto& cache = get_network().get_implementations_cache();
-                    {
-                        std::lock_guard<std::mutex> lock(get_network().get_impl_cache_mutex());
-                        // Check existense in the cache one more time as several iterations of model execution could happens and multiple compilation
-                        // tasks created for same shapes
-                        if (cache.has(layout_key))
-                            return;
-                    }
+            // if (_dynamic_impl) {
+            //     std::cout << _node->id() << " test is running 2222222 .............................................." << std::endl;
+            //     auto& compilation_context = get_network().get_compilation_context();
+            //     compilation_context.push_task([this, updated_params, layout_key](kernels_cache& kc) {
+            //         auto& cache = get_network().get_implementations_cache();
+            //         {
+            //             std::lock_guard<std::mutex> lock(get_network().get_impl_cache_mutex());
+            //             // Check existense in the cache one more time as several iterations of model execution could happens and multiple compilation
+            //             // tasks created for same shapes
+            //             if (cache.has(layout_key))
+            //                 return;
+            //         }
 
-                    auto impl = _node->type()->choose_impl(*_node, updated_params);
-                    auto kernel_ids = kc.add_kernels_source(impl->get_kernels_source());
-                    impl->set_kernel_ids(kernel_ids);
-                    kc.compile();
-                    impl->init_kernels(kc);
-                    kc.reset();
+            //         auto impl = _node->type()->choose_impl(*_node, updated_params);
+            //         auto kernel_ids = kc.add_kernels_source(impl->get_kernels_source());
+            //         impl->set_kernel_ids(kernel_ids);
+            //         kc.compile();
+            //         impl->init_kernels(kc);
+            //         kc.reset();
 
-                    std::lock_guard<std::mutex> lock(get_network().get_impl_cache_mutex());
-                    cache.add(layout_key, impl->clone());
-                });
+            //         std::lock_guard<std::mutex> lock(get_network().get_impl_cache_mutex());
+            //         cache.add(layout_key, impl->clone());
+            //     });
 
-                _impl = _dynamic_impl->clone();
-                _impl->update_dispatch_data(updated_params);
-                update_shape_info(updated_params);
-            } else {
+            //     _impl = _dynamic_impl->clone();
+            //     _impl->update_dispatch_data(updated_params);
+            //     update_shape_info(updated_params);
+            // } else {
                 _impl = _node->type()->choose_impl(*_node, updated_params);
                 auto& kernels_cache = get_network().get_kernels_cache();
                 auto kernel_ids = kernels_cache.add_kernels_source(_impl->get_kernels_source());
@@ -403,11 +409,47 @@ void primitive_inst::update_impl() {
                 kernels_cache.reset();
                 std::lock_guard<std::mutex> lock(get_network().get_impl_cache_mutex());
                 cache.add(layout_key, _impl->clone());
+                // std::cout << _node->id() << " test is running .............................................." << std::endl;
                 if (_node->is_type<fully_connected>()) {
                     size_t key = _node->type()->get_impl_hash_key(*_node, updated_params);
+                    std::cout << _node->id() << " : " << key << std::endl;
                     if (cache_test.has(key)) {
-                        auto saved_one = cache_test.get(key);
-                        std::cout << "saved one : " << saved_one->get_kernel_name() << std::endl;
+                        auto saved_one = cache_test.get(key)->clone();
+                        auto dump_kernels = [&](std::string path, std::string dbg_msg, std::vector<std::shared_ptr<cldnn::kernel_string>> kstrings) {
+                            // struct stat info;
+                            // if ((stat(path.c_str(), &info) == 0) && !(info.st_mode & S_IFDIR)) {
+                            //     mkdir(path.c_str(), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
+
+                            // }
+                            std::string command = "mkdir -p " + path;
+                            if (system(command.c_str())) {
+                                std::cout << "Fail to run command : " << command << std::endl;
+                            }
+                            auto new_msg = std::regex_replace(dbg_msg, std::regex(":"), "_");
+                            std::string dump_file_path = path + new_msg + ".dump.cl.txt";
+                            std::ofstream dump_file;
+                            dump_file.open(dump_file_path);
+                            if (dump_file.good()) {
+                                dump_file << "Title: " << dump_file_path << std::endl;
+                                for (auto& ks : kstrings) {
+                                    std::string full_code = ks->jit + ks->str + ks->undefs;
+                                    std::string entry_point = ks->entry_point;
+                                    std::string options = ks->options;
+                                    std::string batch_compilations = ks->batch_compilation ? "True" : "False";
+                                    dump_file << "entry_point: " << entry_point << std::endl;
+                                    dump_file << "options: " << options << std::endl;
+                                    dump_file << "batch_compilations:" << batch_compilations << std::endl;
+                                    dump_file << "full_code: \n";
+                                    dump_file << full_code << std::endl;
+                                    dump_file << "<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<" << std::endl;
+                                }
+                                std::cout << "Saved " << dump_file_path << " ......................................................" << std::endl;
+                            }
+                        };
+                        auto type_str = _node->get_primitive()->type_string();
+                        std::string path = "/home/ahnyoung/cldnn.dynamic/dumps/";
+                        dump_kernels(path + type_str + "/current/", _node->id(), _impl->get_kernels_source());
+                        dump_kernels(path + type_str + "/saved/", _node->id(), saved_one->get_kernels_source());
                     } else {
                         cache_test.add(key, _impl->clone());
                     }
@@ -417,7 +459,7 @@ void primitive_inst::update_impl() {
                     GPU_DEBUG_COUT << id() << ": update impl from " << prev_impl_str << " to " << new_impl_str << std::endl;
                 }
             }
-        }
+        // }
 
         reset_shape_change();
     }
