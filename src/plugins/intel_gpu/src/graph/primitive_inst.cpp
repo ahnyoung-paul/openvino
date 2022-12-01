@@ -39,6 +39,13 @@
 #include <fstream>
 #include <sys/stat.h>
 #include <reshape_inst.h>
+#include <reorder_inst.h>
+#include <scatter_update_inst.h>
+#include <shape_of_inst.h>
+#include <gather_inst.h>
+#include <mvn_inst.h>
+#include <permute_inst.h>
+#include <softmax_inst.h>
 
 namespace {
 
@@ -411,7 +418,17 @@ void primitive_inst::update_impl() {
                 std::lock_guard<std::mutex> lock(get_network().get_impl_cache_mutex());
                 cache.add(layout_key, _impl->clone());
                 // std::cout << _node->id() << " test is running .............................................." << std::endl;
-                if (_node->is_type<reshape>()) {
+                // if (_node->is_type<reshape>()) {
+                // if (_node->is_type<reorder>()) {
+                // if (_node->is_type<scatter_update>()) {
+                // if (_node->is_type<shape_of>()) {
+                // if (_node->is_type<strided_slice>()) {
+                // if (_node->is_type<gather>()) {
+                // if (_node->is_type<gemm>()) {
+                // if (_node->is_type<eltwise>()) {
+                // if (_node->is_type<mvn>()) {
+                // if (_node->is_type<permute>()) {
+                if (_node->is_type<softmax>()) {
                     size_t key = _node->type()->get_impl_hash_key(*_node, updated_params);
                     std::cout << _node->id() << " : " << key << std::endl;
                     if (cache_test.has(key)) {

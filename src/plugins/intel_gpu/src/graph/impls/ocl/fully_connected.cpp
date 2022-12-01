@@ -131,7 +131,7 @@ public:
     }
 
     static size_t update_hash(size_t seed, const kernel_selector::fully_connected_params& params) {
-        seed = hash_combine(seed, static_cast<size_t>(params.quantization));
+        seed = hash_combine(seed, params.quantization);
         return seed;
     }
 };

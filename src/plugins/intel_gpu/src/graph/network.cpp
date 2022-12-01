@@ -929,7 +929,14 @@ void network::execute_impl(const std::vector<event::ptr>& events) {
     auto surf_lock = surfaces_lock::create(get_engine().type(), in_out_mem, get_stream());
 
     set_arguments();
+    std::map<std::string, size_t> type_map;
     for (auto& inst : _exec_order) {
+        auto type_str = inst->get_node().get_primitive()->type_string();
+        if (type_map.find(type_str) != type_map.end()) {
+            type_map[type_str] = type_map[type_str] + 1;
+        } else {
+            type_map[type_str] = 1;
+        }
         GPU_DEBUG_IF(debug_config->dump_layers_path.length() > 0) {
             const std::string layer_name = inst->id();
             GPU_DEBUG_IF(debug_config->verbose >= 2) {
@@ -1004,6 +1011,11 @@ void network::execute_impl(const std::vector<event::ptr>& events) {
     // provide proper event to execution. Flushing pipeline should prevent this kind of issues.
     // In scenarios with a big number of very small networks it can provide performance drop.
     get_stream().flush();
+
+    std::cout << "type category : " << std::endl;
+    for (auto it = type_map.begin(); it != type_map.end(); it++) {
+        std::cout << it->first << "[" << it->second << "]" << std::endl;
+    }
 }
 
 std::vector<primitive_id> network::get_input_ids() const {

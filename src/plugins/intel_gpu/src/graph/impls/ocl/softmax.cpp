@@ -62,6 +62,11 @@ struct softmax_impl : typed_primitive_impl_ocl<softmax> {
         auto kernel_params = get_kernel_params(impl_param);
         (_kernel_data.update_dispatch_data_func)(kernel_params.first, _kernel_data);
     }
+
+    static size_t update_hash(size_t seed, const kernel_selector::softmax_params& params) {
+        seed = hash_combine(seed, params.dim);
+        return seed;
+    }
 };
 
 namespace detail {
@@ -83,6 +88,8 @@ attach_softmax_impl::attach_softmax_impl() {
     };
 
     implementation_map<softmax>::add(impl_types::ocl, shape_types::dynamic_shape, typed_primitive_impl_ocl<softmax>::create<softmax_impl>, types, dyn_formats);
+
+    impl_hash<softmax>::add(typed_primitive_impl_ocl<softmax>::get_hash_key<softmax_impl>);
 }
 
 }  // namespace detail

@@ -64,6 +64,11 @@ public:
         params.inputs.push_back(convert_data_tensor(impl_param.get_input_layout(2)));
         return {params, optional_params};
     }
+
+    static size_t update_hash(size_t seed, const kernel_selector::scatter_update_params& params) {
+        seed = hash_combine(seed, params.axis);
+        return seed;
+    }
 };
 
 namespace detail {
@@ -88,6 +93,8 @@ attach_scatter_update_impl::attach_scatter_update_impl() {
     };
 
     implementation_map<scatter_update>::add(impl_types::ocl, typed_primitive_impl_ocl<scatter_update>::create<scatter_update_impl>, types, formats);
+
+    impl_hash<scatter_update>::add(typed_primitive_impl_ocl<scatter_update>::get_hash_key<scatter_update_impl>);
 }
 
 }  // namespace detail

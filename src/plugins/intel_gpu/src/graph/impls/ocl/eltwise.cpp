@@ -122,6 +122,28 @@ public:
         auto kernel_params = get_kernel_params(impl_param);
         (_kernel_data.update_dispatch_data_func)(kernel_params.first, _kernel_data);
     }
+
+    static size_t update_hash(size_t seed, const kernel_selector::eltwise_params& params) {
+        seed = hash_combine_vec(seed, params.coefficients);
+        for (auto&& s : params.stride) {
+            seed = hash_combine(seed, s.x);
+            seed = hash_combine(seed, s.y);
+            seed = hash_combine(seed, s.z);
+        }
+        seed = hash_combine(seed, params.layoutBased);
+        seed = hash_combine(seed, params.broadcast);
+        seed = hash_combine(seed, params.int8_quantization);
+        for (auto& op : params.operations) {
+            seed = hash_combine(seed, op.mode);
+            for (auto& in : op.inputs) {
+                seed = hash_combine(seed, in.mode);
+                seed = hash_combine(seed, in.index);
+                seed = hash_combine(seed, in.tmpIndex);
+                seed = hash_combine(seed, in.scalar);
+            }
+        }
+        return seed;
+    }
 };
 
 namespace detail {
@@ -305,6 +327,8 @@ attach_eltwise_impl::attach_eltwise_impl() {
         std::make_tuple(data_types::i32, format::bs_fs_zyx_bsv32_fsv16),
         std::make_tuple(data_types::i64, format::bs_fs_zyx_bsv32_fsv16),
     });
+
+    impl_hash<eltwise>::add(typed_primitive_impl_ocl<eltwise>::get_hash_key<eltwise_impl>);
 }
 
 }  // namespace detail

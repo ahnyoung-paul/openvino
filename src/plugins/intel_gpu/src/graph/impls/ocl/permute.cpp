@@ -70,6 +70,11 @@ struct permute_impl : typed_primitive_impl_ocl<permute> {
         auto kernel_params = get_kernel_params(impl_param);
         (_kernel_data.update_dispatch_data_func)(kernel_params.first, _kernel_data);
     }
+
+    static size_t update_hash(size_t seed, const kernel_selector::permute_params& params) {
+        seed = hash_combine_vec(seed, params.order);
+        return seed;
+    }
 };
 
 namespace detail {
@@ -96,6 +101,8 @@ attach_permute_impl::attach_permute_impl() {
                                      typed_primitive_impl_ocl<permute>::create<permute_impl>,
                                      dyn_types,
                                      dyn_formats);
+
+    impl_hash<permute>::add(typed_primitive_impl_ocl<permute>::get_hash_key<permute_impl>);
 }
 
 }  // namespace detail

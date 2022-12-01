@@ -146,6 +146,15 @@ public:
         auto kernel_params = get_kernel_params(impl_param);
         (_kernel_data.update_dispatch_data_func)(kernel_params.first, _kernel_data);
     }
+
+    static size_t update_hash(size_t seed, const kernel_selector::gemm_params& params) {
+        seed = hash_combine(seed, params.alpha);
+        seed = hash_combine(seed, params.beta);
+        seed = hash_combine(seed, params.transpose_input0);
+        seed = hash_combine(seed, params.transpose_input1);
+        seed = hash_combine(seed, params.quantization);
+        return seed;
+    }
 };
 
 namespace detail {
@@ -185,6 +194,8 @@ attach_gemm_impl::attach_gemm_impl() {
     implementation_map<gemm>::add(impl_types::ocl,
                                   shape_types::dynamic_shape,
                                   typed_primitive_impl_ocl<gemm>::create<gemm_impl>, types, dyn_formats);
+
+    impl_hash<gemm>::add(typed_primitive_impl_ocl<gemm>::get_hash_key<gemm_impl>);
 }
 
 }  // namespace detail

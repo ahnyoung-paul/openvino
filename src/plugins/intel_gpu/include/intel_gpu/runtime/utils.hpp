@@ -193,6 +193,14 @@ static size_t hash_combine(size_t seed, const T &v) {
     using underlying_t = typename std::underlying_type<T>::type;
     return hash_combine(seed, static_cast<underlying_t>(v));
 }
+
+template <typename T>
+static size_t hash_combine_vec(size_t seed, const std::vector<T> vec) {
+    for (auto v : vec) {
+        seed = hash_combine(seed, v);
+    }
+    return seed;
+}
 /// @}
 /// @endcond
 /// @}

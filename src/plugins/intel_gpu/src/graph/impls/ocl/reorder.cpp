@@ -12,7 +12,6 @@
 
 namespace cldnn {
 namespace ocl {
-
 struct reorder_impl : typed_primitive_impl_ocl<reorder> {
     using parent = typed_primitive_impl_ocl<reorder>;
     using parent::parent;
@@ -142,6 +141,10 @@ public:
         (_kernel_data.update_dispatch_data_func)(kernel_params.first, _kernel_data);
     }
 
+    static size_t update_hash(size_t seed, const kernel_selector::reorder_params& params) {
+        return seed;
+    }
+
 private:
     bool _can_be_optimized;
     bool _has_mean;
@@ -167,6 +170,8 @@ attach_reorder_impl::attach_reorder_impl() {
         format::bfwzyx,
     };
     implementation_map<reorder>::add(impl_types::ocl, shape_types::dynamic_shape, typed_primitive_impl_ocl<reorder>::create<reorder_impl>, types, formats);
+
+    impl_hash<reorder>::add(typed_primitive_impl_ocl<reorder>::get_hash_key<reorder_impl>);
 }
 
 }  // namespace detail

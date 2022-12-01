@@ -39,6 +39,23 @@ struct reorder_params : public base_params {
         }
         return k;
     }
+
+    size_t hash() const override {
+        size_t seed = base_params::hash();
+        seed = cldnn::hash_combine(seed, has_padded_output);
+        seed = cldnn::hash_combine(seed, surface_input);
+        seed = cldnn::hash_combine(seed, toString(mean));
+        seed = cldnn::hash_combine(seed, mode);
+        for (auto& mean_value : meanValues)
+            seed = cldnn::hash_combine(seed, mean_value);
+        seed = cldnn::hash_combine(seed, mean_op);
+        if (winograd) {
+            seed = cldnn::hash_combine(seed, winograd_input_offset_x);
+            seed = cldnn::hash_combine(seed, winograd_input_offset_y);
+            seed = cldnn::hash_combine(seed, winograd_nr_tiles_x);
+        }
+        return seed;
+    }
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
