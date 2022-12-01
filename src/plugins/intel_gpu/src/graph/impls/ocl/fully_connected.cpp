@@ -130,7 +130,7 @@ public:
         (_kernel_data.update_dispatch_data_func)(kernel_params.first, _kernel_data);
     }
 
-    static size_t combine_hash_v(size_t seed, const kernel_selector::fully_connected_params& params) {
+    static size_t update_hash(size_t seed, const kernel_selector::fully_connected_params& params) {
         seed = hash_combine(seed, static_cast<size_t>(params.quantization));
         return seed;
     }

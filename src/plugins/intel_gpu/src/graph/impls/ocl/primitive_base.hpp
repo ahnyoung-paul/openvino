@@ -104,7 +104,7 @@ struct typed_primitive_impl_ocl : public typed_primitive_impl<PType> {
         auto kernel_params = ImplType::get_kernel_params(impl_param);
         auto params = kernel_params.first;
         auto seed = params.hash();
-        return ImplType::combine_hash_v(seed, params);
+        return ImplType::update_hash(seed, params);
     }
 
 protected:

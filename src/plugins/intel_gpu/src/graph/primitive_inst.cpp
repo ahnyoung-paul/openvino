@@ -38,6 +38,7 @@
 #include <sstream>
 #include <fstream>
 #include <sys/stat.h>
+#include <reshape_inst.h>
 
 namespace {
 
@@ -410,17 +411,12 @@ void primitive_inst::update_impl() {
                 std::lock_guard<std::mutex> lock(get_network().get_impl_cache_mutex());
                 cache.add(layout_key, _impl->clone());
                 // std::cout << _node->id() << " test is running .............................................." << std::endl;
-                if (_node->is_type<fully_connected>()) {
+                if (_node->is_type<reshape>()) {
                     size_t key = _node->type()->get_impl_hash_key(*_node, updated_params);
                     std::cout << _node->id() << " : " << key << std::endl;
                     if (cache_test.has(key)) {
                         auto saved_one = cache_test.get(key)->clone();
                         auto dump_kernels = [&](std::string path, std::string dbg_msg, std::vector<std::shared_ptr<cldnn::kernel_string>> kstrings) {
-                            // struct stat info;
-                            // if ((stat(path.c_str(), &info) == 0) && !(info.st_mode & S_IFDIR)) {
-                            //     mkdir(path.c_str(), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
-
-                            // }
                             std::string command = "mkdir -p " + path;
                             if (system(command.c_str())) {
                                 std::cout << "Fail to run command : " << command << std::endl;
