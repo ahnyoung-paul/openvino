@@ -46,6 +46,8 @@
 #include <mvn_inst.h>
 #include <permute_inst.h>
 #include <softmax_inst.h>
+#include <broadcast_inst.h>
+#include <reduce_inst.h>
 
 namespace {
 
@@ -365,7 +367,7 @@ void primitive_inst::update_impl() {
         auto updated_params = _node->type()->get_fake_aligned_params(*_impl_params);
         auto layout_key = get_layout_key(updated_params);
         auto& cache = get_network().get_implementations_cache();
-        auto& cache_test = get_network().get_implementations_cache_test();
+        // auto& cache_test = get_network().get_implementations_cache_test();
         bool has_cached_impl = false;
         {
             std::lock_guard<std::mutex> lock(get_network().get_impl_cache_mutex());
@@ -380,34 +382,36 @@ void primitive_inst::update_impl() {
             }
         }
         if (!has_cached_impl) {
-            // if (_dynamic_impl) {
-            //     std::cout << _node->id() << " test is running 2222222 .............................................." << std::endl;
-            //     auto& compilation_context = get_network().get_compilation_context();
-            //     compilation_context.push_task([this, updated_params, layout_key](kernels_cache& kc) {
-            //         auto& cache = get_network().get_implementations_cache();
-            //         {
-            //             std::lock_guard<std::mutex> lock(get_network().get_impl_cache_mutex());
-            //             // Check existense in the cache one more time as several iterations of model execution could happens and multiple compilation
-            //             // tasks created for same shapes
-            //             if (cache.has(layout_key))
-            //                 return;
-            //         }
+#if 0
+            if (_dynamic_impl) {
+                std::cout << _node->id() << " test is running 2222222 .............................................." << std::endl;
+                auto& compilation_context = get_network().get_compilation_context();
+                compilation_context.push_task([this, updated_params, layout_key](kernels_cache& kc) {
+                    auto& cache = get_network().get_implementations_cache();
+                    {
+                        std::lock_guard<std::mutex> lock(get_network().get_impl_cache_mutex());
+                        // Check existense in the cache one more time as several iterations of model execution could happens and multiple compilation
+                        // tasks created for same shapes
+                        if (cache.has(layout_key))
+                            return;
+                    }
 
-            //         auto impl = _node->type()->choose_impl(*_node, updated_params);
-            //         auto kernel_ids = kc.add_kernels_source(impl->get_kernels_source());
-            //         impl->set_kernel_ids(kernel_ids);
-            //         kc.compile();
-            //         impl->init_kernels(kc);
-            //         kc.reset();
+                    auto impl = _node->type()->choose_impl(*_node, updated_params);
+                    auto kernel_ids = kc.add_kernels_source(impl->get_kernels_source());
+                    impl->set_kernel_ids(kernel_ids);
+                    kc.compile();
+                    impl->init_kernels(kc);
+                    kc.reset();
 
-            //         std::lock_guard<std::mutex> lock(get_network().get_impl_cache_mutex());
-            //         cache.add(layout_key, impl->clone());
-            //     });
+                    std::lock_guard<std::mutex> lock(get_network().get_impl_cache_mutex());
+                    cache.add(layout_key, impl->clone());
+                });
 
-            //     _impl = _dynamic_impl->clone();
-            //     _impl->update_dispatch_data(updated_params);
-            //     update_shape_info(updated_params);
-            // } else {
+                _impl = _dynamic_impl->clone();
+                _impl->update_dispatch_data(updated_params);
+                update_shape_info(updated_params);
+            } else {
+#endif
                 _impl = _node->type()->choose_impl(*_node, updated_params);
                 auto& kernels_cache = get_network().get_kernels_cache();
                 auto kernel_ids = kernels_cache.add_kernels_source(_impl->get_kernels_source());
@@ -428,53 +432,62 @@ void primitive_inst::update_impl() {
                 // if (_node->is_type<eltwise>()) {
                 // if (_node->is_type<mvn>()) {
                 // if (_node->is_type<permute>()) {
-                if (_node->is_type<softmax>()) {
-                    size_t key = _node->type()->get_impl_hash_key(*_node, updated_params);
-                    std::cout << _node->id() << " : " << key << std::endl;
-                    if (cache_test.has(key)) {
-                        auto saved_one = cache_test.get(key)->clone();
-                        auto dump_kernels = [&](std::string path, std::string dbg_msg, std::vector<std::shared_ptr<cldnn::kernel_string>> kstrings) {
-                            std::string command = "mkdir -p " + path;
-                            if (system(command.c_str())) {
-                                std::cout << "Fail to run command : " << command << std::endl;
-                            }
-                            auto new_msg = std::regex_replace(dbg_msg, std::regex(":"), "_");
-                            std::string dump_file_path = path + new_msg + ".dump.cl.txt";
-                            std::ofstream dump_file;
-                            dump_file.open(dump_file_path);
-                            if (dump_file.good()) {
-                                dump_file << "Title: " << dump_file_path << std::endl;
-                                for (auto& ks : kstrings) {
-                                    std::string full_code = ks->jit + ks->str + ks->undefs;
-                                    std::string entry_point = ks->entry_point;
-                                    std::string options = ks->options;
-                                    std::string batch_compilations = ks->batch_compilation ? "True" : "False";
-                                    dump_file << "entry_point: " << entry_point << std::endl;
-                                    dump_file << "options: " << options << std::endl;
-                                    dump_file << "batch_compilations:" << batch_compilations << std::endl;
-                                    dump_file << "full_code: \n";
-                                    dump_file << full_code << std::endl;
-                                    dump_file << "<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<" << std::endl;
-                                }
-                                std::cout << "Saved " << dump_file_path << " ......................................................" << std::endl;
-                            }
-                        };
-                        auto type_str = _node->get_primitive()->type_string();
-                        std::string path = "/home/ahnyoung/cldnn.dynamic/dumps/";
-                        dump_kernels(path + type_str + "/current/", _node->id(), _impl->get_kernels_source());
-                        dump_kernels(path + type_str + "/saved/", _node->id(), saved_one->get_kernels_source());
-                    } else {
-                        cache_test.add(key, _impl->clone());
-                    }
-                }
+                // if (_node->is_type<softmax>()) {
+                // if (_node->is_type<broadcast>() || _node->is_type<concatenation>() ||
+                //         _node->is_type<crop>() || _node->is_type<reduce>()) {
+                //     size_t key = _node->type()->get_impl_hash_key(*_node, updated_params);
+                //     std::cout << _node->id() << " : " << key << std::endl;
+                //     if (cache_test.has(key)) {
+                //         auto saved_one = cache_test.get(key)->clone();
+                //         auto dump_kernels = [&](std::string path, std::string dbg_msg, std::vector<std::shared_ptr<cldnn::kernel_string>> kstrings) {
+                //             std::string command = "mkdir -p " + path;
+                //             if (system(command.c_str())) {
+                //                 std::cout << "Fail to run command : " << command << std::endl;
+                //             }
+                //             auto new_msg = std::regex_replace(dbg_msg, std::regex(":"), "_");
+                //             std::string dump_file_path = path + new_msg + ".dump.cl.txt";
+                //             std::ofstream dump_file;
+                //             dump_file.open(dump_file_path);
+                //             if (dump_file.good()) {
+                //                 dump_file << "Title: " << dump_file_path << std::endl;
+                //                 for (auto& ks : kstrings) {
+                //                     std::string full_code = ks->jit + ks->str + ks->undefs;
+                //                     std::string entry_point = ks->entry_point;
+                //                     std::string options = ks->options;
+                //                     std::string batch_compilations = ks->batch_compilation ? "True" : "False";
+                //                     dump_file << "entry_point: " << entry_point << std::endl;
+                //                     dump_file << "options: " << options << std::endl;
+                //                     dump_file << "batch_compilations:" << batch_compilations << std::endl;
+                //                     dump_file << "full_code: \n";
+                //                     dump_file << full_code << std::endl;
+                //                     dump_file << "<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<" << std::endl;
+                //                 }
+                //                 std::cout << "Saved " << dump_file_path << " ......................................................" << std::endl;
+                //             }
+                //         };
+                //         auto type_str = _node->get_primitive()->type_string();
+                //         std::string path = "/home/ahnyoung/cldnn.dynamic/dumps/";
+                //         dump_kernels(path + type_str + "/current/", _node->id(), _impl->get_kernels_source());
+                //         dump_kernels(path + type_str + "/saved/", _node->id(), saved_one->get_kernels_source());
+                //     } else {
+                //         cache_test.add(key, _impl->clone());
+                //     }
+                // }
                 GPU_DEBUG_IF(debug_config->verbose >= 4) {
                     auto new_impl_str = _impl != nullptr ? _impl->get_kernel_name() : "nullptr";
                     GPU_DEBUG_COUT << id() << ": update impl from " << prev_impl_str << " to " << new_impl_str << std::endl;
                 }
             }
-        // }
+#if 0
+        }
+#endif
 
         reset_shape_change();
+    } else {
+                if (_node->is_type<broadcast>() || _node->is_type<concatenation>() ||
+                        _node->is_type<crop>() || _node->is_type<reduce>()) {
+                            std::cout << _node->id() << " : no update .." << std::endl;
+                        }
     }
 }
 
@@ -534,6 +547,52 @@ event::ptr primitive_inst::execute(const std::vector<event::ptr>& events) {
                     "[GPU] Can't execute ", primitive_id, " primitive as output layout is dynamic in runtime");
 
     OPENVINO_ASSERT(_impl != nullptr, "[GPU] Implementation is nullptr for ", primitive_id,  " primitive");
+    if (!_node->is_type<input_layout>() && !_node->is_type<data>()) {
+        auto& cache_test = get_network().get_implementations_cache_test();
+        auto updated_params = _node->type()->get_fake_aligned_params(*_impl_params);
+        // std::cout << "Get impl key : " <<  _node->id() << " " << _node->get_primitive()->type_string() << std::endl;
+        size_t key = _node->type()->get_impl_hash_key(*_node, updated_params);
+
+        if (cache_test.has(key)) {
+            auto saved_one = cache_test.get(key)->clone();
+            auto dump_kernels = [&](std::string path, std::string dbg_msg, std::vector<std::shared_ptr<cldnn::kernel_string>> kstrings) {
+                std::string command = "mkdir -p " + path;
+                if (system(command.c_str())) {
+                    std::cout << "Fail to run command : " << command << std::endl;
+                }
+                auto new_msg = std::regex_replace(dbg_msg, std::regex(":"), "_");
+                std::string dump_file_path = path + new_msg + ".dump.cl.txt";
+                std::ofstream dump_file;
+                dump_file.open(dump_file_path);
+                if (dump_file.good()) {
+                    dump_file << "Title: " << dump_file_path << std::endl;
+                    for (auto& ks : kstrings) {
+                        std::string full_code = ks->jit + ks->str + ks->undefs;
+                        std::string entry_point = ks->entry_point;
+                        std::string options = ks->options;
+                        std::string batch_compilations = ks->batch_compilation ? "True" : "False";
+                        dump_file << "entry_point: " << entry_point << std::endl;
+                        dump_file << "options: " << options << std::endl;
+                        dump_file << "batch_compilations:" << batch_compilations << std::endl;
+                        dump_file << "full_code: \n";
+                        dump_file << full_code << std::endl;
+                        dump_file << "<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<" << std::endl;
+                    }
+                    std::cout << "Saved " << dump_file_path << " ......................................................" << std::endl;
+                }
+            };
+
+            std::cout << _node->id() << " : " << key << std::endl;
+            auto type_str = _node->get_primitive()->type_string();
+            std::string path = "/home/ahnyoung/cldnn.dynamic/dumps/";
+            dump_kernels(path + type_str + "/current/", _node->id(), _impl->get_kernels_source());
+            dump_kernels(path + type_str + "/saved/", _node->id(), saved_one->get_kernels_source());
+        } else {
+            cache_test.add(key, _impl->clone());
+        }
+    }
+
+
 
     // Output buffer may be changed under the following conditions, so we need to set args to kernel on each iteration
     if (is_dynamic() || has_mutable_input() || is_output()) {
