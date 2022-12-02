@@ -36,6 +36,13 @@ struct ctc_loss_impl : typed_primitive_impl_ocl<ctc_loss> {
         }
         return {params, optional_params};
     }
+
+    static size_t update_hash(size_t seed, const kernel_selector::ctc_loss_params& params) {
+        seed = hash_combine(seed, params.preprocess_collapse_repeated);
+        seed = hash_combine(seed, params.ctc_merge_repeated);
+        seed = hash_combine(seed, params.unique);
+        return seed;
+    }
 };
 
 namespace detail {
@@ -51,6 +58,8 @@ attach_ctc_loss_impl::attach_ctc_loss_impl() {
                     format::bs_fs_yx_bsv32_fsv16};
 
     implementation_map<ctc_loss>::add(impl_types::ocl, typed_primitive_impl_ocl<ctc_loss>::create<ctc_loss_impl>, types, formats);
+
+    impl_hash<ctc_loss>::add(typed_primitive_impl_ocl<ctc_loss>::get_hash_key<ctc_loss_impl>);
 }
 
 }  // namespace detail

@@ -71,6 +71,34 @@ public:
 
         return {params, optional_params};
     }
+
+    static size_t update_hash(size_t seed, const kernel_selector::detection_output_params& params) {
+        seed = hash_combine(seed, params.detectOutParams.num_images);
+        seed = hash_combine(seed, params.detectOutParams.num_classes);
+        seed = hash_combine(seed, params.detectOutParams.keep_top_k);
+        seed = hash_combine(seed, params.detectOutParams.top_k);
+        seed = hash_combine(seed, params.detectOutParams.background_label_id);
+        seed = hash_combine(seed, params.detectOutParams.code_type);
+        seed = hash_combine(seed, params.detectOutParams.conf_size_x);
+        seed = hash_combine(seed, params.detectOutParams.conf_size_y);
+        seed = hash_combine(seed, params.detectOutParams.conf_padding_x);
+        seed = hash_combine(seed, params.detectOutParams.conf_padding_y);
+        seed = hash_combine(seed, params.detectOutParams.elements_per_thread);
+        seed = hash_combine(seed, params.detectOutParams.input_width);
+        seed = hash_combine(seed, params.detectOutParams.input_heigh);
+        seed = hash_combine(seed, params.detectOutParams.prior_coordinates_offset);
+        seed = hash_combine(seed, params.detectOutParams.prior_info_size);
+        seed = hash_combine(seed, params.detectOutParams.prior_is_normalized);
+        seed = hash_combine(seed, params.detectOutParams.share_location);
+        seed = hash_combine(seed, params.detectOutParams.variance_encoded_in_target);
+        seed = hash_combine(seed, params.detectOutParams.decrease_label_id);
+        seed = hash_combine(seed, params.detectOutParams.clip_before_nms);
+        seed = hash_combine(seed, params.detectOutParams.clip_after_nms);
+        seed = hash_combine(seed, params.detectOutParams.nms_threshold);
+        seed = hash_combine(seed, params.detectOutParams.eta);
+        seed = hash_combine(seed, params.detectOutParams.confidence_threshold);
+        return seed;
+    }
 };
 
 namespace detail {
@@ -86,6 +114,8 @@ attach_detection_output_impl::attach_detection_output_impl() {
         format::bs_fs_zyx_bsv16_fsv32,
     };
     implementation_map<detection_output>::add(impl_types::ocl, typed_primitive_impl_ocl<detection_output>::create<detection_output_impl>, dt, fmt);
+
+    impl_hash<detection_output>::add(typed_primitive_impl_ocl<detection_output>::get_hash_key<detection_output_impl>);
 }
 
 }  // namespace detail

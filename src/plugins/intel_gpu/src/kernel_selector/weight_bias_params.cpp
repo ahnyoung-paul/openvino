@@ -45,20 +45,20 @@ std::string weight_bias_zero_point_params::to_cache_string_v2() const {
 
 size_t weight_bias_params::hash() const {
     size_t seed = base_params::hash();
-    seed = cldnn::hash_combine(seed, toString(weights));
+    seed = hash_combine_wt(seed, weights);
     for (auto& dt : bias)
-        seed = cldnn::hash_combine(seed, toString(dt));
+        seed = hash_combine_dt(seed, dt);
     return seed;
 }
 
 size_t weight_bias_zero_point_params::hash() const {
     size_t seed = weight_bias_params::hash();
     for (auto& dt : weights_zero_points)
-        seed = cldnn::hash_combine(seed, toString(dt));
+        seed = hash_combine_dt(seed, dt);
     for (auto& dt : activations_zero_points)
-        seed = cldnn::hash_combine(seed, toString(dt));
+        seed = hash_combine_dt(seed, dt);
     for (auto& dt : compensation)
-        seed = cldnn::hash_combine(seed, toString(dt));
+        seed = hash_combine_dt(seed, dt);
     return seed;
 }
 

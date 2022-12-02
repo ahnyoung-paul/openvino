@@ -13,6 +13,8 @@
 
 namespace kernel_selector {
 
+using namespace cldnn;
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // ParamsKey
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -578,25 +580,59 @@ std::string base_params::to_cache_string_v2() const {
     return s.str();
 }
 
+size_t hash_combine_dim(size_t seed, const Tensor::Dim& dim) {
+    using namespace cldnn;
+    seed = hash_combine(seed, dim.v);
+    seed = hash_combine(seed, dim.pitch);
+    seed = hash_combine(seed, dim.pad.before);
+    seed = hash_combine(seed, dim.pad.after);
+    return seed;
+}
+
+template <typename DType, typename Layout>
+size_t hash_combine_tensor(size_t seed, const Tensor::TensorBaseT<DType, Layout>& tensor) {
+    seed = hash_combine(seed, tensor.GetDType());
+    seed = hash_combine(seed, tensor.GetLayout());
+    for (auto dim : tensor.GetDims()) {
+        seed = hash_combine_dim(seed, dim);
+    }
+    return seed;
+}
+
+size_t hash_combine_dt(size_t seed, const DataTensor dt) {
+    return hash_combine_tensor(seed, dt);
+}
+
+size_t hash_combine_wt(size_t seed, const WeightsTensor wt) {
+    return hash_combine_tensor(seed, wt);
+}
+
+size_t hash_combine_usize(size_t s, kernel_selector::uSize u_size) {
+    s = hash_combine(s, u_size.x);
+    s = hash_combine(s, u_size.y);
+    s = hash_combine(s, u_size.z);
+    return s;
+}
+
 size_t base_params::hash() const {
     size_t seed = 0;
-    seed = cldnn::hash_combine(seed, kType);
+    seed = hash_combine(seed, kType);
 
     if (!activations.empty()) {
         auto& act = activations[0];
-        seed = cldnn::hash_combine(seed, act.m);
-        seed = cldnn::hash_combine(seed, act.n);
-        seed = cldnn::hash_combine(seed, static_cast<size_t>(act.function));
+        seed = hash_combine(seed, act.m);
+        seed = hash_combine(seed, act.n);
+        seed = hash_combine(seed, static_cast<size_t>(act.function));
     }
 
     for (auto& input : inputs)
-        seed = cldnn::hash_combine(seed, toString(input));
+        seed = hash_combine_dt(seed, input);
 
     for (auto& output : outputs)
-        seed = cldnn::hash_combine(seed, toString(output));
+        seed = hash_combine_dt(seed, output);
 
     for (auto& fused : fused_ops)
-        seed = cldnn::hash_combine(seed, fused.GetType());
+        seed = hash_combine(seed, fused.GetType());
 
     return seed;
 }

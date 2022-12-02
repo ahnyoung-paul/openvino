@@ -24,7 +24,6 @@
 
 namespace cldnn {
 namespace ocl {
-
 /*
 Base class for all GPU implementation of specified primitive type.
 For example, all gpu convolution implementations should derive from typed_primitive_impl_ocl<convolution>.

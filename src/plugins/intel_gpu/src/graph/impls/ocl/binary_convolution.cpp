@@ -138,6 +138,19 @@ public:
         return {params, optional_params};
     }
 
+    static size_t update_hash(size_t seed, const kernel_selector::binary_convolution_params& params) {
+        seed = hash_combine_usize(seed, params.filterSize);
+        seed = hash_combine_usize(seed, params.stride);
+        seed = hash_combine_usize(seed, params.dilation);
+        seed = hash_combine_usize(seed, params.padding);
+        seed = hash_combine(seed, params.out_dt);
+        seed = hash_combine(seed, params.split);
+        seed = hash_combine(seed, params.depthwise_separable_opt);
+        seed = hash_combine(seed, params.pad_value);
+        seed = hash_combine(seed, params.groups);
+        return seed;
+    }
+
 private:
     int32_t _split;
 };

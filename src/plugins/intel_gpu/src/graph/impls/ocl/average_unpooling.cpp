@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
+#include "common_types.h"
 #include "average_unpooling_inst.h"
 #include "primitive_base.hpp"
 #include "impls/implementation_map.hpp"
@@ -47,6 +48,12 @@ public:
 
         return {params, optional_params};
     }
+
+    static size_t update_hash(size_t seed, const kernel_selector::average_unpooling_params& params) {
+        seed = hash_combine_usize(seed, params.unpoolSize);
+        seed = hash_combine_usize(seed, params.unpoolStride);
+        return seed;
+    }
 };
 
 namespace detail {
@@ -63,6 +70,8 @@ attach_average_unpooling_impl::attach_average_unpooling_impl() {
         std::make_tuple(data_types::f16, format::byxf),
         std::make_tuple(data_types::i8, format::byxf),
     });
+
+    impl_hash<average_unpooling>::add(typed_primitive_impl_ocl<average_unpooling>::get_hash_key<average_unpooling_impl>);
 }
 
 }  // namespace detail
