@@ -66,6 +66,19 @@ public:
         return {params, optional_params};
     }
 
+    static size_t update_hash(size_t seed, const kernel_selector::eltwise_params& params) {
+        for (auto& op : params.operations) {
+            seed = hash_combine(seed, op.mode);
+            for (auto& in : op.inputs) {
+                seed = hash_combine(seed, in.mode);
+                seed = hash_combine(seed, in.index);
+                seed = hash_combine(seed, in.tmpIndex);
+                seed = hash_combine(seed, in.scalar);
+            }
+        }
+        return seed;
+    }
+
 private:
     bool _can_be_optimized;
 };
@@ -151,6 +164,8 @@ attach_crop_impl::attach_crop_impl() {
         std::make_tuple(data_types::i32, format::bs_fs_yx_bsv32_fsv16),
         std::make_tuple(data_types::i64, format::bs_fs_yx_bsv32_fsv16),
     });
+
+    impl_hash<crop>::add(typed_primitive_impl_ocl<crop>::get_hash_key<crop_impl>);
 }
 
 }  // namespace detail
