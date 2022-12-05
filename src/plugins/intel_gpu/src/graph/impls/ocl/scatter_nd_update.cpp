@@ -39,6 +39,11 @@ struct scatter_nd_update_impl : typed_primitive_impl_ocl<scatter_nd_update> {
 
         return {params, optional_params};
     }
+
+    static size_t update_hash(size_t seed, const kernel_selector::scatter_nd_update_params& params) {
+        seed = hash_combine(seed, params.indices_rank);
+        return seed;
+    }
 };
 
 namespace detail {
@@ -135,6 +140,8 @@ attach_scatter_nd_update_impl::attach_scatter_nd_update_impl() {
         std::make_tuple(data_types::i8, format::bs_fs_yx_bsv32_fsv32),
         std::make_tuple(data_types::u8, format::bs_fs_yx_bsv32_fsv32),
     });
+
+    impl_hash<scatter_nd_update>::add(typed_primitive_impl_ocl<scatter_nd_update>::get_hash_key<scatter_nd_update_impl>);
 }
 
 }  // namespace detail

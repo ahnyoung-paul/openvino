@@ -124,11 +124,10 @@ public:
     }
 
     static size_t update_hash(size_t seed, const kernel_selector::eltwise_params& params) {
+        using namespace kernel_selector;
         seed = hash_combine_vec(seed, params.coefficients);
-        for (auto&& s : params.stride) {
-            seed = hash_combine(seed, s.x);
-            seed = hash_combine(seed, s.y);
-            seed = hash_combine(seed, s.z);
+        for (auto& s : params.stride) {
+            seed = hash_combine_usize(seed, s);
         }
         seed = hash_combine(seed, params.layoutBased);
         seed = hash_combine(seed, params.broadcast);

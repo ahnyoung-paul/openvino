@@ -22,14 +22,6 @@ struct activation_params : public base_params {
         }
         return k;
     }
-
-    size_t hash() const override {
-        size_t seed = base_params::hash();
-        for (auto& tensor : inputActivationParams) {
-            seed = cldnn::hash_combine(seed, toString(tensor));
-        }
-        return seed;
-    }
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

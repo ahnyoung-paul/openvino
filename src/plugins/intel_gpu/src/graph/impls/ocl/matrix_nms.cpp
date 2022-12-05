@@ -88,6 +88,20 @@ public:
 
         return {params, optional_params};
     }
+
+    static size_t update_hash(size_t seed, const kernel_selector::matrix_nms_params& params) {
+        seed = hash_combine(seed, params.sort_type);
+        seed = hash_combine(seed, params.sort_result_across_batch);
+        seed = hash_combine(seed, params.score_threshold);
+        seed = hash_combine(seed, params.nms_top_k);
+        seed = hash_combine(seed, params.keep_top_k);
+        seed = hash_combine(seed, params.background_class);
+        seed = hash_combine(seed, params.decay);
+        seed = hash_combine(seed, params.gaussian_sigma);
+        seed = hash_combine(seed, params.post_threshold);
+        seed = hash_combine(seed, params.normalized);
+        return seed;
+    }
 };
 
 namespace detail {
@@ -103,6 +117,8 @@ attach_matrix_nms_impl::attach_matrix_nms_impl() {
                     format::bs_fs_yx_bsv32_fsv32};
 
     implementation_map<matrix_nms>::add(impl_types::ocl, typed_primitive_impl_ocl<matrix_nms>::create<matrix_nms_impl>, types, formats);
+
+    impl_hash<matrix_nms>::add(typed_primitive_impl_ocl<matrix_nms>::get_hash_key<matrix_nms_impl>);
 }
 
 }  // namespace detail

@@ -580,8 +580,20 @@ std::string base_params::to_cache_string_v2() const {
     return s.str();
 }
 
+template<typename T>
+size_t hash_combine_dim_tensor(size_t seed, const DimTensor<T>& dt) {
+    seed = hash_combine(seed, dt.b);
+    seed = hash_combine(seed, dt.f);
+    seed = hash_combine(seed, dt.z);
+    seed = hash_combine(seed, dt.w);
+    seed = hash_combine(seed, dt.y);
+    seed = hash_combine(seed, dt.x);
+    return seed;
+}
+
+template size_t hash_combine_dim_tensor(size_t seed, const DimTensor<uint32_t>& dt);
+
 size_t hash_combine_dim(size_t seed, const Tensor::Dim& dim) {
-    using namespace cldnn;
     seed = hash_combine(seed, dim.v);
     seed = hash_combine(seed, dim.pitch);
     seed = hash_combine(seed, dim.pad.before);
@@ -599,15 +611,15 @@ size_t hash_combine_tensor(size_t seed, const Tensor::TensorBaseT<DType, Layout>
     return seed;
 }
 
-size_t hash_combine_dt(size_t seed, const DataTensor dt) {
+size_t hash_combine_dt(size_t seed, const DataTensor& dt) {
     return hash_combine_tensor(seed, dt);
 }
 
-size_t hash_combine_wt(size_t seed, const WeightsTensor wt) {
+size_t hash_combine_wt(size_t seed, const WeightsTensor& wt) {
     return hash_combine_tensor(seed, wt);
 }
 
-size_t hash_combine_usize(size_t s, kernel_selector::uSize u_size) {
+size_t hash_combine_usize(size_t s, const kernel_selector::uSize& u_size) {
     s = hash_combine(s, u_size.x);
     s = hash_combine(s, u_size.y);
     s = hash_combine(s, u_size.z);

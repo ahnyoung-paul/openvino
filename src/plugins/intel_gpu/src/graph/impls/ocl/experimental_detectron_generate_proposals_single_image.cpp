@@ -59,6 +59,14 @@ public:
 
         return {params, optional_params};
     }
+
+    static size_t update_hash(size_t seed, const kernel_selector::experimental_detectron_generate_proposals_single_image_params& params) {
+        seed = hash_combine(seed, params.min_size);
+        seed = hash_combine(seed, params.nms_threshold);
+        seed = hash_combine(seed, params.pre_nms_count);
+        seed = hash_combine(seed, params.post_nms_count);
+        return seed;
+    }
 };
 
 namespace detail {
@@ -78,6 +86,10 @@ attach_experimental_detectron_generate_proposals_single_image_impl::attach_exper
         impl_types::ocl,
         typed_primitive_impl_ocl<experimental_detectron_generate_proposals_single_image>::create<experimental_detectron_generate_proposals_single_image_impl>,
         types, formats);
+
+    impl_hash<experimental_detectron_generate_proposals_single_image>::add(
+        typed_primitive_impl_ocl<experimental_detectron_generate_proposals_single_image>
+        ::get_hash_key<experimental_detectron_generate_proposals_single_image_impl>);
 }
 }  // namespace detail
 }  // namespace ocl

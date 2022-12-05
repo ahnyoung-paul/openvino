@@ -41,6 +41,14 @@ struct one_hot_impl : typed_primitive_impl_ocl<one_hot> {
         params.one_hot_limit = output_sizes[params.one_hot_axis];
         return {params, optional_params};
     }
+
+    static size_t update_hash(size_t seed, const kernel_selector::one_hot_params& params) {
+        seed = hash_combine(seed, params.one_hot_axis);
+        seed = hash_combine(seed, params.on_value);
+        seed = hash_combine(seed, params.off_value);
+        seed = hash_combine(seed, params.one_hot_limit);
+        return seed;
+    }
 };
 
 namespace detail {
@@ -60,6 +68,8 @@ attach_one_hot_impl::attach_one_hot_impl() {
         std::make_tuple(data_types::f32, format::bfzyx),
         std::make_tuple(data_types::f16, format::bfzyx),
     });
+
+    impl_hash<one_hot>::add(typed_primitive_impl_ocl<one_hot>::get_hash_key<one_hot_impl>);
 }
 
 }  // namespace detail

@@ -163,6 +163,22 @@ public:
 
         return {params, optional_params};
     }
+
+    static size_t update_hash(size_t seed, const kernel_selector::pooling_params& params) {
+        using namespace kernel_selector;
+        seed = hash_combine(seed, params.poolType);
+        seed = hash_combine(seed, params.remainderAction);
+        seed = hash_combine(seed, params.divMode);
+        seed = hash_combine(seed, params.quantization);
+        seed = hash_combine_usize(seed, params.poolSize);
+        seed = hash_combine_usize(seed, params.poolStride);
+        seed = hash_combine_usize(seed, params.poolPad);
+        seed = hash_combine(seed, params.maxPoolOpset8Features);
+        seed = hash_combine_usize(seed, params.poolDilation);
+        seed = hash_combine(seed, params.poolIndexElementType);
+        seed = hash_combine(seed, params.poolAxis);
+        return seed;
+    }
 };
 
 namespace detail {
@@ -200,6 +216,8 @@ attach_pooling_impl::attach_pooling_impl() {
     keys.emplace(data_types::f32, format::fs_b_yx_fsv32);
 
     implementation_map<pooling>::add(impl_types::ocl, typed_primitive_impl_ocl<pooling>::create<pooling_impl>, keys);
+
+    impl_hash<pooling>::add(typed_primitive_impl_ocl<pooling>::get_hash_key<pooling_impl>);
 }
 
 }  // namespace detail

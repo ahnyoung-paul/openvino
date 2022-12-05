@@ -61,7 +61,7 @@ protected:
     }
 
 public:
-    static std::unique_ptr<primitive_impl> create(const non_max_suppression_node& arg, const kernel_impl_params& impl_param) {
+    static kernel_params_t get_kernel_params(const non_max_suppression_node& arg, const kernel_impl_params& impl_param) {
         const auto& primitive = impl_param.typed_desc<non_max_suppression>();
         auto params = get_default_params<kernel_selector::non_max_suppression_params>(impl_param);
         auto optional_params =
@@ -144,10 +144,45 @@ public:
         params.sort_result_descending = primitive->sort_result_descending;
         params.box_encoding = primitive->center_point_box ? kernel_selector::BoxEncodingType::BOX_ENCODING_CENTER
                                                           : kernel_selector::BoxEncodingType::BOX_ENCODING_CORNER;
+
+        return {params, optional_params};
+    }
+
+    static std::unique_ptr<primitive_impl> create(const non_max_suppression_node& arg, const kernel_impl_params& impl_param) {
+        auto kernel_params = get_kernel_params(arg, impl_param);
         auto& kernel_selector = kernel_selector::non_max_suppression_kernel_selector::Instance();
-        auto best_kernel = kernel_selector.get_best_kernel(params, optional_params);
+        auto best_kernel = kernel_selector.get_best_kernel(kernel_params.first, kernel_params.second);
 
         return make_unique<non_max_suppression_impl>(arg, best_kernel);
+    }
+
+    static size_t get_hash_key(const non_max_suppression_node& arg, const kernel_impl_params& impl_param) {
+        auto kernel_params = get_kernel_params(arg, impl_param);
+        auto params = kernel_params.first;
+        auto seed = params.hash();
+
+        seed = hash_combine(seed, params.num_select_per_class_type);
+        if (params.num_select_per_class_type == kernel_selector::NmsArgType::Input)
+            seed = hash_combine(seed, params.num_select_per_class);
+
+        seed = hash_combine(seed, params.iou_threshold_type);
+        if (params.iou_threshold_type == kernel_selector::NmsArgType::Input)
+            seed = hash_combine(seed, params.iou_threshold);
+
+        seed = hash_combine(seed, params.score_threshold_type);
+        if (params.score_threshold_type == kernel_selector::NmsArgType::Input)
+            seed = hash_combine(seed, params.score_threshold);
+
+        seed = hash_combine(seed, params.soft_nms_sigma_type);
+        if (params.soft_nms_sigma_type == kernel_selector::NmsArgType::Input)
+            seed = hash_combine(seed, params.soft_nms_sigma);
+
+        seed = hash_combine(seed, params.has_second_output);
+        seed = hash_combine(seed, params.has_third_output);
+        seed = hash_combine(seed, params.use_multiple_outputs);
+        seed = hash_combine(seed, params.sort_result_descending);
+        seed = hash_combine(seed, params.box_encoding);
+        return seed;
     }
 
 private:
@@ -207,6 +242,8 @@ attach_non_max_suppression_impl::attach_non_max_suppression_impl() {
                                                      std::make_tuple(data_types::f32, format::bs_fs_yx_bsv32_fsv16),
                                                      std::make_tuple(data_types::f32, format::bs_fs_yx_bsv32_fsv32),
                                                  });
+
+    impl_hash<non_max_suppression>::add(non_max_suppression_impl::get_hash_key);
 }
 
 }  // namespace detail

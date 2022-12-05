@@ -137,13 +137,14 @@ public:
     }
 
     static size_t update_hash(size_t seed, const kernel_selector::strided_slice_params& params) {
-        seed = hash_combine_vec(seed, params.end_mask);
-        seed = hash_combine_vec(seed, params.begin_mask);
-        seed = hash_combine_vec(seed, params.new_axis_mask);
-        seed = hash_combine_vec(seed, params.shrink_axis_mask);
         for (auto stride : params.striding_params) {
             seed = hash_combine_vec(seed, stride);
         }
+        seed = hash_combine_vec(seed, params.begin_mask);
+        seed = hash_combine_vec(seed, params.end_mask);
+        seed = hash_combine_vec(seed, params.ellipsis_mask);
+        seed = hash_combine_vec(seed, params.new_axis_mask);
+        seed = hash_combine_vec(seed, params.shrink_axis_mask);
         return seed;
     }
 };

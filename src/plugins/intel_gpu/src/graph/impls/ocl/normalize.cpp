@@ -54,6 +54,14 @@ public:
         }
         return {params, optional_params};
     }
+
+    static size_t update_hash(size_t seed, const kernel_selector::normalize_params& params) {
+        using namespace kernel_selector;
+        seed = hash_combine(seed, params.normMode);
+        seed = hash_combine(seed, params.epsilon);
+        seed = hash_combine_dt(seed, params.scaleTable);
+        return seed;
+    }
 };
 
 namespace detail {
@@ -71,6 +79,8 @@ attach_normalize_impl::attach_normalize_impl() {
         format::bs_fs_yx_bsv32_fsv16,
     };
     implementation_map<normalize>::add(impl_types::ocl, typed_primitive_impl_ocl<normalize>::create<normalize_impl>, types, formats);
+
+    impl_hash<normalize>::add(typed_primitive_impl_ocl<normalize>::get_hash_key<normalize_impl>);
 }
 
 }  // namespace detail

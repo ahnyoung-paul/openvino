@@ -38,7 +38,7 @@ protected:
     }
 
 public:
-    static std::unique_ptr<primitive_impl> create(const lstm_elt_node& arg, const kernel_impl_params& impl_param) {
+    static kernel_params_t get_kernel_params(const lstm_elt_node& arg, const kernel_impl_params& impl_param) {
         const auto& prim = arg.get_primitive();
         auto lstm_elt_params = get_default_params<kernel_selector::lstm_elt_params>(impl_param);
         auto lstm_elt_optional_params =
@@ -81,10 +81,37 @@ public:
         lstm_elt_params.input_forget = arg.input_forget();
         lstm_elt_params.direction = arg.direction();
 
+        return {lstm_elt_params, lstm_elt_optional_params};
+    }
+
+    static std::unique_ptr<primitive_impl> create(const lstm_elt_node& arg, const kernel_impl_params& impl_param) {
+        auto kernel_params = get_kernel_params(arg, impl_param);
         auto& kernel_selector = kernel_selector::lstm_elt_kernel_selector::Instance();
-        auto best_kernel = kernel_selector.get_best_kernel(lstm_elt_params, lstm_elt_optional_params);
+        auto best_kernel = kernel_selector.get_best_kernel(kernel_params.first, kernel_params.second);
 
         return make_unique<lstm_elt_impl>(arg, best_kernel);
+    }
+
+    static size_t get_hash_key(const lstm_elt_node& arg, const kernel_impl_params& impl_param) {
+        auto kernel_params = get_kernel_params(arg, impl_param);
+        auto params = kernel_params.first;
+        auto seed = params.hash();
+        using namespace kernel_selector;
+
+        seed = hash_combine(seed, params.has_cell);
+        if (params.has_cell)
+            seed = hash_combine_dt(seed, params.cell);
+        seed = hash_combine(seed, params.gate_order);
+        seed = hash_combine(seed, params.clip);
+        seed = hash_combine(seed, params.input_forget);
+        seed = hash_combine(seed, params.direction);
+        seed = hash_combine(seed, params.cell_direction);
+
+        seed = hash_combine(seed, params.GetOffsetIndexI());
+        seed = hash_combine(seed, params.GetOffsetIndexO());
+        seed = hash_combine(seed, params.GetOffsetIndexF());
+        seed = hash_combine(seed, params.GetOffsetIndexZ());
+        return seed;
     }
 };
 
@@ -97,6 +124,8 @@ attach_lstm_elt_impl::attach_lstm_elt_impl() {
         std::make_tuple(data_types::f32, format::fyxb),
         std::make_tuple(data_types::f16, format::fyxb),
     });
+
+    impl_hash<lstm_elt>::add(lstm_elt_impl::get_hash_key);
 }
 
 }  // namespace detail

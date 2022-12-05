@@ -65,6 +65,17 @@ public:
 
         return {params, optional_params};
     }
+
+    static size_t update_hash(size_t seed, const kernel_selector::experimental_detectron_roi_feature_extractor_params& params) {
+        seed = hash_combine(seed, params.output_dim);
+        seed = hash_combine(seed, params.pooled_height);
+        seed = hash_combine(seed, params.pooled_width);
+        seed = hash_combine_vec(seed, params.pyramid_scales);
+        seed = hash_combine(seed, params.sampling_ratio);
+        seed = hash_combine(seed, params.aligned);
+        seed = hash_combine(seed, params.number_of_inputs);
+        return seed;
+    }
 };
 
 namespace detail {
@@ -76,6 +87,9 @@ attach_experimental_detectron_roi_feature_extractor_impl::attach_experimental_de
             std::make_tuple(data_types::f16, format::bfyx),
             std::make_tuple(data_types::f32, format::bfyx)
         });
+
+    impl_hash<experimental_detectron_roi_feature_extractor>::add(
+        typed_primitive_impl_ocl<experimental_detectron_roi_feature_extractor>::get_hash_key<experimental_detectron_roi_feature_extractor_impl>);
 }
 
 }  // namespace detail

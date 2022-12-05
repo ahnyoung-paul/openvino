@@ -46,6 +46,10 @@ public:
 
         return {params, optional_params};
     }
+
+    static size_t update_hash(size_t seed, const kernel_selector::tile_params& params) {
+        return seed;
+    }
 };
 
 namespace detail {
@@ -70,6 +74,8 @@ attach_tile_impl::attach_tile_impl() {
     };
 
     implementation_map<tile>::add(impl_types::ocl, typed_primitive_impl_ocl<tile>::create<tile_impl>, types, formats);
+
+    impl_hash<tile>::add(typed_primitive_impl_ocl<tile>::get_hash_key<tile_impl>);
 }
 
 }  // namespace detail

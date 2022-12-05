@@ -38,6 +38,12 @@ struct reverse_sequence_impl : typed_primitive_impl_ocl<reverse_sequence> {
 
         return {params, optional_params};
     }
+
+    static size_t update_hash(size_t seed, const kernel_selector::reverse_sequence_params& params) {
+        seed = hash_combine(seed, params.seq_axis);
+        seed = hash_combine(seed, params.batch_axis);
+        return seed;
+    }
 };
 
 namespace detail {
@@ -50,6 +56,8 @@ attach_reverse_sequence_impl::attach_reverse_sequence_impl() {
         std::make_tuple(data_types::u8, format::bfyx),
         std::make_tuple(data_types::i8, format::bfyx),
     });
+
+    impl_hash<reverse_sequence>::add(typed_primitive_impl_ocl<reverse_sequence>::get_hash_key<reverse_sequence_impl>);
 }
 
 }  // namespace detail

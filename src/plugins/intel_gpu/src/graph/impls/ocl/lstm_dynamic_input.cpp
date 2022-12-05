@@ -63,6 +63,11 @@ public:
         auto optional_params = get_default_weights_bias_optional_params<kernel_selector::lstm_dynamic_input_optional_params>(impl_param.get_program());
         return {params, optional_params};
     }
+
+    static size_t update_hash(size_t seed, const kernel_selector::lstm_dynamic_input_params& params) {
+        seed = hash_combine(seed, params.direction);
+        return seed;
+    }
 };
 
 namespace detail {
@@ -72,6 +77,8 @@ attach_lstm_dynamic_input_impl::attach_lstm_dynamic_input_impl() {
         std::make_tuple(data_types::f32, format::bfyx),
         std::make_tuple(data_types::f16, format::bfyx),
     });
+
+    impl_hash<lstm_dynamic_input>::add(typed_primitive_impl_ocl<lstm_dynamic_input>::get_hash_key<lstm_dynamic_input_impl>);
 }
 
 }  // namespace detail

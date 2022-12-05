@@ -39,6 +39,12 @@ struct space_to_depth_impl : typed_primitive_impl_ocl<space_to_depth> {
 
         return {params, optional_params};
     }
+
+    static size_t update_hash(size_t seed, const kernel_selector::space_to_depth_params& params) {
+        seed = hash_combine(seed, params.depth_mode);
+        seed = hash_combine(seed, params.block_size);
+        return seed;
+    }
 };
 
 namespace detail {
@@ -62,6 +68,8 @@ attach_space_to_depth_impl::attach_space_to_depth_impl() {
         std::make_tuple(data_types::u8, format::b_fs_yx_fsv4),
         std::make_tuple(data_types::i8, format::b_fs_yx_fsv4),
     });
+
+    impl_hash<space_to_depth>::add(typed_primitive_impl_ocl<space_to_depth>::get_hash_key<space_to_depth_impl>);
 }
 
 }  // namespace detail

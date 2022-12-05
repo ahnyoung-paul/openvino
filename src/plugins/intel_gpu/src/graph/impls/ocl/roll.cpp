@@ -31,6 +31,11 @@ struct roll_impl : typed_primitive_impl_ocl<roll> {
 
         return {params, optional_params};
     }
+
+    static size_t update_hash(size_t seed, const kernel_selector::roll_params& params) {
+        seed = kernel_selector::hash_combine_dim_tensor(seed, params.shift);
+        return seed;
+    }
 };
 
 namespace detail {
@@ -62,6 +67,8 @@ attach_roll_impl::attach_roll_impl() {
         }
     }
     implementation_map<roll>::add(impl_types::ocl, typed_primitive_impl_ocl<roll>::create<roll_impl>, keys);
+
+    impl_hash<roll>::add(typed_primitive_impl_ocl<roll>::get_hash_key<roll_impl>);
 }
 
 }  // namespace detail

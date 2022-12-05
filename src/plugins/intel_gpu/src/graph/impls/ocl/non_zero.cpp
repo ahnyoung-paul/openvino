@@ -62,6 +62,7 @@ struct gather_nonzero_impl : typed_primitive_impl_ocl<gather_nonzero> {
     }
 
     static size_t update_hash(size_t seed, const kernel_selector::gather_nonzero_params& params) {
+        seed = hash_combine(seed, params.ov_input_rank);
         return seed;
     }
 };

@@ -80,6 +80,32 @@ struct prior_box_impl : typed_primitive_impl_ocl<prior_box> {
         params.inputs.push_back(convert_data_tensor(impl_param.get_input_layout(1)));
         return {params, {}};
     }
+
+    static size_t update_hash(size_t seed, const kernel_selector::prior_box_params& params) {
+        seed = hash_combine_vec(seed, params.min_size);
+        seed = hash_combine_vec(seed, params.max_size);
+        seed = hash_combine_vec(seed, params.density);
+        seed = hash_combine_vec(seed, params.fixed_ratio);
+        seed = hash_combine_vec(seed, params.fixed_size);
+        seed = hash_combine(seed, params.clip);
+        seed = hash_combine(seed, params.flip);
+        seed = hash_combine(seed, params.step);
+        seed = hash_combine(seed, params.offset);
+        seed = hash_combine(seed, params.scale_all_sizes);
+        seed = hash_combine(seed, params.min_max_aspect_ratios_order);
+        seed = hash_combine_vec(seed, params.widths);
+        seed = hash_combine_vec(seed, params.heights);
+        seed = hash_combine_vec(seed, params.aspect_ratio);
+        seed = hash_combine_vec(seed, params.variance);
+        seed = hash_combine(seed, params.reverse_image_width);
+        seed = hash_combine(seed, params.reverse_image_height);
+        seed = hash_combine(seed, params.step_x);
+        seed = hash_combine(seed, params.step_y);
+        seed = hash_combine(seed, params.width);
+        seed = hash_combine(seed, params.height);
+        seed = hash_combine(seed, params.num_priors_4);
+        return seed;
+    }
 };
 
 namespace detail {
@@ -93,6 +119,8 @@ attach_prior_box_impl::attach_prior_box_impl() {
                     format::bs_fs_yx_bsv32_fsv16,
                     format::bs_fs_yx_bsv32_fsv32};
     implementation_map<prior_box>::add(impl_types::ocl, typed_primitive_impl_ocl<prior_box>::create<prior_box_impl>, types, formats);
+
+    impl_hash<prior_box>::add(typed_primitive_impl_ocl<prior_box>::get_hash_key<prior_box_impl>);
 }
 }  // namespace detail
 

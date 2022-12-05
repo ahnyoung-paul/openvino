@@ -645,12 +645,15 @@ protected:
     KernelType kType;
 };
 
+template<typename T = std::uint32_t>
+size_t hash_combine_dim_tensor(size_t seed, const DimTensor<T>& dt);
+
 size_t hash_combine_dim(size_t seed, const Tensor::Dim& dim);
 
-size_t hash_combine_dt(size_t seed, const DataTensor dt);
+size_t hash_combine_dt(size_t seed, const DataTensor& dt);
 
-size_t hash_combine_wt(size_t seed, const WeightsTensor wt);
+size_t hash_combine_wt(size_t seed, const WeightsTensor& wt);
 
-size_t hash_combine_usize(size_t s, kernel_selector::uSize u_size);
+size_t hash_combine_usize(size_t s, const kernel_selector::uSize& u_size);
 
 }  // namespace kernel_selector

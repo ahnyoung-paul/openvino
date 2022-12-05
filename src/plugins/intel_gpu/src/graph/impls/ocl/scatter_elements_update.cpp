@@ -64,6 +64,11 @@ struct scatter_elements_update_impl : typed_primitive_impl_ocl<scatter_elements_
         params.inputs.push_back(convert_data_tensor(impl_param.get_input_layout(2)));
         return {params, optional_params};
     }
+
+    static size_t update_hash(size_t seed, const kernel_selector::scatter_elements_update_params& params) {
+        seed = hash_combine(seed, params.axis);
+        return seed;
+    }
 };
 
 namespace detail {
@@ -93,6 +98,8 @@ attach_scatter_elements_update_impl::attach_scatter_elements_update_impl() {
         typed_primitive_impl_ocl<scatter_elements_update>::create<scatter_elements_update_impl>,
         types,
         formats);
+
+    impl_hash<scatter_elements_update>::add(typed_primitive_impl_ocl<scatter_elements_update>::get_hash_key<scatter_elements_update_impl>);
 }
 
 }  // namespace detail
