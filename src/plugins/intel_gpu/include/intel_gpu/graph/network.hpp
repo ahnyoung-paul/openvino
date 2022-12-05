@@ -235,8 +235,9 @@ public:
 
     ICompilationContext& get_compilation_context() const { return *_compilation_context; }
     std::mutex& get_impl_cache_mutex() const { return _in_mem_cache_mutex; }
-
+#ifdef PAUL_DEBUG
     ImplementationsCache& get_implementations_cache_test() const { return *_impls_cache_test; }
+#endif
 
 private:
     using output_chains_map = std::map<primitive_id, std::vector<std::shared_ptr<primitive_inst>>>;
@@ -282,6 +283,8 @@ private:
 
     const size_t _impls_cache_capacity = 10000;
     const size_t _in_mem_kernels_cache_capacity = 10000;
+#ifdef PAUL_DEBUG
     std::unique_ptr<ImplementationsCache> _impls_cache_test;
+#endif
 };
 }  // namespace cldnn

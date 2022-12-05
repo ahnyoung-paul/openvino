@@ -34,6 +34,10 @@ struct range_impl : typed_primitive_impl_ocl<range> {
 
         return {params, optional_params};
     }
+
+    static size_t update_hash(size_t seed, const kernel_selector::range_params& params) {
+        return seed;
+    }
 };
 
 namespace detail {
@@ -50,6 +54,8 @@ attach_range_impl::attach_range_impl() {
             std::make_tuple(data_types::i32, format::bfyx),
             std::make_tuple(data_types::i64, format::bfyx),
         });
+
+    impl_hash<range>::add(typed_primitive_impl_ocl<range>::get_hash_key<range_impl>);
 }
 
 }  // namespace detail

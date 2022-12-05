@@ -62,6 +62,10 @@ struct select_impl : typed_primitive_impl_ocl<select> {
         }
         return {params, optional_params};
     }
+
+    static size_t update_hash(size_t seed, const kernel_selector::select_params& params) {
+        return seed;
+    }
 };
 
 namespace detail {
@@ -81,6 +85,8 @@ attach_select_impl::attach_select_impl() {
         std::make_tuple(data_types::i8, format::byxf),
         std::make_tuple(data_types::u8, format::byxf),
     });
+
+    impl_hash<select>::add(typed_primitive_impl_ocl<select>::get_hash_key<select_impl>);
 }
 
 }  // namespace detail

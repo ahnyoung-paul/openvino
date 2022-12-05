@@ -49,6 +49,7 @@
 #include <broadcast_inst.h>
 #include <reduce_inst.h>
 
+#define OPT_IMPL_CACHE
 namespace {
 
 bool is_optimized_output_user(const program_node* user) {
@@ -317,7 +318,7 @@ void primitive_inst::update_impl() {
         layout l(ps, data_types::i32, format::get_default_format(ps.size()));
         return l.transform(format::bfwzyx).to_shape();
     };
-
+#ifndef OPT_IMPL_CACHE
     auto get_layout_key = [&](const kernel_impl_params& params) -> size_t {
         size_t seed = 0;
         auto& id = params.desc->id;
@@ -335,6 +336,7 @@ void primitive_inst::update_impl() {
         }
         return seed;
     };
+#endif
 
     auto update_shape_info = [this, extend_to_6d, debug_config, prev_impl_str](const kernel_impl_params& params) {
         mem_lock<int32_t> lock(_shape_info_memory, _network.get_stream());
@@ -365,7 +367,23 @@ void primitive_inst::update_impl() {
         GPU_DEBUG_GET_INSTANCE(debug_config);
         // Update param if fake_alignment is available
         auto updated_params = _node->type()->get_fake_aligned_params(*_impl_params);
+#ifndef OPT_IMPL_CACHE
         auto layout_key = get_layout_key(updated_params);
+#else
+        // if (_node->is_type<input_layout>()) {
+        //     auto ret = _node->type()->choose_impl(*_node, updated_params);
+        //     if (ret != nullptr) {
+        //         auto b = ret->get_type();
+        //         std::cout << _node->id() << " has impl " << b;
+        //         std::cout << " , " << ret->get_kernel_name() << ", ";
+        //         std::cout << static_cast<size_t>(_node->get_preferred_impl_type()) << std::endl;
+        //     } else {
+        //         std::cout << _node->id() << " doesn't have impl " << std::endl;
+        //     }
+        // }
+        // std::cout << "CALL layout key for " << _node->id() << " " << _node->get_primitive()->type_string() << std::endl;
+        auto layout_key = _node->type()->get_impl_hash_key(*_node, updated_params);
+#endif
         auto& cache = get_network().get_implementations_cache();
         // auto& cache_test = get_network().get_implementations_cache_test();
         bool has_cached_impl = false;
@@ -426,11 +444,6 @@ void primitive_inst::update_impl() {
         }
 
         reset_shape_change();
-    } else {
-                if (_node->is_type<broadcast>() || _node->is_type<concatenation>() ||
-                        _node->is_type<crop>() || _node->is_type<reduce>()) {
-                            std::cout << _node->id() << " : no update .." << std::endl;
-                        }
     }
 }
 
@@ -490,6 +503,7 @@ event::ptr primitive_inst::execute(const std::vector<event::ptr>& events) {
                     "[GPU] Can't execute ", primitive_id, " primitive as output layout is dynamic in runtime");
 
     OPENVINO_ASSERT(_impl != nullptr, "[GPU] Implementation is nullptr for ", primitive_id,  " primitive");
+#ifdef PAUL_DEBUG
     if (!_node->is_type<input_layout>() && !_node->is_type<data>() && !_node->is_type<generic_layer>()) {
         auto& cache_test = get_network().get_implementations_cache_test();
         auto updated_params = _node->type()->get_fake_aligned_params(*_impl_params);
@@ -534,7 +548,7 @@ event::ptr primitive_inst::execute(const std::vector<event::ptr>& events) {
             cache_test.add(key, _impl->clone());
         }
     }
-
+#endif
 
 
     // Output buffer may be changed under the following conditions, so we need to set args to kernel on each iteration

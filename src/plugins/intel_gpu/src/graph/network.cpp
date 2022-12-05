@@ -310,7 +310,9 @@ network::network(program::ptr program, stream::ptr stream, bool is_internal, boo
         _impls_cache = std::unique_ptr<ImplementationsCache>(new ImplementationsCache(_impls_cache_capacity));
         _in_mem_kernels_cache = std::unique_ptr<KernelsCache>(new KernelsCache(_in_mem_kernels_cache_capacity));
         _compilation_context = std::move(ICompilationContext::create(program->get_engine(), program->get_id()));
+#ifdef PAUL_DEBUG
         _impls_cache_test = std::unique_ptr<ImplementationsCache>(new ImplementationsCache(_impls_cache_capacity));
+#endif
     }
 }
 
@@ -1012,10 +1014,12 @@ void network::execute_impl(const std::vector<event::ptr>& events) {
     // In scenarios with a big number of very small networks it can provide performance drop.
     get_stream().flush();
 
+#ifdef PAUL_DEBUG
     std::cout << "type category : " << std::endl;
     for (auto it = type_map.begin(); it != type_map.end(); it++) {
         std::cout << it->first << "[" << it->second << "]" << std::endl;
     }
+#endif
 }
 
 std::vector<primitive_id> network::get_input_ids() const {
