@@ -36,6 +36,10 @@ struct gather_tree_impl : typed_primitive_impl_ocl<gather_tree> {
         }
         return {params, optional_params};
     }
+
+    static size_t update_hash(size_t seed, const kernel_selector::gather_tree_params& params) {
+        return seed;
+    }
 };
 
 namespace detail {
@@ -57,6 +61,8 @@ attach_gather_tree_impl::attach_gather_tree_impl() {
     };
 
     implementation_map<gather_tree>::add(impl_types::ocl, typed_primitive_impl_ocl<gather_tree>::create<gather_tree_impl>, types, formats);
+
+    impl_hash<gather_tree>::add(typed_primitive_impl_ocl<gather_tree>::get_hash_key<gather_tree_impl>);
 }
 
 }  // namespace detail

@@ -58,6 +58,10 @@ struct generic_layer_impl : typed_primitive_impl<generic_layer> {
         _kernels.push_back(std::move(kernels_cache.get_kernel(_kernel_id)));
     }
 
+    void set_kernel_ids(std::vector<kernel_id> kernel_ids) override {
+        _kernel_id = kernel_ids[0];
+    }
+
     void set_arguments_impl(generic_layer_inst& instance) override {
         stream& stream = instance.get_network().get_stream();
         kernel_arguments_data args;
@@ -128,9 +132,29 @@ static std::unique_ptr<primitive_impl> create(const generic_layer_node& arg, con
     }
 }
 
+static size_t get_hash_key(const generic_layer_node& arg, const kernel_impl_params& impl_param) {
+    size_t seed = 0;
+    auto& id = impl_param.desc->id;
+    for (size_t i = 0; i < id.size(); i++) {
+        seed = hash_combine(seed, id[i]);
+    }
+    seed = hash_combine(seed, arg.get_unique_id());
+    for (auto& layout : impl_param.input_layouts) {
+        for (auto& d : layout.get_shape()) {
+            seed = hash_combine(seed, d);
+        }
+    }
+    for (auto& d : impl_param.get_output_layout().get_shape()) {
+        seed = hash_combine(seed, d);
+    }
+    return seed;
+}
+
 namespace detail {
 attach_generic_layer_impl::attach_generic_layer_impl() {
     implementation_map<generic_layer>::add(cldnn::impl_types::ocl, create, {});
+
+    impl_hash<generic_layer>::add(get_hash_key);
 }
 
 }  // namespace detail
