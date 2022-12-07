@@ -58,9 +58,9 @@ struct generic_layer_impl : typed_primitive_impl<generic_layer> {
         _kernels.push_back(std::move(kernels_cache.get_kernel(_kernel_id)));
     }
 
-    void set_kernel_ids(std::vector<kernel_id> kernel_ids) override {
-        _kernel_id = kernel_ids[0];
-    }
+    // void set_kernel_ids(std::vector<kernel_id> kernel_ids) override {
+    //     _kernel_id = kernel_ids[0];
+    // }
 
     void set_arguments_impl(generic_layer_inst& instance) override {
         stream& stream = instance.get_network().get_stream();
