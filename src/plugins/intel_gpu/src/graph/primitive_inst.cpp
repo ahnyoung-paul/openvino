@@ -392,6 +392,7 @@ void primitive_inst::update_impl() {
             has_cached_impl = cache.has(layout_key);
             if (has_cached_impl) {
                 _impl = cache.get(layout_key)->clone();
+                _impl->set_node_params(*_node); // Need to check node params is set properly.
                 GPU_DEBUG_PROFILED_STAGE_CACHE_HIT(true);
 
                 GPU_DEBUG_IF(debug_config->verbose >= 4) {
