@@ -57,7 +57,7 @@ attach_reverse_sequence_impl::attach_reverse_sequence_impl() {
         std::make_tuple(data_types::i8, format::bfyx),
     });
 
-    impl_hash<reverse_sequence>::add(typed_primitive_impl_ocl<reverse_sequence>::get_hash_key<reverse_sequence_impl>);
+    impl_hash_key<reverse_sequence>::add(typed_primitive_impl_ocl<reverse_sequence>::get_impl_key<reverse_sequence_impl>);
 }
 
 }  // namespace detail

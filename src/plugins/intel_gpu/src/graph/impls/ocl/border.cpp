@@ -179,7 +179,7 @@ attach_border_impl::attach_border_impl() {
         std::make_tuple(data_types::u8, format::bs_fs_zyx_bsv16_fsv16),
     });
 
-    impl_hash<border>::add(typed_primitive_impl_ocl<border>::get_hash_key<border_impl>);
+    impl_hash_key<border>::add(typed_primitive_impl_ocl<border>::get_impl_key<border_impl>);
 }
 
 }  // namespace detail

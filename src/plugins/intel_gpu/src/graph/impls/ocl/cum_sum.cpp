@@ -103,7 +103,7 @@ attach_cum_sum_impl::attach_cum_sum_impl() {
         std::make_tuple(data_types::f32, format::bfwzyx),
     });
 
-    impl_hash<cum_sum>::add(typed_primitive_impl_ocl<cum_sum>::get_hash_key<cum_sum_impl>);
+    impl_hash_key<cum_sum>::add(typed_primitive_impl_ocl<cum_sum>::get_impl_key<cum_sum_impl>);
 }
 
 }  // namespace detail

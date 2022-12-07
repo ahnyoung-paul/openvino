@@ -50,8 +50,8 @@ struct primitive_type_base : primitive_type {
     }
 
     size_t get_impl_hash_key(const program_node& node, const kernel_impl_params& params) const override {
-        auto get_hash_key = impl_hash<PType>::get();
-        return get_hash_key(node, params);
+        auto get_impl_key = impl_hash_key<PType>::get();
+        return get_impl_key(node, params);
     }
 
     bool does_an_implementation_exist(const cldnn::program_node& node) const override {

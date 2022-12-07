@@ -95,7 +95,7 @@ public:
         return make_unique<quantize_impl>(arg, best_kernel);
     }
 
-    static size_t get_hash_key(const quantize_node& arg, const kernel_impl_params& impl_param) {
+    static size_t get_impl_key(const quantize_node& arg, const kernel_impl_params& impl_param) {
         auto kernel_params = get_kernel_params(arg, impl_param);
         auto params = kernel_params.first;
         auto seed = params.hash();
@@ -240,7 +240,7 @@ attach_quantize_impl::attach_quantize_impl() {
         std::make_tuple(data_types::u8, format::bs_fs_zyx_bsv32_fsv16),
     });
 
-    impl_hash<quantize>::add(quantize_impl::get_hash_key);
+    impl_hash_key<quantize>::add(quantize_impl::get_impl_key);
 }
 
 }  // namespace detail

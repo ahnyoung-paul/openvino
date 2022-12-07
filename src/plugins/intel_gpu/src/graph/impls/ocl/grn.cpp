@@ -54,7 +54,7 @@ attach_grn_impl::attach_grn_impl() {
         std::make_tuple(data_types::f16, format::bfyx),
     });
 
-    impl_hash<grn>::add(typed_primitive_impl_ocl<grn>::get_hash_key<grn_impl>);
+    impl_hash_key<grn>::add(typed_primitive_impl_ocl<grn>::get_impl_key<grn_impl>);
 }
 
 }  // namespace detail

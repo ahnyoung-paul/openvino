@@ -217,7 +217,7 @@ attach_pooling_impl::attach_pooling_impl() {
 
     implementation_map<pooling>::add(impl_types::ocl, typed_primitive_impl_ocl<pooling>::create<pooling_impl>, keys);
 
-    impl_hash<pooling>::add(typed_primitive_impl_ocl<pooling>::get_hash_key<pooling_impl>);
+    impl_hash_key<pooling>::add(typed_primitive_impl_ocl<pooling>::get_impl_key<pooling_impl>);
 }
 
 }  // namespace detail

@@ -61,7 +61,7 @@ attach_random_uniform_impl::attach_random_uniform_impl() {
             std::make_tuple(data_types::i64, format::bfwzyx),
     });
 
-    impl_hash<random_uniform>::add(typed_primitive_impl_ocl<random_uniform>::get_hash_key<random_uniform_impl>);
+    impl_hash_key<random_uniform>::add(typed_primitive_impl_ocl<random_uniform>::get_impl_key<random_uniform_impl>);
 }
 
 }  // namespace detail

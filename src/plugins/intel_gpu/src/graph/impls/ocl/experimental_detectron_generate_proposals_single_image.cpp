@@ -87,9 +87,9 @@ attach_experimental_detectron_generate_proposals_single_image_impl::attach_exper
         typed_primitive_impl_ocl<experimental_detectron_generate_proposals_single_image>::create<experimental_detectron_generate_proposals_single_image_impl>,
         types, formats);
 
-    impl_hash<experimental_detectron_generate_proposals_single_image>::add(
+    impl_hash_key<experimental_detectron_generate_proposals_single_image>::add(
         typed_primitive_impl_ocl<experimental_detectron_generate_proposals_single_image>
-        ::get_hash_key<experimental_detectron_generate_proposals_single_image_impl>);
+        ::get_impl_key<experimental_detectron_generate_proposals_single_image_impl>);
 }
 }  // namespace detail
 }  // namespace ocl

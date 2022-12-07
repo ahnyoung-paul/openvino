@@ -70,7 +70,7 @@ attach_bucketize_impl::attach_bucketize_impl() {
     }
     implementation_map<bucketize>::add(impl_types::ocl, typed_primitive_impl_ocl<bucketize>::create<bucketize_impl>, keys);
 
-    impl_hash<bucketize>::add(typed_primitive_impl_ocl<bucketize>::get_hash_key<bucketize_impl>);
+    impl_hash_key<bucketize>::add(typed_primitive_impl_ocl<bucketize>::get_impl_key<bucketize_impl>);
 }
 }  // namespace detail
 

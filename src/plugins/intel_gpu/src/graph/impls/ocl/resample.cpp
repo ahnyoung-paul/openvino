@@ -218,7 +218,7 @@ attach_resample_impl::attach_resample_impl() {
 
     implementation_map<resample>::add(impl_types::ocl, typed_primitive_impl_ocl<resample>::create<resample_impl>, keys);
 
-    impl_hash<resample>::add(typed_primitive_impl_ocl<resample>::get_hash_key<resample_impl>);
+    impl_hash_key<resample>::add(typed_primitive_impl_ocl<resample>::get_impl_key<resample_impl>);
 }
 
 }  // namespace detail

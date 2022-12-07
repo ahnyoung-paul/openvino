@@ -55,7 +55,7 @@ attach_range_impl::attach_range_impl() {
             std::make_tuple(data_types::i64, format::bfyx),
         });
 
-    impl_hash<range>::add(typed_primitive_impl_ocl<range>::get_hash_key<range_impl>);
+    impl_hash_key<range>::add(typed_primitive_impl_ocl<range>::get_impl_key<range_impl>);
 }
 
 }  // namespace detail

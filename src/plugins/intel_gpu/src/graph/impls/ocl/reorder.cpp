@@ -183,7 +183,7 @@ attach_reorder_impl::attach_reorder_impl() {
     };
     implementation_map<reorder>::add(impl_types::ocl, shape_types::dynamic_shape, typed_primitive_impl_ocl<reorder>::create<reorder_impl>, types, formats);
 
-    impl_hash<reorder>::add(typed_primitive_impl_ocl<reorder>::get_hash_key<reorder_impl>);
+    impl_hash_key<reorder>::add(typed_primitive_impl_ocl<reorder>::get_impl_key<reorder_impl>);
 }
 
 }  // namespace detail

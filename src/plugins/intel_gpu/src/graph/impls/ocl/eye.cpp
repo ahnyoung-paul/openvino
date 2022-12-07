@@ -73,7 +73,7 @@ attach_eye_impl::attach_eye_impl() {
     };
     implementation_map<eye>::add(impl_types::ocl, typed_primitive_impl_ocl<eye>::create<eye_impl>, types, formats);
 
-    impl_hash<eye>::add(typed_primitive_impl_ocl<eye>::get_hash_key<eye_impl>);
+    impl_hash_key<eye>::add(typed_primitive_impl_ocl<eye>::get_impl_key<eye_impl>);
 }
 
 }  // namespace detail

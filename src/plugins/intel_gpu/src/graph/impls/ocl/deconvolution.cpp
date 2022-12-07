@@ -173,7 +173,7 @@ attach_deconvolution_impl::attach_deconvolution_impl() {
 
     implementation_map<deconvolution>::add(impl_types::ocl, typed_primitive_impl_ocl<deconvolution>::create<deconvolution_impl>, types, formats);
 
-    impl_hash<deconvolution>::add(typed_primitive_impl_ocl<deconvolution>::get_hash_key<deconvolution_impl>);
+    impl_hash_key<deconvolution>::add(typed_primitive_impl_ocl<deconvolution>::get_impl_key<deconvolution_impl>);
 }
 
 }  // namespace detail

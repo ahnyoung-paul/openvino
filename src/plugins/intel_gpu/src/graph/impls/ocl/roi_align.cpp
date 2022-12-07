@@ -101,7 +101,7 @@ attach_roi_align_impl::attach_roi_align_impl() {
 
     implementation_map<roi_align>::add(impl_types::ocl, typed_primitive_impl_ocl<roi_align>::create<roi_align_impl>, types, formats);
 
-    impl_hash<roi_align>::add(typed_primitive_impl_ocl<roi_align>::get_hash_key<roi_align_impl>);
+    impl_hash_key<roi_align>::add(typed_primitive_impl_ocl<roi_align>::get_impl_key<roi_align_impl>);
 }
 
 }  // namespace detail

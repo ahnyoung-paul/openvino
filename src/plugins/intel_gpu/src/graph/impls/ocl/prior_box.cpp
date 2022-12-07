@@ -120,7 +120,7 @@ attach_prior_box_impl::attach_prior_box_impl() {
                     format::bs_fs_yx_bsv32_fsv32};
     implementation_map<prior_box>::add(impl_types::ocl, typed_primitive_impl_ocl<prior_box>::create<prior_box_impl>, types, formats);
 
-    impl_hash<prior_box>::add(typed_primitive_impl_ocl<prior_box>::get_hash_key<prior_box_impl>);
+    impl_hash_key<prior_box>::add(typed_primitive_impl_ocl<prior_box>::get_impl_key<prior_box_impl>);
 }
 }  // namespace detail
 

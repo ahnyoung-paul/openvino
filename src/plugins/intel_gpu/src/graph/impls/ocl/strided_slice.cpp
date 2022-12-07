@@ -168,7 +168,7 @@ attach_strided_slice_impl::attach_strided_slice_impl() {
         std::make_tuple(data_types::u8, format::bfzyx),
     });
 
-    impl_hash<strided_slice>::add(typed_primitive_impl_ocl<strided_slice>::get_hash_key<strided_slice_impl>);
+    impl_hash_key<strided_slice>::add(typed_primitive_impl_ocl<strided_slice>::get_impl_key<strided_slice_impl>);
 }
 
 }  // namespace detail

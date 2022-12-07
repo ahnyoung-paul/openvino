@@ -57,8 +57,8 @@ attach_experimental_detectron_topk_rois_impl::attach_experimental_detectron_topk
         types,
         formats);
 
-    impl_hash<experimental_detectron_topk_rois>::add(
-        typed_primitive_impl_ocl<experimental_detectron_topk_rois>::get_hash_key<experimental_detectron_topk_rois_impl>);
+    impl_hash_key<experimental_detectron_topk_rois>::add(
+        typed_primitive_impl_ocl<experimental_detectron_topk_rois>::get_impl_key<experimental_detectron_topk_rois_impl>);
 }
 
 }  // namespace detail

@@ -60,7 +60,7 @@ attach_extract_image_patches_impl::attach_extract_image_patches_impl() {
         std::make_tuple(data_types::f16, format::bfyx),
     });
 
-    impl_hash<extract_image_patches>::add(typed_primitive_impl_ocl<extract_image_patches>::get_hash_key<extract_image_patches_impl>);
+    impl_hash_key<extract_image_patches>::add(typed_primitive_impl_ocl<extract_image_patches>::get_impl_key<extract_image_patches_impl>);
 }
 
 }  // namespace detail

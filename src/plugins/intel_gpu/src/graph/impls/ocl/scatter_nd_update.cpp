@@ -141,7 +141,7 @@ attach_scatter_nd_update_impl::attach_scatter_nd_update_impl() {
         std::make_tuple(data_types::u8, format::bs_fs_yx_bsv32_fsv32),
     });
 
-    impl_hash<scatter_nd_update>::add(typed_primitive_impl_ocl<scatter_nd_update>::get_hash_key<scatter_nd_update_impl>);
+    impl_hash_key<scatter_nd_update>::add(typed_primitive_impl_ocl<scatter_nd_update>::get_impl_key<scatter_nd_update_impl>);
 }
 
 }  // namespace detail

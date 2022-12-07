@@ -156,7 +156,7 @@ public:
         return make_unique<non_max_suppression_impl>(arg, best_kernel);
     }
 
-    static size_t get_hash_key(const non_max_suppression_node& arg, const kernel_impl_params& impl_param) {
+    static size_t get_impl_key(const non_max_suppression_node& arg, const kernel_impl_params& impl_param) {
         auto kernel_params = get_kernel_params(arg, impl_param);
         auto params = kernel_params.first;
         auto seed = params.hash();
@@ -243,7 +243,7 @@ attach_non_max_suppression_impl::attach_non_max_suppression_impl() {
                                                      std::make_tuple(data_types::f32, format::bs_fs_yx_bsv32_fsv32),
                                                  });
 
-    impl_hash<non_max_suppression>::add(non_max_suppression_impl::get_hash_key);
+    impl_hash_key<non_max_suppression>::add(non_max_suppression_impl::get_impl_key);
 }
 
 }  // namespace detail

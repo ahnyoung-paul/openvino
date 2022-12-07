@@ -99,7 +99,7 @@ struct typed_primitive_impl_ocl : public typed_primitive_impl<PType> {
     }
 
     template<typename ImplType>
-    static size_t get_hash_key(const typed_program_node<PType>& /*arg*/, const kernel_impl_params& impl_param) {
+    static size_t get_impl_key(const typed_program_node<PType>& /*arg*/, const kernel_impl_params& impl_param) {
         auto kernel_params = ImplType::get_kernel_params(impl_param);
         auto params = kernel_params.first;
         auto seed = params.hash();

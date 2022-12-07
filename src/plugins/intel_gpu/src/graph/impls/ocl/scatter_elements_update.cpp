@@ -99,7 +99,7 @@ attach_scatter_elements_update_impl::attach_scatter_elements_update_impl() {
         types,
         formats);
 
-    impl_hash<scatter_elements_update>::add(typed_primitive_impl_ocl<scatter_elements_update>::get_hash_key<scatter_elements_update_impl>);
+    impl_hash_key<scatter_elements_update>::add(typed_primitive_impl_ocl<scatter_elements_update>::get_impl_key<scatter_elements_update_impl>);
 }
 
 }  // namespace detail

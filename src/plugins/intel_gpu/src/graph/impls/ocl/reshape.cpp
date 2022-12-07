@@ -64,7 +64,7 @@ attach_reshape_impl::attach_reshape_impl() {
                                      dyn_types,
                                      dyn_formats);
 
-    impl_hash<reshape>::add(typed_primitive_impl_ocl<reshape>::get_hash_key<reshape_impl>);
+    impl_hash_key<reshape>::add(typed_primitive_impl_ocl<reshape>::get_impl_key<reshape_impl>);
 }
 
 }  // namespace detail

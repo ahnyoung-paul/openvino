@@ -102,7 +102,7 @@ attach_permute_impl::attach_permute_impl() {
                                      dyn_types,
                                      dyn_formats);
 
-    impl_hash<permute>::add(typed_primitive_impl_ocl<permute>::get_hash_key<permute_impl>);
+    impl_hash_key<permute>::add(typed_primitive_impl_ocl<permute>::get_impl_key<permute_impl>);
 }
 
 }  // namespace detail

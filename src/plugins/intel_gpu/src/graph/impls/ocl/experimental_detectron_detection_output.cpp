@@ -85,9 +85,9 @@ attach_experimental_detectron_detection_output_impl::attach_experimental_detectr
         typed_primitive_impl_ocl<experimental_detectron_detection_output>::create<experimental_detectron_detection_output_impl>,
         types, formats);
 
-    impl_hash<experimental_detectron_detection_output>::add(
+    impl_hash_key<experimental_detectron_detection_output>::add(
         typed_primitive_impl_ocl<experimental_detectron_detection_output>
-        ::get_hash_key<experimental_detectron_detection_output_impl>);
+        ::get_impl_key<experimental_detectron_detection_output_impl>);
 }
 }  // namespace detail
 }  // namespace ocl

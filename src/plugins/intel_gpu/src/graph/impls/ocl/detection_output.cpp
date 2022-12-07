@@ -115,7 +115,7 @@ attach_detection_output_impl::attach_detection_output_impl() {
     };
     implementation_map<detection_output>::add(impl_types::ocl, typed_primitive_impl_ocl<detection_output>::create<detection_output_impl>, dt, fmt);
 
-    impl_hash<detection_output>::add(typed_primitive_impl_ocl<detection_output>::get_hash_key<detection_output_impl>);
+    impl_hash_key<detection_output>::add(typed_primitive_impl_ocl<detection_output>::get_impl_key<detection_output_impl>);
 }
 
 }  // namespace detail

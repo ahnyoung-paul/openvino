@@ -89,7 +89,7 @@ attach_grid_sample_impl::attach_grid_sample_impl() {
 
     implementation_map<grid_sample>::add(impl_types::ocl, typed_primitive_impl_ocl<grid_sample>::create<grid_sample_impl>, types, formats);
 
-    impl_hash<grid_sample>::add(typed_primitive_impl_ocl<grid_sample>::get_hash_key<grid_sample_impl>);
+    impl_hash_key<grid_sample>::add(typed_primitive_impl_ocl<grid_sample>::get_impl_key<grid_sample_impl>);
 }
 
 }  // namespace detail

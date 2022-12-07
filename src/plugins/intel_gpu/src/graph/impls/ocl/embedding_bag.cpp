@@ -70,7 +70,7 @@ attach_embedding_bag_impl::attach_embedding_bag_impl() {
         std::make_tuple(data_types::f16, format::bfyx),
     });
 
-    impl_hash<embedding_bag>::add(typed_primitive_impl_ocl<embedding_bag>::get_hash_key<embedding_bag_impl>);
+    impl_hash_key<embedding_bag>::add(typed_primitive_impl_ocl<embedding_bag>::get_impl_key<embedding_bag_impl>);
 }
 
 }  // namespace detail

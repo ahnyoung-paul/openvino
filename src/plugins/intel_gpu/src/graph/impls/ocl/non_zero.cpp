@@ -90,7 +90,7 @@ attach_count_nonzero_impl::attach_count_nonzero_impl() {
         std::make_tuple(data_types::u8, format::bfwzyx),
     });
 
-    impl_hash<count_nonzero>::add(typed_primitive_impl_ocl<count_nonzero>::get_hash_key<count_nonzero_impl>);
+    impl_hash_key<count_nonzero>::add(typed_primitive_impl_ocl<count_nonzero>::get_impl_key<count_nonzero_impl>);
 }
 
 attach_gather_nonzero_impl::attach_gather_nonzero_impl() {
@@ -114,7 +114,7 @@ attach_gather_nonzero_impl::attach_gather_nonzero_impl() {
         std::make_tuple(data_types::u8, format::bfwzyx),
     });
 
-    impl_hash<gather_nonzero>::add(typed_primitive_impl_ocl<gather_nonzero>::get_hash_key<gather_nonzero_impl>);
+    impl_hash_key<gather_nonzero>::add(typed_primitive_impl_ocl<gather_nonzero>::get_impl_key<gather_nonzero_impl>);
 }
 
 }  // namespace detail

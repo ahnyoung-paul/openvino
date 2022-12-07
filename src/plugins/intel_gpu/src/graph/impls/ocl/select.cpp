@@ -86,7 +86,7 @@ attach_select_impl::attach_select_impl() {
         std::make_tuple(data_types::u8, format::byxf),
     });
 
-    impl_hash<select>::add(typed_primitive_impl_ocl<select>::get_hash_key<select_impl>);
+    impl_hash_key<select>::add(typed_primitive_impl_ocl<select>::get_impl_key<select_impl>);
 }
 
 }  // namespace detail

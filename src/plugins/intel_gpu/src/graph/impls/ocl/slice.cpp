@@ -118,7 +118,7 @@ struct slice_impl : typed_primitive_impl_ocl<slice> {
         return make_unique<slice_impl>(arg, best_kernel);
     }
 
-    static size_t get_hash_key(const slice_node& arg, const kernel_impl_params& impl_param) {
+    static size_t get_impl_key(const slice_node& arg, const kernel_impl_params& impl_param) {
         auto kernel_params = get_kernel_params(arg, impl_param);
         auto params = kernel_params.first;
         auto seed = params.hash();
@@ -147,7 +147,7 @@ attach_slice_impl::attach_slice_impl() {
         std::make_tuple(data_types::i64, format::bfzyx),
     });
 
-    impl_hash<slice>::add(slice_impl::get_hash_key);
+    impl_hash_key<slice>::add(slice_impl::get_impl_key);
 }
 
 }  // namespace detail

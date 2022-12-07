@@ -170,7 +170,7 @@ attach_fully_connected_impl::attach_fully_connected_impl() {
         std::make_tuple(data_types::f16, format::fs_b_yx_fsv32),
     });
 
-    impl_hash<fully_connected>::add(typed_primitive_impl_ocl<fully_connected>::get_hash_key<fully_connected_impl>);
+    impl_hash_key<fully_connected>::add(typed_primitive_impl_ocl<fully_connected>::get_impl_key<fully_connected_impl>);
 }
 
 }  // namespace detail

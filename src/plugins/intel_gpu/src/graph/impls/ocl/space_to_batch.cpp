@@ -71,7 +71,7 @@ attach_space_to_batch_impl::attach_space_to_batch_impl() {
         std::make_tuple(data_types::i8, format::b_fs_zyx_fsv16),
     });
 
-    impl_hash<space_to_batch>::add(typed_primitive_impl_ocl<space_to_batch>::get_hash_key<space_to_batch_impl>);
+    impl_hash_key<space_to_batch>::add(typed_primitive_impl_ocl<space_to_batch>::get_impl_key<space_to_batch_impl>);
 }
 
 }  // namespace detail

@@ -118,7 +118,7 @@ attach_matrix_nms_impl::attach_matrix_nms_impl() {
 
     implementation_map<matrix_nms>::add(impl_types::ocl, typed_primitive_impl_ocl<matrix_nms>::create<matrix_nms_impl>, types, formats);
 
-    impl_hash<matrix_nms>::add(typed_primitive_impl_ocl<matrix_nms>::get_hash_key<matrix_nms_impl>);
+    impl_hash_key<matrix_nms>::add(typed_primitive_impl_ocl<matrix_nms>::get_impl_key<matrix_nms_impl>);
 }
 
 }  // namespace detail

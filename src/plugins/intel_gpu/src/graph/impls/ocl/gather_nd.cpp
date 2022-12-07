@@ -62,7 +62,7 @@ attach_gather_nd_impl::attach_gather_nd_impl() {
         std::make_tuple(data_types::i32, format::bfwzyx),
     });
 
-    impl_hash<gather_nd>::add(typed_primitive_impl_ocl<gather_nd>::get_hash_key<gather_nd_impl>);
+    impl_hash_key<gather_nd>::add(typed_primitive_impl_ocl<gather_nd>::get_impl_key<gather_nd_impl>);
 }
 
 }  // namespace detail

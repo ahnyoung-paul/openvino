@@ -192,7 +192,7 @@ public:
         return make_unique<convolution_impl>(arg, best_kernel);
     }
 
-    static size_t get_hash_key(const convolution_node& arg, const kernel_impl_params& impl_param) {
+    static size_t get_impl_key(const convolution_node& arg, const kernel_impl_params& impl_param) {
         auto kernel_params = get_kernel_params(arg, impl_param);
         auto params = kernel_params.first;
         auto seed = params.hash();
@@ -303,7 +303,7 @@ attach_convolution_impl::attach_convolution_impl() {
         std::make_tuple(data_types::i8, format::bs_fs_yx_bsv4_fsv2),
     });
 
-    impl_hash<convolution>::add(convolution_impl::get_hash_key);
+    impl_hash_key<convolution>::add(convolution_impl::get_impl_key);
 }
 
 }  // namespace detail

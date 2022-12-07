@@ -69,7 +69,7 @@ attach_one_hot_impl::attach_one_hot_impl() {
         std::make_tuple(data_types::f16, format::bfzyx),
     });
 
-    impl_hash<one_hot>::add(typed_primitive_impl_ocl<one_hot>::get_hash_key<one_hot_impl>);
+    impl_hash_key<one_hot>::add(typed_primitive_impl_ocl<one_hot>::get_impl_key<one_hot_impl>);
 }
 
 }  // namespace detail

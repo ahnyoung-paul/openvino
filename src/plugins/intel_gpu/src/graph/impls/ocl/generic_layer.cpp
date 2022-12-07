@@ -132,7 +132,7 @@ static std::unique_ptr<primitive_impl> create(const generic_layer_node& arg, con
     }
 }
 
-static size_t get_hash_key(const generic_layer_node& arg, const kernel_impl_params& impl_param) {
+static size_t get_impl_key(const generic_layer_node& arg, const kernel_impl_params& impl_param) {
     size_t seed = 0;
     auto& id = impl_param.desc->id;
     for (size_t i = 0; i < id.size(); i++) {
@@ -154,7 +154,7 @@ namespace detail {
 attach_generic_layer_impl::attach_generic_layer_impl() {
     implementation_map<generic_layer>::add(cldnn::impl_types::ocl, create, {});
 
-    impl_hash<generic_layer>::add(get_hash_key);
+    impl_hash_key<generic_layer>::add(get_impl_key);
 }
 
 }  // namespace detail

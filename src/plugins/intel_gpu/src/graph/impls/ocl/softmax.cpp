@@ -89,7 +89,7 @@ attach_softmax_impl::attach_softmax_impl() {
 
     implementation_map<softmax>::add(impl_types::ocl, shape_types::dynamic_shape, typed_primitive_impl_ocl<softmax>::create<softmax_impl>, types, dyn_formats);
 
-    impl_hash<softmax>::add(typed_primitive_impl_ocl<softmax>::get_hash_key<softmax_impl>);
+    impl_hash_key<softmax>::add(typed_primitive_impl_ocl<softmax>::get_impl_key<softmax_impl>);
 }
 
 }  // namespace detail

@@ -108,7 +108,7 @@ attach_dft_impl::attach_dft_impl() {
     };
     implementation_map<dft>::add(impl_types::ocl, typed_primitive_impl_ocl<dft>::create<dft_impl>, types, formats);
 
-    impl_hash<dft>::add(typed_primitive_impl_ocl<dft>::get_hash_key<dft_impl>);
+    impl_hash_key<dft>::add(typed_primitive_impl_ocl<dft>::get_impl_key<dft_impl>);
 }
 
 }  // namespace detail

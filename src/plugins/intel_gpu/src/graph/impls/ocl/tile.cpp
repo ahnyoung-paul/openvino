@@ -75,7 +75,7 @@ attach_tile_impl::attach_tile_impl() {
 
     implementation_map<tile>::add(impl_types::ocl, typed_primitive_impl_ocl<tile>::create<tile_impl>, types, formats);
 
-    impl_hash<tile>::add(typed_primitive_impl_ocl<tile>::get_hash_key<tile_impl>);
+    impl_hash_key<tile>::add(typed_primitive_impl_ocl<tile>::get_impl_key<tile_impl>);
 }
 
 }  // namespace detail

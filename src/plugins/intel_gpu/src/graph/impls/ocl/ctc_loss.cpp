@@ -59,7 +59,7 @@ attach_ctc_loss_impl::attach_ctc_loss_impl() {
 
     implementation_map<ctc_loss>::add(impl_types::ocl, typed_primitive_impl_ocl<ctc_loss>::create<ctc_loss_impl>, types, formats);
 
-    impl_hash<ctc_loss>::add(typed_primitive_impl_ocl<ctc_loss>::get_hash_key<ctc_loss_impl>);
+    impl_hash_key<ctc_loss>::add(typed_primitive_impl_ocl<ctc_loss>::get_impl_key<ctc_loss_impl>);
 }
 
 }  // namespace detail
