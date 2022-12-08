@@ -371,6 +371,42 @@ std::string get_test_info_stream_header(benchmark_app::InputInfo& inputInfo) {
     }
     return strOut.str();
 }
+std::map<std::string, ov::TensorVector> get_tensors_random(std::map<std::string, std::vector<std::string>> inputFiles,
+                                                           std::vector<benchmark_app::InputsInfo>& app_inputs_info) {
+    std::cout << "get tensors random" << std::endl;
+    size_t n_shape = 0, m_file = 0;
+    std::map<std::string, ov::TensorVector> tensors;
+    srand (time(nullptr));
+    int32_t n_input_ports = app_inputs_info[0].size();
+    std::ifstream fin;
+    fin.open("/home/yblee/work/openvino/squad_1.1_shapes.csv");
+    std::string line;
+    while (n_shape < 2000 && fin >> line) { // create 1000 random inputs
+        std::getline(fin, line);
+        std::stringstream words(line);
+        std::string word;
+        std::getline(words, word, ',');
+        auto batch = std::stoi(word);
+        std::getline(words, word, ',');
+        auto random_seq_len = std::stoi(word);
+        auto input_info_iter = app_inputs_info[0].begin();
+        std::cout << n_shape << "-th sequence len : " << random_seq_len << std::endl;
+        for (int i = 0; i < app_inputs_info[0].size(); ++i) {
+            std::string input_name = input_info_iter->first;
+            std::string tensor_src_info;
+            benchmark_app::InputInfo info;
+            info.dataShape = ov::Shape(2, 0);
+            info.dataShape[0] = 1;
+            info.dataShape[1] = random_seq_len;
+            info.type = input_info_iter->second.type;
+            tensors[input_name].push_back(get_random_tensor({input_name, info}));
+            input_info_iter = std::next(input_info_iter);
+        }
+        n_shape++;
+    }
+    fin.close();
+    return tensors;
+}
 
 std::map<std::string, ov::TensorVector> get_tensors(std::map<std::string, std::vector<std::string>> inputFiles,
                                                     std::vector<benchmark_app::InputsInfo>& app_inputs_info) {
