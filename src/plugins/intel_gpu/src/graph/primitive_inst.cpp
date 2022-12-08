@@ -36,6 +36,8 @@
 
 namespace {
 
+#define USE_SHAPE_AGNOSTIC_KERNEL
+
 bool is_optimized_output_user(const program_node* user) {
     if (user->can_be_optimized()) {
         if (user->is_output())
@@ -283,6 +285,7 @@ void primitive_inst::realloc_if_needed() {
     allocate_internal_buffers();
 }
 
+#define USE_IMPROVED_KEY
 void primitive_inst::update_impl() {
     GPU_DEBUG_PROFILED_STAGE(instrumentation::pipeline_stage::update_implementation);
     GPU_DEBUG_GET_INSTANCE(debug_config);
@@ -303,24 +306,25 @@ void primitive_inst::update_impl() {
         return l.transform(format::bfwzyx).to_shape();
     };
 
-    // auto get_layout_key = [&](const kernel_impl_params& params) -> size_t {
-    //     size_t seed = 0;
-    //     auto& id = params.desc->id;
-    //     for (size_t i = 0; i < id.size(); i++) {
-    //         seed = hash_combine(seed, id[i]);
-    //     }
-    //     seed = hash_combine(seed, _node->get_unique_id());
-    //     for (auto& layout : params.input_layouts) {
-    //         for (auto& d : layout.get_shape()) {
-    //             seed = hash_combine(seed, d);
-    //         }
-    //     }
-    //     for (auto& d : params.get_output_layout().get_shape()) {
-    //         seed = hash_combine(seed, d);
-    //     }
-    //     return seed;
-    // };
-
+#ifndef USE_IMPROVED_KEY
+    auto get_layout_key = [&](const kernel_impl_params& params) -> size_t {
+        size_t seed = 0;
+        auto& id = params.desc->id;
+        for (size_t i = 0; i < id.size(); i++) {
+            seed = hash_combine(seed, id[i]);
+        }
+        seed = hash_combine(seed, _node->get_unique_id());
+        for (auto& layout : params.input_layouts) {
+            for (auto& d : layout.get_shape()) {
+                seed = hash_combine(seed, d);
+            }
+        }
+        for (auto& d : params.get_output_layout().get_shape()) {
+            seed = hash_combine(seed, d);
+        }
+        return seed;
+    };
+#endif
     auto update_shape_info = [this, extend_to_6d, debug_config, prev_impl_str](const kernel_impl_params& params) {
         mem_lock<int32_t> lock(_shape_info_memory, _network.get_stream());
         size_t offset = 0;
@@ -350,8 +354,11 @@ void primitive_inst::update_impl() {
         GPU_DEBUG_GET_INSTANCE(debug_config);
         // Update param if fake_alignment is available
         auto updated_params = _node->type()->get_fake_aligned_params(*_impl_params);
-        // auto layout_key = get_layout_key(updated_params);
-        auto layout_key = _node->type()->get_impl_hash_key(*_node, updated_params);
+#ifndef USE_IMPROVED_KEY
+        const auto layout_key = get_layout_key(updated_params);
+#else
+        const auto layout_key = _node->type()->get_impl_hash_key(*_node, updated_params);
+#endif
         auto& cache = get_network().get_implementations_cache();
         bool has_cached_impl = false;
         {
@@ -361,25 +368,33 @@ void primitive_inst::update_impl() {
                 _impl = cache.get(layout_key)->clone();
                 _impl->set_node_params(*_node);
                 GPU_DEBUG_PROFILED_STAGE_CACHE_HIT(true);
+                GPU_DEBUG_PROFILED_STAGE_SET_STATUS(instrumentation::update_impl_status::matched_cache);
 
                 GPU_DEBUG_IF(debug_config->verbose >= 4) {
                     GPU_DEBUG_COUT << id() << ": get impl from cache " << _impl->get_kernel_name() << std::endl;
                 }
             }
         }
+
         if (!has_cached_impl) {
+#ifdef USE_SHAPE_AGNOSTIC_KERNEL
             if (_dynamic_impl) {
                 auto& compilation_context = get_network().get_compilation_context();
                 compilation_context.push_task([this, updated_params, layout_key](kernels_cache& kc) {
+                    GPU_DEBUG_PROFILED_STAGE(instrumentation::pipeline_stage::agnostic_compilation);
                     auto& cache = get_network().get_implementations_cache();
                     {
                         std::lock_guard<std::mutex> lock(get_network().get_impl_cache_mutex());
                         // Check existense in the cache one more time as several iterations of model execution could happens and multiple compilation
                         // tasks created for same shapes
-                        if (cache.has(layout_key))
+                        if (cache.has(layout_key)) {
+                            GPU_DEBUG_PROFILED_STAGE_CACHE_HIT(true);
+                            GPU_DEBUG_PROFILED_STAGE_SET_STATUS(instrumentation::update_impl_status::matched_cache);
                             return;
+                        }
                     }
 
+                    GPU_DEBUG_PROFILED_STAGE_SET_STATUS(instrumentation::update_impl_status::compile_agnostic_impl);
                     auto impl = _node->type()->choose_impl(*_node, updated_params);
                     auto kernel_ids = kc.add_kernels_source(impl->get_kernels_source());
                     impl->set_kernel_ids(kernel_ids);
@@ -391,10 +406,15 @@ void primitive_inst::update_impl() {
                     cache.add(layout_key, impl->clone());
                 });
 
+                GPU_DEBUG_PROFILED_STAGE_SET_STATUS(instrumentation::update_impl_status::set_dynamic_impl);
                 _impl = _dynamic_impl->clone();
                 _impl->update_dispatch_data(updated_params);
                 update_shape_info(updated_params);
             } else {
+#else
+            {
+#endif
+                GPU_DEBUG_PROFILED_STAGE_SET_STATUS(instrumentation::update_impl_status::compile_impl);
                 _impl = _node->type()->choose_impl(*_node, updated_params);
                 auto& kernels_cache = get_network().get_kernels_cache();
                 auto kernel_ids = kernels_cache.add_kernels_source(_impl->get_kernels_source());
@@ -634,6 +654,7 @@ primitive_inst::primitive_inst(network& network, program_node const& node, bool 
     }
     if (_impl) {
         _impl->set_node_params(node);
+#ifdef USE_SHAPE_AGNOSTIC_KERNEL
         if (_impl->is_dynamic()) {
             _dynamic_impl = _impl->clone();
             // Actual shape info layout is the following:
@@ -644,6 +665,7 @@ primitive_inst::primitive_inst(network& network, program_node const& node, bool 
             const int64_t shape_elements = buffers_count * tensor_dims_count;
             _shape_info_memory = _network.get_engine().allocate_memory(layout{{shape_elements}, data_types::i32, format::bfyx});
         }
+#endif
     }
 
     if (_outputs[0])
@@ -1055,14 +1077,17 @@ bool primitive_inst::is_valid_fusion() const {
     return true;
 }
 
-void primitive_inst::add_profiling_data(instrumentation::pipeline_stage stage, bool cache_hit, int64_t time) {
+void primitive_inst::add_profiling_data(instrumentation::pipeline_stage stage,
+                                            instrumentation::update_impl_status status, bool cache_hit, int64_t time) {
+    auto updated_params = _node->type()->get_fake_aligned_params(*_impl_params);
     instrumentation::perf_counter_key key {
             _network.get_input_layouts(),
-            _impl_params->input_layouts,
-            _impl_params->output_layouts,
+            updated_params.input_layouts,
+            updated_params.output_layouts,
             get_implementation_name(),
             stage,
-            cache_hit
+            cache_hit,
+            status
     };
 
     auto hash = instrumentation::perf_counter_hash()(key);
