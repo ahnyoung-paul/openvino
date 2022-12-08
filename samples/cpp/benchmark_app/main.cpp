@@ -1034,7 +1034,7 @@ int main(int argc, char* argv[]) {
             }
         } else {
             if (newInputType) {
-                inputsData = get_tensors(inputFiles, app_inputs_info);
+                inputsData = get_tensors_random(inputFiles, app_inputs_info);
             } else {
                 inputsData = get_tensors_static_case(
                     inputFiles.empty() ? std::vector<std::string>{} : inputFiles.begin()->second,
