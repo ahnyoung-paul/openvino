@@ -16,6 +16,9 @@
 std::map<std::string, ov::TensorVector> get_tensors(std::map<std::string, std::vector<std::string>> inputFiles,
                                                     std::vector<benchmark_app::InputsInfo>& app_inputs_info);
 
+std::map<std::string, ov::TensorVector> get_tensors_random(std::map<std::string, std::vector<std::string>> inputFiles,
+                                                    std::vector<benchmark_app::InputsInfo>& app_inputs_info);
+
 std::map<std::string, ov::TensorVector> get_tensors_static_case(const std::vector<std::string>& inputFiles,
                                                                 const size_t& batchSize,
                                                                 benchmark_app::InputsInfo& app_inputs_info,
