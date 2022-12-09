@@ -112,6 +112,8 @@ struct perf_counter_key {
     pipeline_stage stage;
     bool cache_hit;
     size_t impl_key;
+    std::string aligned_input_layouts;
+    std::string aligned_output_layouts;
 };
 
 struct perf_counter_hash {

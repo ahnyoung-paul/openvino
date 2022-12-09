@@ -1063,6 +1063,19 @@ bool primitive_inst::is_valid_fusion() const {
 }
 
 void primitive_inst::add_profiling_data(size_t impl_key, instrumentation::pipeline_stage stage, bool cache_hit, int64_t time) {
+    auto layouts_to_str = [](const std::vector<layout>& layouts) -> std::string {
+        std::stringstream s;
+        for (size_t i = 0; i < layouts.size(); i++) {
+            s << layouts[i].to_short_string();
+            if (i != layouts.size() - 1)
+                s << ";";
+        }
+        return s.str();
+    };
+    auto updated_params = _node->type()->get_fake_aligned_params(*_impl_params);
+    auto aligned_input_layouts = layouts_to_str(updated_params.input_layouts);
+    auto aligned_output_layouts = layouts_to_str(updated_params.output_layouts);
+
     instrumentation::perf_counter_key key {
             _network.get_input_layouts(),
             _impl_params->input_layouts,
@@ -1070,7 +1083,9 @@ void primitive_inst::add_profiling_data(size_t impl_key, instrumentation::pipeli
             get_implementation_name(),
             stage,
             cache_hit,
-            impl_key
+            impl_key,
+            aligned_input_layouts,
+            aligned_output_layouts
     };
 
     auto hash = instrumentation::perf_counter_hash()(key);
