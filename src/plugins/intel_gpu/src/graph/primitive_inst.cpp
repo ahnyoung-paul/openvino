@@ -352,6 +352,7 @@ void primitive_inst::update_impl() {
         auto updated_params = _node->type()->get_fake_aligned_params(*_impl_params);
         // auto layout_key = get_layout_key(updated_params);
         auto layout_key = _node->type()->get_impl_hash_key(*_node, updated_params);
+        GPU_DEBUG_PROFILED_STAGE_IMPL_KEY(layout_key);
         auto& cache = get_network().get_implementations_cache();
         bool has_cached_impl = false;
         {
@@ -371,7 +372,8 @@ void primitive_inst::update_impl() {
             if (_dynamic_impl) {
                 auto& compilation_context = get_network().get_compilation_context();
                 compilation_context.push_task([this, updated_params, layout_key](kernels_cache& kc) {
-                    GPU_DEBUG_PROFILED_STAGE(instrumentation::pipeline_stage::dynamic_compilation);
+                    GPU_DEBUG_PROFILED_STAGE(instrumentation::pipeline_stage::agnostic_compilation);
+                    GPU_DEBUG_PROFILED_STAGE_IMPL_KEY(layout_key);
                     auto& cache = get_network().get_implementations_cache();
                     {
                         std::lock_guard<std::mutex> lock(get_network().get_impl_cache_mutex());
@@ -398,6 +400,8 @@ void primitive_inst::update_impl() {
                 _impl->update_dispatch_data(updated_params);
                 update_shape_info(updated_params);
             } else {
+                GPU_DEBUG_PROFILED_STAGE(instrumentation::pipeline_stage::dynamic_compilation);
+                GPU_DEBUG_PROFILED_STAGE_IMPL_KEY(layout_key);
                 _impl = _node->type()->choose_impl(*_node, updated_params);
                 auto& kernels_cache = get_network().get_kernels_cache();
                 auto kernel_ids = kernels_cache.add_kernels_source(_impl->get_kernels_source());
@@ -1058,14 +1062,15 @@ bool primitive_inst::is_valid_fusion() const {
     return true;
 }
 
-void primitive_inst::add_profiling_data(instrumentation::pipeline_stage stage, bool cache_hit, int64_t time) {
+void primitive_inst::add_profiling_data(size_t impl_key, instrumentation::pipeline_stage stage, bool cache_hit, int64_t time) {
     instrumentation::perf_counter_key key {
             _network.get_input_layouts(),
             _impl_params->input_layouts,
             _impl_params->output_layouts,
             get_implementation_name(),
             stage,
-            cache_hit
+            cache_hit,
+            impl_key
     };
 
     auto hash = instrumentation::perf_counter_hash()(key);

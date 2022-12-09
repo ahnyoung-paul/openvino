@@ -86,7 +86,8 @@ enum class pipeline_stage : uint8_t {
     memory_allocation = 3,
     set_arguments = 4,
     inference = 5,
-    dynamic_compilation = 6
+    agnostic_compilation = 6,
+    dynamic_compilation = 7
 };
 
 inline std::ostream& operator<<(std::ostream& os, const pipeline_stage& stage) {
@@ -97,6 +98,7 @@ inline std::ostream& operator<<(std::ostream& os, const pipeline_stage& stage) {
         case pipeline_stage::update_weights:        return os << "update_weights";
         case pipeline_stage::memory_allocation:     return os << "memory_allocation";
         case pipeline_stage::inference:             return os << "inference";
+        case pipeline_stage::agnostic_compilation:  return os << "agnostic_compilation";
         case pipeline_stage::dynamic_compilation:   return os << "dynamic_compilation";
         default: OPENVINO_ASSERT(false, "[GPU] Unexpected pipeline stage");
     }
@@ -109,6 +111,7 @@ struct perf_counter_key {
     std::string impl_name;
     pipeline_stage stage;
     bool cache_hit;
+    size_t impl_key;
 };
 
 struct perf_counter_hash {
@@ -151,10 +154,11 @@ public:
         GPU_DEBUG_IF(profiling_enabled) {
             _finish = std::chrono::high_resolution_clock::now();
             auto total_duration = std::chrono::duration_cast<std::chrono::microseconds>(_finish - _start).count();
-            _obj.add_profiling_data(_stage, cache_hit, total_duration);
+            _obj.add_profiling_data(impl_key, _stage, cache_hit, total_duration);
         }
     }
     void set_cache_hit(bool val = true) { cache_hit = val; }
+    void set_impl_key(size_t val = 0) { impl_key = val; }
 
 private:
     bool profiling_enabled = false;
@@ -163,6 +167,7 @@ private:
     ProfiledObjectType& _obj;
     instrumentation::pipeline_stage _stage;
     bool cache_hit = false;
+    size_t impl_key = 0;
 };
 
 /// @}

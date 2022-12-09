@@ -13,10 +13,12 @@
     auto stage_prof = cldnn::instrumentation::profiled_stage<primitive_inst>(\
         !cldnn::debug_configuration::get_instance()->dump_profiling_data.empty(), *this, stage)
 #define GPU_DEBUG_PROFILED_STAGE_CACHE_HIT(val) stage_prof.set_cache_hit(val)
+#define GPU_DEBUG_PROFILED_STAGE_IMPL_KEY(val) stage_prof.set_impl_key(val)
 #else
 #define GPU_DEBUG_IF(cond) if (0)
 #define GPU_DEBUG_PROFILED_STAGE(stage)
 #define GPU_DEBUG_PROFILED_STAGE_CACHE_HIT(val)
+#define GPU_DEBUG_PROFILED_STAGE_IMPL_KEY(val)
 #endif
 
 #define GPU_DEBUG_COUT std::cout << cldnn::debug_configuration::prefix

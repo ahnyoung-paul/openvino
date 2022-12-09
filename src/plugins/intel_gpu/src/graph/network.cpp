@@ -59,7 +59,7 @@ namespace cldnn {
 namespace {
 
 #ifdef GPU_DEBUG_CONFIG
-void dump_perf_data_raw(std::string dump_path, const std::list<std::shared_ptr<primitive_inst>>& exec_order) {
+void dump_perf_data_raw(size_t net_id, std::string dump_path, const std::list<std::shared_ptr<primitive_inst>>& exec_order) {
     auto layouts_to_str = [](const std::vector<layout>& layouts) -> std::string {
         std::stringstream s;
         for (size_t i = 0; i < layouts.size(); i++) {
@@ -70,8 +70,14 @@ void dump_perf_data_raw(std::string dump_path, const std::list<std::shared_ptr<p
         return s.str();
     };
 
-    const std::string perf_raw_csv_header = "prim_id,prim_type,stage,net_in_shapes,in_shapes,out_shapes,impl,iters,time_usec\n";
-    std::ofstream of(dump_path);
+    std::string perf_raw_csv_header = "";
+    std::ifstream f(dump_path);
+    if (!f.good()) {
+        perf_raw_csv_header = "net_id,impl_key,prim_id,prim_type,stage,cache_hit,net_in_shapes,in_shapes,out_shapes,impl,iters,time_usec\n";
+    }
+
+    // const std::string perf_raw_csv_header = "net_id,impl_key,prim_id,prim_type,stage,cache_hit,net_in_shapes,in_shapes,out_shapes,impl,iters,time_usec\n";
+    std::ofstream of(dump_path, std::ios_base::app);
     if (of.is_open()) {
         of << perf_raw_csv_header;
         for (auto& inst : exec_order) {
@@ -114,13 +120,15 @@ void dump_perf_data_raw(std::string dump_path, const std::list<std::shared_ptr<p
                 std::string net_in_l_str = layouts_to_str(key.network_input_layouts);
                 std::string in_l_str = layouts_to_str(key.input_layouts);
                 std::string out_l_str = layouts_to_str(key.output_layouts);
-                of << prim_id << ","
+                of << net_id << "," << std::to_string(key.impl_key) << "," << prim_id << ","
                 << inst->desc()->type_string() << ","
-                << key.stage << (key.cache_hit ? " (cache_hit)" : "") << ","
+                << key.stage << "," << (key.cache_hit ? "1" : "0") << ","
                 << net_in_l_str << ","
                 << in_l_str << ","
                 << out_l_str << ","
-                << (key.stage == instrumentation::pipeline_stage::inference ? key.impl_name : "undef") << ","
+                << ((key.stage == instrumentation::pipeline_stage::inference
+                    || key.stage == instrumentation::pipeline_stage::agnostic_compilation
+                    || key.stage == instrumentation::pipeline_stage::dynamic_compilation)? key.impl_name : "undef") << ","
                 << num_iters << ","
                 << time_avg << "\n";
             }
@@ -264,7 +272,7 @@ void wait_for_the_turn() {
 }
 
 #else
-void dump_perf_data_raw(std::string, const std::list<std::shared_ptr<primitive_inst>>&) {}
+void dump_perf_data_raw(size_t net_id, std::string, const std::list<std::shared_ptr<primitive_inst>>&) {}
 void log_memory_to_file(memory::ptr, stream&, std::string) {}
 void wait_for_the_turn() {}
 #endif
@@ -433,7 +441,7 @@ network::~network() {
     _memory_pool->clear_pool_for_network(net_id);
     GPU_DEBUG_GET_INSTANCE(debug_config);
     GPU_DEBUG_IF(!debug_config->dump_profiling_data.empty()) {
-        dump_perf_data_raw(debug_config->dump_profiling_data + "/perf_raw" + std::to_string(net_id) + ".csv", _exec_order);
+        dump_perf_data_raw(net_id, debug_config->dump_profiling_data + "/perf_raw_data.csv", _exec_order);
     }
 }
 
