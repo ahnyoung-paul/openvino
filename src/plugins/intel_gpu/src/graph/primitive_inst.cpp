@@ -371,13 +371,16 @@ void primitive_inst::update_impl() {
             if (_dynamic_impl) {
                 auto& compilation_context = get_network().get_compilation_context();
                 compilation_context.push_task([this, updated_params, layout_key](kernels_cache& kc) {
+                    GPU_DEBUG_PROFILED_STAGE(instrumentation::pipeline_stage::dynamic_compilation);
                     auto& cache = get_network().get_implementations_cache();
                     {
                         std::lock_guard<std::mutex> lock(get_network().get_impl_cache_mutex());
                         // Check existense in the cache one more time as several iterations of model execution could happens and multiple compilation
                         // tasks created for same shapes
-                        if (cache.has(layout_key))
+                        if (cache.has(layout_key)) {
+                            GPU_DEBUG_PROFILED_STAGE_CACHE_HIT(true);
                             return;
+                        }
                     }
 
                     auto impl = _node->type()->choose_impl(*_node, updated_params);
