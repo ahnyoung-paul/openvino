@@ -351,7 +351,7 @@ void primitive_inst::update_impl() {
         // Update param if fake_alignment is available
         auto updated_params = _node->type()->get_fake_aligned_params(*_impl_params);
         // auto layout_key = get_layout_key(updated_params);
-        auto layout_key = _node->type()->get_impl_hash_key(*_node, updated_params);
+        const auto layout_key = _node->type()->get_impl_hash_key(*_node, updated_params);
         GPU_DEBUG_PROFILED_STAGE_IMPL_KEY(layout_key);
         auto& cache = get_network().get_implementations_cache();
         bool has_cached_impl = false;
@@ -368,6 +368,18 @@ void primitive_inst::update_impl() {
                 }
             }
         }
+        // if (id() == "reshape:393" || id() == "reshape:529" || id() == "reshape:665") {
+        // if (id() == "reshape:379" || id() == "reshape:801") {
+        //     std::cout << id() << ", key: " << layout_key << ", layout : ";
+        //     for (auto& in : updated_params.input_layouts) {
+        //         std::cout << in.to_short_string() << ";";
+        //     }
+        //     std::cout << "_origin_";
+        //     for (auto& in : _impl_params->input_layouts) {
+        //         std::cout << in.to_short_string() << ";";
+        //     }
+        //     std::cout << std::endl;
+        // }
         if (!has_cached_impl) {
             if (_dynamic_impl) {
                 auto& compilation_context = get_network().get_compilation_context();
@@ -396,6 +408,8 @@ void primitive_inst::update_impl() {
                     cache.add(layout_key, impl->clone());
                 });
 
+                GPU_DEBUG_PROFILED_STAGE(instrumentation::pipeline_stage::set_dynamic_impl);
+                GPU_DEBUG_PROFILED_STAGE_IMPL_KEY(layout_key);
                 _impl = _dynamic_impl->clone();
                 _impl->update_dispatch_data(updated_params);
                 update_shape_info(updated_params);
@@ -423,6 +437,7 @@ void primitive_inst::update_impl() {
 }
 
 event::ptr primitive_inst::execute(const std::vector<event::ptr>& events) {
+    iter++;
     const auto primitive_id = id();
     OPENVINO_ASSERT(_has_valid_input, primitive_id, " has invalid/unset input");
 
@@ -1089,9 +1104,15 @@ void primitive_inst::add_profiling_data(size_t impl_key, instrumentation::pipeli
     };
 
     auto hash = instrumentation::perf_counter_hash()(key);
+    hash = hash_combine(hash, get_network().get_id());
+    hash = hash_combine(hash, iter);
     auto& d = _profiling_data[hash];
     if (_profiling_info.find(hash) == _profiling_info.end()) {
         _profiling_info.emplace(hash, key);
+    // } else {
+    //     if (id() == "reshape:379" || id() == "reshape:801") {
+    //         std::cout << "hash is duplicated ...... >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> " << std::endl;
+    //     }
     }
 
     auto& total_time = std::get<0>(d);

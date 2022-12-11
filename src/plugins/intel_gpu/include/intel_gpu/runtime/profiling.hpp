@@ -87,7 +87,8 @@ enum class pipeline_stage : uint8_t {
     set_arguments = 4,
     inference = 5,
     agnostic_compilation = 6,
-    dynamic_compilation = 7
+    dynamic_compilation = 7,
+    set_dynamic_impl = 8
 };
 
 inline std::ostream& operator<<(std::ostream& os, const pipeline_stage& stage) {
@@ -100,6 +101,7 @@ inline std::ostream& operator<<(std::ostream& os, const pipeline_stage& stage) {
         case pipeline_stage::inference:             return os << "inference";
         case pipeline_stage::agnostic_compilation:  return os << "agnostic_compilation";
         case pipeline_stage::dynamic_compilation:   return os << "dynamic_compilation";
+        case pipeline_stage::set_dynamic_impl:      return os << "set_dynamic_impl";
         default: OPENVINO_ASSERT(false, "[GPU] Unexpected pipeline stage");
     }
 }
@@ -116,9 +118,12 @@ struct perf_counter_key {
     std::string aligned_output_layouts;
 };
 
+
 struct perf_counter_hash {
     std::size_t operator()(const perf_counter_key& k) const {
         size_t seed = 0;
+
+        seed = hash_combine(seed, k.impl_key);
         seed = hash_combine(seed, static_cast<std::underlying_type<instrumentation::pipeline_stage>::type>(k.stage));
         seed = hash_combine(seed, static_cast<int>(k.cache_hit));
         for (auto& layout : k.network_input_layouts) {

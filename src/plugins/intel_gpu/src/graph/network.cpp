@@ -115,6 +115,7 @@ void dump_perf_data_raw(size_t net_id, std::string dump_path, const std::list<st
             for (auto& hash : sorted_entries) {
                 auto& key = perf_info.at(hash);
                 if (key.stage == instrumentation::pipeline_stage::update_implementation
+                    || key.stage == instrumentation::pipeline_stage::set_dynamic_impl
                     || key.stage == instrumentation::pipeline_stage::agnostic_compilation
                     || key.stage == instrumentation::pipeline_stage::dynamic_compilation) {
                     auto& entry = perf_data.at(hash);
@@ -131,6 +132,8 @@ void dump_perf_data_raw(size_t net_id, std::string dump_path, const std::list<st
                     << in_l_str << "," << ((in_l_str == key.aligned_input_layouts)? "," : (key.aligned_input_layouts + ","))
                     << out_l_str << "," << ((out_l_str == key.aligned_output_layouts)? "," : (key.aligned_output_layouts + ","))
                     << ((key.stage == instrumentation::pipeline_stage::inference
+                        || key.stage == instrumentation::pipeline_stage::update_implementation
+                        || key.stage == instrumentation::pipeline_stage::set_dynamic_impl
                         || key.stage == instrumentation::pipeline_stage::agnostic_compilation
                         || key.stage == instrumentation::pipeline_stage::dynamic_compilation)? key.impl_name : "undef") << ","
                     << num_iters << ","
