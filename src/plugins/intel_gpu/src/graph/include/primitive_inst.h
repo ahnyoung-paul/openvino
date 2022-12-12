@@ -234,7 +234,8 @@ public:
         std::list<std::shared_ptr<primitive_inst>> const& primitives);
     std::string get_implementation_name() const;
 
-    void add_profiling_data(size_t impl_key, instrumentation::pipeline_stage stage, bool cache_hit, int64_t time);
+    void add_profiling_data(size_t impl_key, instrumentation::pipeline_stage stage, instrumentation::update_impl_status status,
+                                        bool cache_hit, int64_t time);
     const std::unordered_map<size_t, std::tuple<int64_t, size_t>>& get_profiling_data() const { return _profiling_data; }
     const std::unordered_map<size_t, instrumentation::perf_counter_key>& get_profiling_info() const { return _profiling_info; }
 
@@ -350,8 +351,6 @@ protected:
     // and store mapping onto original perf_clounter_key for further data analysis and dumps
     std::unordered_map<size_t, std::tuple<int64_t, size_t>> _profiling_data;
     std::unordered_map<size_t, instrumentation::perf_counter_key> _profiling_info;
-
-    size_t iter = 0;
 };
 
 /*

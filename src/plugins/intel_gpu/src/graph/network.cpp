@@ -73,8 +73,8 @@ void dump_perf_data_raw(size_t net_id, std::string dump_path, const std::list<st
     std::string perf_raw_csv_header = "";
     std::ifstream f(dump_path);
     if (!f.good()) {
-        perf_raw_csv_header = "net_id,impl_key,prim_id,prim_type,stage,cache_hit,net_in_shapes,"
-                        "in_shapes,in_aligned_shapes,out_shapes,out_aligned_shapes,impl,iters,time_usec\n";
+        perf_raw_csv_header = "prim_id,prim_type,stage,impl_status,cache_hit,net_in_shapes,"
+                        "in_shapes,out_shapes,impl,iters,time_usec\n";
     }
 
     // const std::string perf_raw_csv_header = "net_id,impl_key,prim_id,prim_type,stage,cache_hit,net_in_shapes,in_shapes,out_shapes,impl,iters,time_usec\n";
@@ -114,31 +114,39 @@ void dump_perf_data_raw(size_t net_id, std::string dump_path, const std::list<st
             });
             for (auto& hash : sorted_entries) {
                 auto& key = perf_info.at(hash);
-                if (key.stage == instrumentation::pipeline_stage::update_implementation
+                auto& entry = perf_data.at(hash);
+                auto& time = std::get<0>(entry);
+                auto& num_iters = std::get<1>(entry);
+
+                std::stringstream ss;
+                ss << key.impl_status;
+                std::string impl_status_str = ss.str();
+
+                if (key.impl_status == instrumentation::update_impl_status::none) {
+                    if (key.stage == instrumentation::pipeline_stage::agnostic_compilation) {
+                        impl_status_str = "agnostic_compile";
+                    } else {
+                        impl_status_str = "none";
+                    }
+                }
+
+                int64_t time_avg = time;
+                std::string net_in_l_str = layouts_to_str(key.network_input_layouts);
+                std::string in_l_str = layouts_to_str(key.input_layouts);
+                std::string out_l_str = layouts_to_str(key.output_layouts);
+                of << prim_id << ","
+                << inst->desc()->type_string() << ","
+                << key.stage << "," << impl_status_str << "," << (key.cache_hit ? "1" : "0") << ","
+                << net_in_l_str << ","
+                << in_l_str << ","
+                << out_l_str << ","
+                << ((key.stage == instrumentation::pipeline_stage::inference
+                    || key.stage == instrumentation::pipeline_stage::update_implementation
                     || key.stage == instrumentation::pipeline_stage::set_dynamic_impl
                     || key.stage == instrumentation::pipeline_stage::agnostic_compilation
-                    || key.stage == instrumentation::pipeline_stage::dynamic_compilation) {
-                    auto& entry = perf_data.at(hash);
-                    auto& time = std::get<0>(entry);
-                    auto& num_iters = std::get<1>(entry);
-                    int64_t time_avg = time / num_iters;
-                    std::string net_in_l_str = layouts_to_str(key.network_input_layouts);
-                    std::string in_l_str = layouts_to_str(key.input_layouts);
-                    std::string out_l_str = layouts_to_str(key.output_layouts);
-                    of << net_id << "," << std::to_string(key.impl_key) << "," << prim_id << ","
-                    << inst->desc()->type_string() << ","
-                    << key.stage << "," << (key.cache_hit ? "1" : "0") << ","
-                    << net_in_l_str << ","
-                    << in_l_str << "," << ((in_l_str == key.aligned_input_layouts)? "," : (key.aligned_input_layouts + ","))
-                    << out_l_str << "," << ((out_l_str == key.aligned_output_layouts)? "," : (key.aligned_output_layouts + ","))
-                    << ((key.stage == instrumentation::pipeline_stage::inference
-                        || key.stage == instrumentation::pipeline_stage::update_implementation
-                        || key.stage == instrumentation::pipeline_stage::set_dynamic_impl
-                        || key.stage == instrumentation::pipeline_stage::agnostic_compilation
-                        || key.stage == instrumentation::pipeline_stage::dynamic_compilation)? key.impl_name : "undef") << ","
-                    << num_iters << ","
-                    << time_avg << "\n";
-                }
+                    || key.stage == instrumentation::pipeline_stage::dynamic_compilation)? key.impl_name : "undef") << ","
+                << num_iters << ","
+                << time_avg << "\n";
             }
         }
     }

@@ -283,6 +283,7 @@ void primitive_inst::realloc_if_needed() {
     allocate_internal_buffers();
 }
 
+#define USE_IMPROVED_KEY
 void primitive_inst::update_impl() {
     GPU_DEBUG_PROFILED_STAGE(instrumentation::pipeline_stage::update_implementation);
     GPU_DEBUG_GET_INSTANCE(debug_config);
@@ -303,24 +304,25 @@ void primitive_inst::update_impl() {
         return l.transform(format::bfwzyx).to_shape();
     };
 
-    // auto get_layout_key = [&](const kernel_impl_params& params) -> size_t {
-    //     size_t seed = 0;
-    //     auto& id = params.desc->id;
-    //     for (size_t i = 0; i < id.size(); i++) {
-    //         seed = hash_combine(seed, id[i]);
-    //     }
-    //     seed = hash_combine(seed, _node->get_unique_id());
-    //     for (auto& layout : params.input_layouts) {
-    //         for (auto& d : layout.get_shape()) {
-    //             seed = hash_combine(seed, d);
-    //         }
-    //     }
-    //     for (auto& d : params.get_output_layout().get_shape()) {
-    //         seed = hash_combine(seed, d);
-    //     }
-    //     return seed;
-    // };
-
+#ifndef USE_IMPROVED_KEY
+    auto get_layout_key = [&](const kernel_impl_params& params) -> size_t {
+        size_t seed = 0;
+        auto& id = params.desc->id;
+        for (size_t i = 0; i < id.size(); i++) {
+            seed = hash_combine(seed, id[i]);
+        }
+        seed = hash_combine(seed, _node->get_unique_id());
+        for (auto& layout : params.input_layouts) {
+            for (auto& d : layout.get_shape()) {
+                seed = hash_combine(seed, d);
+            }
+        }
+        for (auto& d : params.get_output_layout().get_shape()) {
+            seed = hash_combine(seed, d);
+        }
+        return seed;
+    };
+#endif
     auto update_shape_info = [this, extend_to_6d, debug_config, prev_impl_str](const kernel_impl_params& params) {
         mem_lock<int32_t> lock(_shape_info_memory, _network.get_stream());
         size_t offset = 0;
@@ -350,9 +352,11 @@ void primitive_inst::update_impl() {
         GPU_DEBUG_GET_INSTANCE(debug_config);
         // Update param if fake_alignment is available
         auto updated_params = _node->type()->get_fake_aligned_params(*_impl_params);
-        // auto layout_key = get_layout_key(updated_params);
+#ifndef USE_IMPROVED_KEY
+        const auto layout_key = get_layout_key(updated_params);
+#else
         const auto layout_key = _node->type()->get_impl_hash_key(*_node, updated_params);
-        GPU_DEBUG_PROFILED_STAGE_IMPL_KEY(layout_key);
+#endif
         auto& cache = get_network().get_implementations_cache();
         bool has_cached_impl = false;
         {
@@ -362,30 +366,19 @@ void primitive_inst::update_impl() {
                 _impl = cache.get(layout_key)->clone();
                 _impl->set_node_params(*_node);
                 GPU_DEBUG_PROFILED_STAGE_CACHE_HIT(true);
+                GPU_DEBUG_PROFILED_STAGE_SET_STATUS(instrumentation::update_impl_status::matched_cache);
 
                 GPU_DEBUG_IF(debug_config->verbose >= 4) {
                     GPU_DEBUG_COUT << id() << ": get impl from cache " << _impl->get_kernel_name() << std::endl;
                 }
             }
         }
-        // if (id() == "reshape:393" || id() == "reshape:529" || id() == "reshape:665") {
-        // if (id() == "reshape:379" || id() == "reshape:801") {
-        //     std::cout << id() << ", key: " << layout_key << ", layout : ";
-        //     for (auto& in : updated_params.input_layouts) {
-        //         std::cout << in.to_short_string() << ";";
-        //     }
-        //     std::cout << "_origin_";
-        //     for (auto& in : _impl_params->input_layouts) {
-        //         std::cout << in.to_short_string() << ";";
-        //     }
-        //     std::cout << std::endl;
-        // }
+
         if (!has_cached_impl) {
             if (_dynamic_impl) {
                 auto& compilation_context = get_network().get_compilation_context();
                 compilation_context.push_task([this, updated_params, layout_key](kernels_cache& kc) {
                     GPU_DEBUG_PROFILED_STAGE(instrumentation::pipeline_stage::agnostic_compilation);
-                    GPU_DEBUG_PROFILED_STAGE_IMPL_KEY(layout_key);
                     auto& cache = get_network().get_implementations_cache();
                     {
                         std::lock_guard<std::mutex> lock(get_network().get_impl_cache_mutex());
@@ -393,10 +386,12 @@ void primitive_inst::update_impl() {
                         // tasks created for same shapes
                         if (cache.has(layout_key)) {
                             GPU_DEBUG_PROFILED_STAGE_CACHE_HIT(true);
+                            GPU_DEBUG_PROFILED_STAGE_SET_STATUS(instrumentation::update_impl_status::matched_cache);
                             return;
                         }
                     }
 
+                    GPU_DEBUG_PROFILED_STAGE_SET_STATUS(instrumentation::update_impl_status::compile_agnostic_impl);
                     auto impl = _node->type()->choose_impl(*_node, updated_params);
                     auto kernel_ids = kc.add_kernels_source(impl->get_kernels_source());
                     impl->set_kernel_ids(kernel_ids);
@@ -408,14 +403,12 @@ void primitive_inst::update_impl() {
                     cache.add(layout_key, impl->clone());
                 });
 
-                GPU_DEBUG_PROFILED_STAGE(instrumentation::pipeline_stage::set_dynamic_impl);
-                GPU_DEBUG_PROFILED_STAGE_IMPL_KEY(layout_key);
+                GPU_DEBUG_PROFILED_STAGE_SET_STATUS(instrumentation::update_impl_status::set_dynamic_impl);
                 _impl = _dynamic_impl->clone();
                 _impl->update_dispatch_data(updated_params);
                 update_shape_info(updated_params);
             } else {
-                GPU_DEBUG_PROFILED_STAGE(instrumentation::pipeline_stage::dynamic_compilation);
-                GPU_DEBUG_PROFILED_STAGE_IMPL_KEY(layout_key);
+                GPU_DEBUG_PROFILED_STAGE_SET_STATUS(instrumentation::update_impl_status::compile_impl);
                 _impl = _node->type()->choose_impl(*_node, updated_params);
                 auto& kernels_cache = get_network().get_kernels_cache();
                 auto kernel_ids = kernels_cache.add_kernels_source(_impl->get_kernels_source());
@@ -437,7 +430,6 @@ void primitive_inst::update_impl() {
 }
 
 event::ptr primitive_inst::execute(const std::vector<event::ptr>& events) {
-    iter++;
     const auto primitive_id = id();
     OPENVINO_ASSERT(_has_valid_input, primitive_id, " has invalid/unset input");
 
@@ -1077,42 +1069,24 @@ bool primitive_inst::is_valid_fusion() const {
     return true;
 }
 
-void primitive_inst::add_profiling_data(size_t impl_key, instrumentation::pipeline_stage stage, bool cache_hit, int64_t time) {
-    auto layouts_to_str = [](const std::vector<layout>& layouts) -> std::string {
-        std::stringstream s;
-        for (size_t i = 0; i < layouts.size(); i++) {
-            s << layouts[i].to_short_string();
-            if (i != layouts.size() - 1)
-                s << ";";
-        }
-        return s.str();
-    };
+void primitive_inst::add_profiling_data(size_t impl_key, instrumentation::pipeline_stage stage,
+                                            instrumentation::update_impl_status status, bool cache_hit, int64_t time) {
     auto updated_params = _node->type()->get_fake_aligned_params(*_impl_params);
-    auto aligned_input_layouts = layouts_to_str(updated_params.input_layouts);
-    auto aligned_output_layouts = layouts_to_str(updated_params.output_layouts);
-
     instrumentation::perf_counter_key key {
             _network.get_input_layouts(),
-            _impl_params->input_layouts,
-            _impl_params->output_layouts,
+            updated_params.input_layouts,
+            updated_params.output_layouts,
             get_implementation_name(),
             stage,
             cache_hit,
             impl_key,
-            aligned_input_layouts,
-            aligned_output_layouts
+            status
     };
 
     auto hash = instrumentation::perf_counter_hash()(key);
-    hash = hash_combine(hash, get_network().get_id());
-    hash = hash_combine(hash, iter);
     auto& d = _profiling_data[hash];
     if (_profiling_info.find(hash) == _profiling_info.end()) {
         _profiling_info.emplace(hash, key);
-    // } else {
-    //     if (id() == "reshape:379" || id() == "reshape:801") {
-    //         std::cout << "hash is duplicated ...... >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> " << std::endl;
-    //     }
     }
 
     auto& total_time = std::get<0>(d);
