@@ -380,14 +380,13 @@ void primitive_inst::update_impl() {
 #ifdef USE_SHAPE_AGNOSTIC_KERNEL
             if (_dynamic_impl) {
                 auto& compilation_context = get_network().get_compilation_context();
-                compilation_context.push_task([this, updated_params, layout_key](kernels_cache& kc) -> bool {
+                compilation_context.push_task(layout_key, [this, updated_params, layout_key](kernels_cache& kc) -> bool {
                     auto& cache = get_network().get_implementations_cache();
                     {
                         std::lock_guard<std::mutex> lock(get_network().get_impl_cache_mutex());
                         // Check existense in the cache one more time as several iterations of model execution could happens and multiple compilation
                         // tasks created for same shapes
-                        if (cache.has(layout_key))
-                            return true; // cache hit
+                        if (cache.has(layout_key))                            return true; // cache hit
                     }
 
                     auto impl = _node->type()->choose_impl(*_node, updated_params);
@@ -399,7 +398,7 @@ void primitive_inst::update_impl() {
 
                     std::lock_guard<std::mutex> lock(get_network().get_impl_cache_mutex());
                     cache.add(layout_key, impl->clone());
-                    return false; // cache miss
+                    return false; // cache_miss
                 });
 
                 GPU_DEBUG_PROFILED_STAGE_SET_STATUS(instrumentation::update_impl_status::set_dynamic_impl);

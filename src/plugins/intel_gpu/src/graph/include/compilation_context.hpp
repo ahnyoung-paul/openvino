@@ -13,7 +13,8 @@ namespace cldnn {
 class ICompilationContext {
 public:
     using Task = std::function<bool(kernels_cache&)>;
-    virtual void push_task(Task&& task) = 0;
+    virtual bool push_task(size_t key, Task&& task) = 0;
+    virtual bool try_pop_task(ICompilationContext::Task& task) = 0;
     virtual void cancel() noexcept = 0;
     virtual ~ICompilationContext() = default;
     virtual std::string get_statistics_str() = 0;
