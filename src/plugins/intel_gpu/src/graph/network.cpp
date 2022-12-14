@@ -117,18 +117,6 @@ void dump_perf_data_raw(std::string dump_path, const std::list<std::shared_ptr<p
                 auto& time = std::get<0>(entry);
                 auto& num_iters = std::get<1>(entry);
 
-                // std::stringstream ss;
-                // ss << key.impl_status;
-                // std::string impl_status_str = ss.str();
-
-                // if (key.impl_status == instrumentation::update_impl_status::none) {
-                //     if (key.stage == instrumentation::pipeline_stage::agnostic_compilation) {
-                //         impl_status_str = "agnostic_compile";
-                //     } else {
-                //         impl_status_str = "none";
-                //     }
-                // }
-
                 int64_t time_avg = time;
                 std::string net_in_l_str = layouts_to_str(key.network_input_layouts);
                 std::string in_l_str = layouts_to_str(key.input_layouts);
@@ -141,9 +129,7 @@ void dump_perf_data_raw(std::string dump_path, const std::list<std::shared_ptr<p
                 << out_l_str << ","
                 << ((key.stage == instrumentation::pipeline_stage::inference
                     || key.stage == instrumentation::pipeline_stage::update_implementation
-                    || key.stage == instrumentation::pipeline_stage::set_dynamic_impl
-                    || key.stage == instrumentation::pipeline_stage::agnostic_compilation
-                    || key.stage == instrumentation::pipeline_stage::dynamic_compilation)? key.impl_name : "undef") << ","
+                    || key.stage == instrumentation::pipeline_stage::async_compilation)? key.impl_name : "undef") << ","
                 << num_iters << ","
                 << time_avg << "\n";
             }

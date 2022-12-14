@@ -368,7 +368,7 @@ void primitive_inst::update_impl() {
                 _impl = cache.get(layout_key)->clone();
                 _impl->set_node_params(*_node);
                 GPU_DEBUG_PROFILED_STAGE_CACHE_HIT(true);
-                GPU_DEBUG_PROFILED_STAGE_SET_STATUS(instrumentation::update_impl_status::matched_cache);
+                GPU_DEBUG_PROFILED_STAGE_SET_STATUS(instrumentation::update_impl_status::cache_hit);
 
                 GPU_DEBUG_IF(debug_config->verbose >= 4) {
                     GPU_DEBUG_COUT << id() << ": get impl from cache " << _impl->get_kernel_name() << std::endl;
@@ -380,21 +380,16 @@ void primitive_inst::update_impl() {
 #ifdef USE_SHAPE_AGNOSTIC_KERNEL
             if (_dynamic_impl) {
                 auto& compilation_context = get_network().get_compilation_context();
-                compilation_context.push_task([this, updated_params, layout_key](kernels_cache& kc) {
-                    GPU_DEBUG_PROFILED_STAGE(instrumentation::pipeline_stage::agnostic_compilation);
+                compilation_context.push_task(layout_key, [this, updated_params, layout_key](kernels_cache& kc) {
                     auto& cache = get_network().get_implementations_cache();
                     {
                         std::lock_guard<std::mutex> lock(get_network().get_impl_cache_mutex());
                         // Check existense in the cache one more time as several iterations of model execution could happens and multiple compilation
                         // tasks created for same shapes
-                        if (cache.has(layout_key)) {
-                            GPU_DEBUG_PROFILED_STAGE_CACHE_HIT(true);
-                            GPU_DEBUG_PROFILED_STAGE_SET_STATUS(instrumentation::update_impl_status::matched_cache);
+                        if (cache.has(layout_key))
                             return;
-                        }
                     }
 
-                    GPU_DEBUG_PROFILED_STAGE_SET_STATUS(instrumentation::update_impl_status::compile_agnostic_impl);
                     auto impl = _node->type()->choose_impl(*_node, updated_params);
                     auto kernel_ids = kc.add_kernels_source(impl->get_kernels_source());
                     impl->set_kernel_ids(kernel_ids);
@@ -1079,11 +1074,11 @@ bool primitive_inst::is_valid_fusion() const {
 
 void primitive_inst::add_profiling_data(instrumentation::pipeline_stage stage,
                                             instrumentation::update_impl_status status, bool cache_hit, int64_t time) {
-    auto updated_params = _node->type()->get_fake_aligned_params(*_impl_params);
+    // auto updated_params = _node->type()->get_fake_aligned_params(*_impl_params);
     instrumentation::perf_counter_key key {
             _network.get_input_layouts(),
-            updated_params.input_layouts,
-            updated_params.output_layouts,
+            _impl_params->input_layouts,
+            _impl_params->output_layouts,
             get_implementation_name(),
             stage,
             cache_hit,

@@ -86,9 +86,7 @@ enum class pipeline_stage : uint8_t {
     memory_allocation = 3,
     set_arguments = 4,
     inference = 5,
-    agnostic_compilation = 6,
-    dynamic_compilation = 7,
-    set_dynamic_impl = 8
+    async_compilation = 6
 };
 
 inline std::ostream& operator<<(std::ostream& os, const pipeline_stage& stage) {
@@ -99,28 +97,24 @@ inline std::ostream& operator<<(std::ostream& os, const pipeline_stage& stage) {
         case pipeline_stage::update_weights:        return os << "update_weights";
         case pipeline_stage::memory_allocation:     return os << "memory_allocation";
         case pipeline_stage::inference:             return os << "inference";
-        case pipeline_stage::agnostic_compilation:  return os << "agnostic_compilation";
-        case pipeline_stage::dynamic_compilation:   return os << "dynamic_compilation";
-        case pipeline_stage::set_dynamic_impl:      return os << "set_dynamic_impl";
+        case pipeline_stage::async_compilation:     return os << "async_compilation";
         default: OPENVINO_ASSERT(false, "[GPU] Unexpected pipeline stage");
     }
 }
 
 enum class update_impl_status : uint8_t {
     none = 0,
-    matched_cache = 1,
+    cache_hit = 1,
     set_dynamic_impl = 2,
-    compile_impl = 3,
-    compile_agnostic_impl = 4
+    compile_impl = 3
 };
 
 inline std::ostream& operator<<(std::ostream& os, const update_impl_status& status) {
     switch (status) {
         case update_impl_status::none:                  return os << "none";
-        case update_impl_status::matched_cache:         return os << "matched_cache";
+        case update_impl_status::cache_hit:             return os << "cache_hit";
         case update_impl_status::set_dynamic_impl:      return os << "set_dynamic_impl";
         case update_impl_status::compile_impl:          return os << "compile_impl";
-        case update_impl_status::compile_agnostic_impl: return os << "compile_agnostic_impl";
         default: OPENVINO_ASSERT(false, "[GPU] Unexpected pipeline status");
     }
 }
@@ -180,11 +174,7 @@ public:
             _obj.add_profiling_data(_stage, impl_status, cache_hit, total_duration);
         }
     }
-
-    void set_cache_hit(bool val = true) {
-        cache_hit = val;
-    }
-
+    void set_cache_hit(bool val = true) { cache_hit = val; }
     void set_status(instrumentation::update_impl_status val) { impl_status = val; }
 
 private:
