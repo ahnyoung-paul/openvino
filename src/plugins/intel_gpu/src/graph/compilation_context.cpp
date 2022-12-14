@@ -13,17 +13,21 @@ public:
     using data_list_type = std::list<data_type>;
     using data_list_iter = typename data_list_type::iterator;
 
-    CompilationContext(cldnn::engine& engine, size_t program_id) {
-        max_queue_size = 0;
-        num_cache_hit = 0;
-        num_cache_miss = 0;
-        _kernels_cache = cldnn::make_unique<kernels_cache>(engine, program_id, kernel_selector::KernelBase::get_db().get_batch_header_str());
-        _worker = std::thread([this](){
+    CompilationContext(CompilationContext&& other) = default;
+
+CompilationContext(cldnn::engine& engine, size_t program_id) {
+    max_queue_size = 0;
+    num_cache_hit = 0;
+    num_cache_miss = 0;
+    const size_t max_num_threads = 2;
+    for (size_t i = 0; i < max_num_threads; i++) {
+        auto thread = std::thread([this, &program_id, &engine](){
+            auto m_kernels_cache = cldnn::make_unique<kernels_cache>(engine, program_id, kernel_selector::KernelBase::get_db().get_batch_header_str());
             while (!_stop_compilation) {
                 CompilationContext::Task task;
                 bool success = try_pop_task(task);
                 if (success) {
-                    if (task(*_kernels_cache)) {
+                    if (task(*m_kernels_cache)) {
                         num_cache_hit++;
                     } else {
                         num_cache_miss++;
@@ -34,6 +38,16 @@ public:
                 }
             }
         });
+        _workers.push_back(std::move(thread));
+    }
+}
+
+    void cancel() noexcept override {
+        _stop_compilation = true;
+        for (size_t i = 0; i < _workers.size(); i++) {
+            if (_workers[i].joinable())
+                _workers.at(i).join();
+        }
     }
 
     bool push_task(size_t key, ICompilationContext::Task&& task) override {
@@ -62,25 +76,17 @@ public:
         return false;
     }
 
-    void cancel() noexcept override {
-        _stop_compilation = true;
-        if (_worker.joinable())
-            _worker.join();
-    }
-
     std::string get_statistics_str() override {
         std::stringstream ss;
-        ss << "compilation_context {";
-        ss << "max_queue_size:" << max_queue_size << ",";
-        ss << "cache_hit:" << num_cache_hit << " / " << (num_cache_hit + num_cache_miss) << "}";
+        ss << "max_queue_size, cache_hit, cache_miss\n";
+        ss << max_queue_size << "," << num_cache_hit << "," << num_cache_miss << "\n";
         return ss.str();
     }
 
     ~CompilationContext() noexcept { cancel(); }
 
 private:
-    std::unique_ptr<kernels_cache> _kernels_cache;
-    std::thread _worker;
+    std::vector<std::thread> _workers;
     std::atomic_bool _stop_compilation{false};
 
     data_list_type _data_list;

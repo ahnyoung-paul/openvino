@@ -386,7 +386,8 @@ void primitive_inst::update_impl() {
                         std::lock_guard<std::mutex> lock(get_network().get_impl_cache_mutex());
                         // Check existense in the cache one more time as several iterations of model execution could happens and multiple compilation
                         // tasks created for same shapes
-                        if (cache.has(layout_key))                            return true; // cache hit
+                        if (cache.has(layout_key))
+                            return true; // cache hit
                     }
 
                     auto impl = _node->type()->choose_impl(*_node, updated_params);
