@@ -49,9 +49,8 @@ public:
 
     std::string get_statistics_str() override {
         std::stringstream ss;
-        ss << "compilation_context {";
-        ss << "max_queue_size:" << max_queue_size << ",";
-        ss << "cache_hit:" << num_cache_hit << " / " << (num_cache_hit + num_cache_miss) << "}";
+        ss << "max_queue_size, cache_hit, cache_miss\n";
+        ss << max_queue_size << "," << num_cache_hit << "," << num_cache_miss << "\n";
         return ss.str();
     }
 

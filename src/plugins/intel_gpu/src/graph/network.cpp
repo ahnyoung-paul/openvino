@@ -59,6 +59,13 @@ namespace cldnn {
 namespace {
 
 #ifdef GPU_DEBUG_CONFIG
+void dump_async_compile_condition(std::string dump_path, std::string data) {
+    std::ofstream of(dump_path, std::ios_base::app);
+    if (of.is_open()) {
+        of << data;
+    }
+}
+
 void dump_perf_data_raw(std::string dump_path, const std::list<std::shared_ptr<primitive_inst>>& exec_order) {
     auto layouts_to_str = [](const std::vector<layout>& layouts) -> std::string {
         std::stringstream s;
@@ -273,6 +280,7 @@ void wait_for_the_turn() {
 }
 
 #else
+void dump_async_compile_condition(std::string dump_path, std::string data) {}
 void dump_perf_data_raw(std::string, const std::list<std::shared_ptr<primitive_inst>>&) {}
 void log_memory_to_file(memory::ptr, stream&, std::string) {}
 void wait_for_the_turn() {}
@@ -444,8 +452,11 @@ network::~network() {
     GPU_DEBUG_IF(!debug_config->dump_profiling_data.empty()) {
         dump_perf_data_raw(debug_config->dump_profiling_data + "/perf_raw" + std::to_string(net_id) + ".csv", _exec_order);
         // dump_perf_data_raw(debug_config->dump_profiling_data + "/perf_raw_data.csv", _exec_order);
-        if (_compilation_context)
-            std::cout << _compilation_context->get_statistics_str() << std::endl;
+        if (_compilation_context) {
+            // std::cout << _compilation_context->get_statistics_str() << std::endl;
+            dump_async_compile_condition(debug_config->dump_profiling_data + "/perf_async_compilation_"
+                                             + std::to_string(net_id) + ".csv.txt", _compilation_context->get_statistics_str());
+        }
     }
 }
 
