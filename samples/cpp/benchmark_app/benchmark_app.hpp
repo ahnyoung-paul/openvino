@@ -233,6 +233,10 @@ static const char exec_graph_path_message[] =
 static const char dump_config_message[] =
     "Optional. Path to JSON file to dump IE parameters, which were set by application.";
 
+/// @brief input shapes shapes <br>
+static constexpr char input_shapes_file_message[] =
+    "Optional. path of input shapes for dynamic shape model.\n";
+
 // @brief message for load config option
 static const char load_config_message[] =
     "Optional. Path to JSON file to load custom IE parameters."
@@ -390,6 +394,10 @@ DEFINE_string(load_config, "", load_config_message);
 /// @brief Define flag for dumping configuration file <br>
 DEFINE_string(dump_config, "", dump_config_message);
 
+/// @brief input shapes shapes <br>
+/// It is a required parameter
+DEFINE_string(input_shapes_file, "", input_shapes_file_message);
+
 /**
  * @brief This function show a help message
  */
@@ -449,4 +457,5 @@ static void show_usage() {
     std::cout << "    -exec_graph_path        " << exec_graph_path_message << std::endl;
     std::cout << "    -dump_config            " << dump_config_message << std::endl;
     std::cout << "    -load_config            " << load_config_message << std::endl;
+    std::cout << "    -input_shapes_file        " << input_shapes_file_message << std::endl;
 }
