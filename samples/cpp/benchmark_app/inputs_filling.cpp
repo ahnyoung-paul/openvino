@@ -607,7 +607,7 @@ std::string get_test_info_stream_header(benchmark_app::InputInfo& inputInfo) {
     }
     return strOut.str();
 }
-std::map<std::string, ov::TensorVector> get_tensors_random(std::map<std::string, std::vector<std::string>> inputFiles,
+std::map<std::string, ov::TensorVector> get_tensors_random(std::string input_shape_file_path, std::map<std::string, std::vector<std::string>> inputFiles,
                                                            std::vector<benchmark_app::InputsInfo>& app_inputs_info) {
     std::cout << "get tensors random" << std::endl;
     size_t n_shape = 0, m_file = 0;
@@ -615,7 +615,11 @@ std::map<std::string, ov::TensorVector> get_tensors_random(std::map<std::string,
     srand (time(nullptr));
     int32_t n_input_ports = app_inputs_info[0].size();
     std::ifstream fin;
-    fin.open("/home/yblee/work/openvino/squad_1.1_shapes.csv");
+    fin.open(input_shape_file_path);
+    if (!fin.good()) {
+        throw ov::Exception("Fail to open input shape file :  " + input_shape_file_path);
+    }
+    std::vector<int> lengths;
     std::string line;
     while (n_shape < 2000 && fin >> line) { // create 1000 random inputs
         std::getline(fin, line);
@@ -626,7 +630,8 @@ std::map<std::string, ov::TensorVector> get_tensors_random(std::map<std::string,
         std::getline(words, word, ',');
         auto random_seq_len = std::stoi(word);
         auto input_info_iter = app_inputs_info[0].begin();
-        std::cout << n_shape << "-th sequence len : " << random_seq_len << std::endl;
+        lengths.push_back(random_seq_len);
+        // std::cout << n_shape << "-th sequence len : " << random_seq_len << std::endl;
         for (int i = 0; i < app_inputs_info[0].size(); ++i) {
             std::string input_name = input_info_iter->first;
             std::string tensor_src_info;
@@ -641,6 +646,14 @@ std::map<std::string, ov::TensorVector> get_tensors_random(std::map<std::string,
         n_shape++;
     }
     fin.close();
+#if 0
+    const float avg = std::accumulate(lengths.begin(), lengths.end(), 0.f) / lengths.size();
+    float variance = std::accumulate(lengths.begin(), lengths.end(), 0.f, [&](int a, int b) {
+        return (a + (b - avg) * (b - avg));
+    }) / lengths.size();
+    float std_deviation = std::sqrt(variance);
+    slog::info << " Input data num " << lengths.size() << ", avg: " << avg << ", variance " << variance << ", std_deviation: " << std_deviation << slog::endl;
+#endif
     return tensors;
 }
 
