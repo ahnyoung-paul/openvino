@@ -370,7 +370,7 @@ void primitive_inst::update_impl() {
         if (!has_cached_impl) {
             if (_dynamic_impl) {
                 auto& compilation_context = get_network().get_compilation_context();
-                compilation_context.push_task([this, updated_params, layout_key](kernels_cache& kc) {
+                compilation_context.push_task(layout_key, [this, updated_params, layout_key](kernels_cache& kc) {
                     auto& cache = get_network().get_implementations_cache();
                     {
                         std::lock_guard<std::mutex> lock(get_network().get_impl_cache_mutex());
