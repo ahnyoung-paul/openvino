@@ -138,19 +138,6 @@ public:
         return {params, optional_params};
     }
 
-    static size_t update_hash(size_t seed, const kernel_selector::binary_convolution_params& params) {
-        seed = hash_combine_usize(seed, params.filterSize);
-        seed = hash_combine_usize(seed, params.stride);
-        seed = hash_combine_usize(seed, params.dilation);
-        seed = hash_combine_usize(seed, params.padding);
-        seed = hash_combine(seed, params.out_dt);
-        seed = hash_combine(seed, params.split);
-        seed = hash_combine(seed, params.depthwise_separable_opt);
-        seed = hash_combine(seed, params.pad_value);
-        seed = hash_combine(seed, params.groups);
-        return seed;
-    }
-
 private:
     int32_t _split;
 };
@@ -161,6 +148,8 @@ attach_binary_convolution_impl::attach_binary_convolution_impl() {
     implementation_map<binary_convolution>::add(impl_types::ocl, typed_primitive_impl_ocl<binary_convolution>::create<binary_convolution_impl>, {
         std::make_tuple(data_types::bin, format::b_fs_yx_32fp),
     });
+
+    impl_hash_key<binary_convolution>::add(typed_primitive_impl_ocl<binary_convolution>::get_impl_key<binary_convolution_impl>);
 }
 
 }  // namespace detail

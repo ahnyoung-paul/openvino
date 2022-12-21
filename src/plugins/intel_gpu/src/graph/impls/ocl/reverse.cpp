@@ -37,11 +37,6 @@ struct reverse_impl : typed_primitive_impl_ocl<reverse> {
                                                                     : kernel_selector::reverse_mode::mask;
         return {params, optional_params};
     }
-
-    static size_t update_hash(size_t seed, const kernel_selector::reverse_params& params) {
-        seed = hash_combine(seed, params.reverseMode);
-        return seed;
-    }
 };
 
 namespace detail {

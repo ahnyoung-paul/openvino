@@ -4,7 +4,7 @@
 
 #include "kernel_selector_params.h"
 #include "kernel_selector_common.h"
-#include "intel_gpu/runtime/utils.hpp"
+#include "kernel_selector_utils.h"
 #include <sstream>
 #include <string>
 
@@ -580,51 +580,6 @@ std::string base_params::to_cache_string_v2() const {
     return s.str();
 }
 
-template<typename T>
-size_t hash_combine_dim_tensor(size_t seed, const DimTensor<T>& dt) {
-    seed = hash_combine(seed, dt.b);
-    seed = hash_combine(seed, dt.f);
-    seed = hash_combine(seed, dt.z);
-    seed = hash_combine(seed, dt.w);
-    seed = hash_combine(seed, dt.y);
-    seed = hash_combine(seed, dt.x);
-    return seed;
-}
-
-template size_t hash_combine_dim_tensor(size_t seed, const DimTensor<uint32_t>& dt);
-
-size_t hash_combine_dim(size_t seed, const Tensor::Dim& dim) {
-    seed = hash_combine(seed, dim.v);
-    seed = hash_combine(seed, dim.pitch);
-    seed = hash_combine(seed, dim.pad.before);
-    seed = hash_combine(seed, dim.pad.after);
-    return seed;
-}
-
-template <typename DType, typename Layout>
-size_t hash_combine_tensor(size_t seed, const Tensor::TensorBaseT<DType, Layout>& tensor) {
-    seed = hash_combine(seed, tensor.GetDType());
-    seed = hash_combine(seed, tensor.GetLayout());
-    for (auto dim : tensor.GetDims()) {
-        seed = hash_combine_dim(seed, dim);
-    }
-    return seed;
-}
-
-size_t hash_combine_dt(size_t seed, const DataTensor& dt) {
-    return hash_combine_tensor(seed, dt);
-}
-
-size_t hash_combine_wt(size_t seed, const WeightsTensor& wt) {
-    return hash_combine_tensor(seed, wt);
-}
-
-size_t hash_combine_usize(size_t s, const kernel_selector::uSize& u_size) {
-    s = hash_combine(s, u_size.x);
-    s = hash_combine(s, u_size.y);
-    s = hash_combine(s, u_size.z);
-    return s;
-}
 
 size_t base_params::hash() const {
     size_t seed = 0;

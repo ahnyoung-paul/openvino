@@ -56,18 +56,6 @@ public:
 
         return {params, optional_params};
     }
-
-    static size_t update_hash(size_t seed, const kernel_selector::experimental_detectron_detection_output_params& params) {
-        seed = hash_combine(seed, params.score_threshold);
-        seed = hash_combine(seed, params.nms_threshold);
-        seed = hash_combine(seed, params.max_delta_log_wh);
-        seed = hash_combine(seed, params.num_classes);
-        seed = hash_combine(seed, params.post_nms_count);
-        seed = hash_combine(seed, params.max_detections_per_image);
-        seed = hash_combine(seed, params.class_agnostic_box_regression);
-        seed = hash_combine_vec(seed, params.deltas_weights);
-        return seed;
-    }
 };
 
 namespace detail {

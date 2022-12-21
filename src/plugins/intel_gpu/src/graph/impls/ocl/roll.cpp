@@ -31,11 +31,6 @@ struct roll_impl : typed_primitive_impl_ocl<roll> {
 
         return {params, optional_params};
     }
-
-    static size_t update_hash(size_t seed, const kernel_selector::roll_params& params) {
-        seed = kernel_selector::hash_combine_dim_tensor(seed, params.shift);
-        return seed;
-    }
 };
 
 namespace detail {

@@ -82,14 +82,6 @@ struct activation_impl : typed_primitive_impl_ocl<activation> {
         return {params, optional_params};
     }
 
-    static size_t update_hash(size_t seed, const kernel_selector::activation_params& params) {
-        using namespace kernel_selector;
-        for (auto& tensor : params.inputActivationParams) {
-            seed = hash_combine_dt(seed, tensor);
-        }
-        return seed;
-    }
-
 private:
     bool _is_parameterized;
 };

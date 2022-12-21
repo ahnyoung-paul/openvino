@@ -46,10 +46,6 @@ public:
 
         return {params, optional_params};
     }
-
-    static size_t update_hash(size_t seed, const kernel_selector::tile_params& params) {
-        return seed;
-    }
 };
 
 namespace detail {

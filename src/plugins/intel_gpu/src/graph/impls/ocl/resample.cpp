@@ -167,21 +167,6 @@ struct resample_impl : typed_primitive_impl_ocl<resample> {
 
         return {params, optional_params};
     }
-
-    static size_t update_hash(size_t seed, const kernel_selector::resample_params& params) {
-        seed = hash_combine_vec(seed, params.pads_begin);
-        seed = hash_combine_vec(seed, params.pads_end);
-        seed = hash_combine(seed, params.resampleType);
-        seed = hash_combine(seed, params.nearestMode);
-        seed = hash_combine(seed, params.coordTransMode);
-        seed = hash_combine(seed, params.shapeCalculationMode);
-        seed = hash_combine(seed, params.antialias);
-        seed = hash_combine(seed, params.cube_coeff);
-        for (auto iter = params.axesAndScales.begin(); iter != params.axesAndScales.end(); iter++) {
-            seed = hash_combine(seed, iter->second);
-        }
-        return seed;
-    }
 };
 
 namespace detail {

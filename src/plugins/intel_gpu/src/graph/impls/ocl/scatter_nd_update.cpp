@@ -39,11 +39,6 @@ struct scatter_nd_update_impl : typed_primitive_impl_ocl<scatter_nd_update> {
 
         return {params, optional_params};
     }
-
-    static size_t update_hash(size_t seed, const kernel_selector::scatter_nd_update_params& params) {
-        seed = hash_combine(seed, params.indices_rank);
-        return seed;
-    }
 };
 
 namespace detail {

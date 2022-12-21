@@ -163,22 +163,6 @@ public:
 
         return {params, optional_params};
     }
-
-    static size_t update_hash(size_t seed, const kernel_selector::pooling_params& params) {
-        using namespace kernel_selector;
-        seed = hash_combine(seed, params.poolType);
-        seed = hash_combine(seed, params.remainderAction);
-        seed = hash_combine(seed, params.divMode);
-        seed = hash_combine(seed, params.quantization);
-        seed = hash_combine_usize(seed, params.poolSize);
-        seed = hash_combine_usize(seed, params.poolStride);
-        seed = hash_combine_usize(seed, params.poolPad);
-        seed = hash_combine(seed, params.maxPoolOpset8Features);
-        seed = hash_combine_usize(seed, params.poolDilation);
-        seed = hash_combine(seed, params.poolIndexElementType);
-        seed = hash_combine(seed, params.poolAxis);
-        return seed;
-    }
 };
 
 namespace detail {

@@ -54,15 +54,6 @@ struct pyramid_roi_align_impl : typed_primitive_impl_ocl<pyramid_roi_align> {
 
         return {params, optional_params};
     }
-
-    static size_t update_hash(size_t seed, const kernel_selector::PyramidROIAlign_params& params) {
-        seed = hash_combine(seed, params.image_size_x);
-        seed = hash_combine(seed, params.image_size_y);
-        seed = hash_combine(seed, params.sampling_ratio_x);
-        seed = hash_combine(seed, params.sampling_ratio_y);
-        seed = hash_combine(seed, params.pyramid_starting_level);
-        return seed;
-    }
 };
 
 namespace detail {

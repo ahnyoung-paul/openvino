@@ -96,7 +96,7 @@ public:
         ib >> _depthwise_sep_opt;
     }
 
-    static kernel_params_t get_kernel_params(const convolution_node& arg, const kernel_impl_params& impl_param) {
+    static kernel_params_t get_kernel_params(const kernel_impl_params& impl_param) {
         const auto& primitive = impl_param.typed_desc<convolution>();
 
         const auto &split = primitive->split();
@@ -105,7 +105,7 @@ public:
         const auto& pad = primitive->pad;
         const auto& groups = primitive->groups;
         const auto& deformable_groups = primitive->deformable_groups;
-        const auto transposed = arg.get_transposed();
+        const auto transposed = impl_param.transposed;
 
         auto conv_params = get_weight_bias_zero_point_default_params<kernel_selector::convolution_params>(
             impl_param, split, 1, primitive->grouped_weights_shape);
@@ -119,7 +119,13 @@ public:
                 conv_params.inputs.push_back(convert_data_tensor(impl_param.input_layouts[2]));
                 conv_params.deformable_mask_enabled = true;
             }
-            conv_params.bilinear_interpolation_pad = arg.bilinear_interpolation_pad();
+
+            auto bilinear_interpolation_pad = [&primitive]() -> bool {
+                if (!primitive->deformable_mode)
+                    throw std::range_error("bilinear_interpolation_pad exists only in deformable mode");
+                return primitive->bilinear_interpolation_pad;
+            };
+            conv_params.bilinear_interpolation_pad = bilinear_interpolation_pad();
         }
 
         conv_params.transposed = transposed;
@@ -128,7 +134,14 @@ public:
         conv_params.split = split;
         conv_params.groups = groups;
 
-        const auto& weights_layout = impl_param.input_layouts[1 + 0 + arg.get_deform_conv_dep_offset()]
+        auto get_deform_conv_dep_offset = [&primitive]() -> int32_t {
+            auto offset = primitive->deformable_mode ? 1 : 0;
+            if (primitive->input.size() == 3)
+                offset++;
+            return offset;
+        };
+
+        const auto& weights_layout = impl_param.input_layouts[1 + 0 + get_deform_conv_dep_offset()]
                                                                 .convert_to_weights_layout(primitive->grouped_weights_shape);
         uint32_t kx = weights_layout.spatial(0);
         uint32_t ky = weights_layout.spatial(1);
@@ -173,46 +186,15 @@ public:
             format == format::b_fs_zyx_fsv32)
             conv_optional_params.allowInputReordering = true;
 
-        const auto& tuning_config = arg.get_program().get_options().get<build_option_type::tuning_config>();
+        const auto& tuning_config = impl_param.get_program().get_options().get<build_option_type::tuning_config>();
 
         if (tuning_config->config.mode == tuning_mode::tuning_tune_and_cache ||
             tuning_config->config.mode == tuning_mode::tuning_retune_and_cache) {
             conv_optional_params.tuningParams.runner =
-                std::make_shared<gpu::kernel_runner>(arg.get_program().get_engine(), arg.get_program().get_id(), true, true);
+                std::make_shared<gpu::kernel_runner>(impl_param.get_program().get_engine(), impl_param.get_program().get_id(), true, true);
         }
 
         return {conv_params, conv_optional_params};
-    }
-
-    static std::unique_ptr<primitive_impl> create(const convolution_node& arg, const kernel_impl_params& impl_param) {
-        auto kernel_params = get_kernel_params(arg, impl_param);
-        auto& kernel_selector = kernel_selector::convolution_kernel_selector::Instance();
-        auto best_kernel = kernel_selector.get_best_kernel(kernel_params.first, kernel_params.second);
-
-        return make_unique<convolution_impl>(arg, best_kernel);
-    }
-
-    static size_t get_impl_key(const convolution_node& arg, const kernel_impl_params& impl_param) {
-        auto kernel_params = get_kernel_params(arg, impl_param);
-        auto params = kernel_params.first;
-        auto seed = params.hash();
-        using namespace kernel_selector;
-        seed = hash_combine_usize(seed, params.filterSize);
-        seed = hash_combine_usize(seed, params.stride);
-        seed = hash_combine_usize(seed, params.dilation);
-        seed = hash_combine_usize(seed, params.padding);
-
-        seed = hash_combine(seed, params.split);
-        seed = hash_combine(seed, params.depthwise_separable_opt);
-        seed = hash_combine(seed, params.transposed);
-        seed = hash_combine(seed, params.quantization);
-        seed = hash_combine(seed, params.deformable_mode);
-        seed = hash_combine(seed, params.groups);
-        seed = hash_combine_usize(seed, params.kernelSize);
-        seed = hash_combine(seed, params.deformable_groups);
-        seed = hash_combine(seed, params.bilinear_interpolation_pad);
-        seed = hash_combine(seed, params.deformable_mask_enabled);
-        return seed;
     }
 
 private:
@@ -224,7 +206,7 @@ private:
 namespace detail {
 
 attach_convolution_impl::attach_convolution_impl() {
-    implementation_map<convolution>::add(impl_types::ocl, convolution_impl::create, {
+    implementation_map<convolution>::add(impl_types::ocl, typed_primitive_impl_ocl<convolution>::create<convolution_impl>, {
         std::make_tuple(data_types::f32, format::bfyx),
         std::make_tuple(data_types::f16, format::bfyx),
         std::make_tuple(data_types::i8, format::bfyx),
@@ -303,7 +285,7 @@ attach_convolution_impl::attach_convolution_impl() {
         std::make_tuple(data_types::i8, format::bs_fs_yx_bsv4_fsv2),
     });
 
-    impl_hash_key<convolution>::add(convolution_impl::get_impl_key);
+    impl_hash_key<convolution>::add(typed_primitive_impl_ocl<convolution>::get_impl_key<convolution_impl>);
 }
 
 }  // namespace detail

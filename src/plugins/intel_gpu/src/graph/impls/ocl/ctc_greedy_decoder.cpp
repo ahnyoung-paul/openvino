@@ -45,13 +45,6 @@ struct ctc_greedy_decoder_impl : typed_primitive_impl_ocl<ctc_greedy_decoder> {
         }
         return {params, optional_params};
     }
-
-    static size_t update_hash(size_t seed, const kernel_selector::ctc_greedy_decoder_params& params) {
-        seed = hash_combine(seed, params.merge_repeated);
-        seed = hash_combine(seed, params.blank_index);
-        seed = hash_combine(seed, params.outputs_num);
-        return seed;
-    }
 };
 
 namespace detail {

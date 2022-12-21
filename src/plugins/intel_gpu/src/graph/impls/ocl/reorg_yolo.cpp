@@ -33,11 +33,6 @@ struct reorg_yolo_impl : typed_primitive_impl_ocl<reorg_yolo> {
         params.stride = primitive->stride;
         return {params, optional_params};
     }
-
-    static size_t update_hash(size_t seed, const kernel_selector::reorg_yolo_params& params) {
-        seed = hash_combine(seed, params.stride);
-        return seed;
-    }
 };
 
 namespace detail {

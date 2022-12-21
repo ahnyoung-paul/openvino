@@ -87,21 +87,6 @@ public:
 
         return {params, optional_params};
     }
-
-    static size_t update_hash(size_t seed, const kernel_selector::roi_pooling_params& params) {
-        seed = hash_combine(seed, params.mode);
-        seed = hash_combine(seed, params.position_sensitive);
-        seed = hash_combine(seed, params.pooled_width);
-        seed = hash_combine(seed, params.pooled_height);
-        seed = hash_combine(seed, params.spatial_bins_x);
-        seed = hash_combine(seed, params.spatial_bins_y);
-        seed = hash_combine(seed, params.spatial_scale);
-        seed = hash_combine(seed, params.trans_std);
-        seed = hash_combine(seed, params.no_trans);
-        seed = hash_combine(seed, params.part_size);
-        seed = hash_combine(seed, params.group_size);
-        return seed;
-    }
 };
 
 namespace detail {

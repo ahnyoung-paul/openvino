@@ -54,14 +54,6 @@ public:
         }
         return {params, optional_params};
     }
-
-    static size_t update_hash(size_t seed, const kernel_selector::normalize_params& params) {
-        using namespace kernel_selector;
-        seed = hash_combine(seed, params.normMode);
-        seed = hash_combine(seed, params.epsilon);
-        seed = hash_combine_dt(seed, params.scaleTable);
-        return seed;
-    }
 };
 
 namespace detail {

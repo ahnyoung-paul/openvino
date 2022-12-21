@@ -116,13 +116,6 @@ public:
         return {params, optional_params};
     }
 
-    static size_t update_hash(size_t seed, const kernel_selector::concatenation_params& params) {
-        seed = hash_combine(seed, params.axis);
-        seed = hash_combine(seed, params.isAligned);
-        seed = hash_combine(seed, params.misalignment);
-        return seed;
-    }
-
 private:
     bool _can_be_optimized;
 };

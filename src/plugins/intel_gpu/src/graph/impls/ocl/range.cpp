@@ -34,10 +34,6 @@ struct range_impl : typed_primitive_impl_ocl<range> {
 
         return {params, optional_params};
     }
-
-    static size_t update_hash(size_t seed, const kernel_selector::range_params& params) {
-        return seed;
-    }
 };
 
 namespace detail {

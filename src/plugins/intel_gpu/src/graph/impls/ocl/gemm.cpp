@@ -146,15 +146,6 @@ public:
         auto kernel_params = get_kernel_params(impl_param);
         (_kernel_data.update_dispatch_data_func)(kernel_params.first, _kernel_data);
     }
-
-    static size_t update_hash(size_t seed, const kernel_selector::gemm_params& params) {
-        seed = hash_combine(seed, params.alpha);
-        seed = hash_combine(seed, params.beta);
-        seed = hash_combine(seed, params.transpose_input0);
-        seed = hash_combine(seed, params.transpose_input1);
-        seed = hash_combine(seed, params.quantization);
-        return seed;
-    }
 };
 
 namespace detail {

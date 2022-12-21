@@ -58,24 +58,6 @@ struct border_impl : typed_primitive_impl_ocl<border> {
 
         return {params, optional_params};
     }
-
-    static size_t update_hash(size_t seed, const kernel_selector::border_params& params) {
-        auto hash_combine_dimtensor = [&](size_t s, kernel_selector::DimTensor<> tensor) -> size_t {
-            s = hash_combine(s, tensor.b);
-            s = hash_combine(s, tensor.f);
-            s = hash_combine(s, tensor.w);
-            s = hash_combine(s, tensor.x);
-            s = hash_combine(s, tensor.y);
-            s = hash_combine(s, tensor.x);
-            return s;
-        };
-
-        seed = hash_combine_dimtensor(seed, params.lt_sizes);
-        seed = hash_combine_dimtensor(seed, params.rb_sizes);
-        seed = hash_combine(seed, params.border_value);
-        seed = hash_combine(seed, params.b_type);
-        return seed;
-    }
 };
 
 namespace detail {

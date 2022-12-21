@@ -66,35 +66,6 @@ public:
         return {params, optional_params};
     }
 
-    static size_t update_hash(size_t seed, const kernel_selector::eltwise_params& params) {
-        using namespace kernel_selector;
-        for (auto& op : params.operations) {
-            seed = hash_combine(seed, op.mode);
-            for (auto& in : op.inputs) {
-                seed = hash_combine(seed, in.mode);
-                seed = hash_combine(seed, in.index);
-                seed = hash_combine(seed, in.tmpIndex);
-                seed = hash_combine(seed, in.scalar);
-            }
-        }
-
-        hash_combine_vec(seed, params.coefficients);
-        for (auto& uid : params.updateInputIds) {
-            seed = hash_combine(seed, uid.inputId);
-            seed = hash_combine(seed, uid.tmpId);
-        }
-
-        for (auto& s : params.stride) {
-            seed = hash_combine_usize(seed, s);
-        }
-
-        seed = hash_combine(seed, params.layoutBased);
-        seed = hash_combine(seed, params.int8_quantization);
-        seed = hash_combine(seed, params.broadcast);
-
-        return seed;
-    }
-
 private:
     bool _can_be_optimized;
 };

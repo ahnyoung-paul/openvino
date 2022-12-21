@@ -73,14 +73,6 @@ struct dft_impl : typed_primitive_impl_ocl<dft> {
         auto optional_params = get_default_optional_params<kernel_selector::dft_optional_params>(impl_param.get_program());
         return {params, optional_params};
     }
-
-    static size_t update_hash(size_t seed, const kernel_selector::dft_params& params) {
-        seed = hash_combine_vec(seed, params.axes);
-        seed = hash_combine_vec(seed, params.signal_size);
-        seed = hash_combine(seed, params.direction);
-        seed = hash_combine(seed, params.mode);
-        return seed;
-    }
 };
 
 namespace detail {

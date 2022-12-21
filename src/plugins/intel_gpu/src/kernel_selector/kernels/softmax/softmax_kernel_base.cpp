@@ -3,6 +3,7 @@
 //
 
 #include "softmax_kernel_base.h"
+#include "kernel_selector_utils.h"
 
 namespace kernel_selector {
 JitConstants SoftmaxKernelBase::GetJitConstants(const softmax_params& params,
@@ -144,5 +145,11 @@ SoftmaxKernelBase::DispatchData SoftmaxKernelBaseBF::SetDefault(const softmax_pa
     dispatchData.dataSetsCount = input.Batch().v;
 
     return dispatchData;
+}
+
+size_t softmax_params::hash() const {
+    auto seed = base_params::hash();
+    seed = hash_combine(seed, dim);
+    return seed;
 }
 }  // namespace kernel_selector

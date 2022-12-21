@@ -39,14 +39,6 @@ struct space_to_batch_impl : typed_primitive_impl_ocl<space_to_batch> {
 
         return {params, optional_params};
     }
-
-    static size_t update_hash(size_t seed, const kernel_selector::space_to_batch_params& params) {
-        using namespace kernel_selector;
-        hash_combine_dim_tensor<uint32_t>(seed, params.block_shape);
-        hash_combine_dim_tensor<uint32_t>(seed, params.pads_begin);
-        hash_combine_dim_tensor<uint32_t>(seed, params.pads_end);
-        return seed;
-    }
 };
 
 namespace detail {

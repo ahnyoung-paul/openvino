@@ -46,15 +46,6 @@ struct experimental_detectron_prior_grid_generator_impl
 
         return {params, optional_params};
     }
-
-    static size_t update_hash(size_t seed, const kernel_selector::experimental_detectron_prior_grid_generator_params& params) {
-        seed = hash_combine(seed, params.flatten);
-        seed = hash_combine(seed, params.layer_height);
-        seed = hash_combine(seed, params.layer_width);
-        seed = hash_combine(seed, params.step_x);
-        seed = hash_combine(seed, params.step_y);
-        return seed;
-    }
 };
 
 namespace detail {

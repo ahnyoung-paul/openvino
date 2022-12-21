@@ -88,20 +88,6 @@ public:
 
         return {params, optional_params};
     }
-
-    static size_t update_hash(size_t seed, const kernel_selector::matrix_nms_params& params) {
-        seed = hash_combine(seed, params.sort_type);
-        seed = hash_combine(seed, params.sort_result_across_batch);
-        seed = hash_combine(seed, params.score_threshold);
-        seed = hash_combine(seed, params.nms_top_k);
-        seed = hash_combine(seed, params.keep_top_k);
-        seed = hash_combine(seed, params.background_class);
-        seed = hash_combine(seed, params.decay);
-        seed = hash_combine(seed, params.gaussian_sigma);
-        seed = hash_combine(seed, params.post_threshold);
-        seed = hash_combine(seed, params.normalized);
-        return seed;
-    }
 };
 
 namespace detail {

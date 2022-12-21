@@ -39,12 +39,6 @@ struct space_to_depth_impl : typed_primitive_impl_ocl<space_to_depth> {
 
         return {params, optional_params};
     }
-
-    static size_t update_hash(size_t seed, const kernel_selector::space_to_depth_params& params) {
-        seed = hash_combine(seed, params.depth_mode);
-        seed = hash_combine(seed, params.block_size);
-        return seed;
-    }
 };
 
 namespace detail {

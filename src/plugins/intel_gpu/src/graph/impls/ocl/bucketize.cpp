@@ -33,11 +33,6 @@ struct bucketize_impl : typed_primitive_impl_ocl<bucketize> {
 
         return {params, optional_params};
     }
-
-    static size_t update_hash(size_t seed, const kernel_selector::bucketize_params& params) {
-        seed = hash_combine(seed, params.with_right_bound);
-        return seed;
-    }
 };
 
 namespace detail {

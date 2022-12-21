@@ -121,11 +121,7 @@ struct slice_impl : typed_primitive_impl_ocl<slice> {
     static size_t get_impl_key(const slice_node& arg, const kernel_impl_params& impl_param) {
         auto kernel_params = get_kernel_params(arg, impl_param);
         auto params = kernel_params.first;
-        auto seed = params.hash();
-        seed = hash_combine_vec(seed, params.start);
-        seed = hash_combine_vec(seed, params.end);
-        seed = hash_combine_vec(seed, params.step);
-        return seed;
+        return params.hash();
     }
 };
 

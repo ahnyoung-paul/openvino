@@ -43,12 +43,6 @@ struct shuffle_channels_impl : typed_primitive_impl_ocl<shuffle_channels> {
 
         return {params, optional_params};
     }
-
-    static size_t update_hash(size_t seed, const kernel_selector::shuffle_channels_params& params) {
-        seed = hash_combine(seed, params.group);
-        seed = hash_combine(seed, params.axis);
-        return seed;
-    }
 };
 
 namespace detail {

@@ -48,14 +48,6 @@ struct mvn_impl : typed_primitive_impl_ocl<mvn> {
         auto kernel_params = get_kernel_params(impl_param);
         (_kernel_data.update_dispatch_data_func)(kernel_params.first, _kernel_data);
     }
-
-    static size_t update_hash(size_t seed, const kernel_selector::mvn_params& params) {
-        seed = hash_combine(seed, params.mvnMode);
-        seed = hash_combine(seed, params.mvnNormalizeVariance);
-        seed = hash_combine(seed, params.epsilon);
-        seed = hash_combine(seed, params.mvnEpsMode);
-        return seed;
-    }
 };
 
 namespace detail {

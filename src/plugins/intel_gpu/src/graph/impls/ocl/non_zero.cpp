@@ -34,10 +34,6 @@ struct count_nonzero_impl : typed_primitive_impl_ocl<count_nonzero> {
         auto optional_params = get_default_optional_params<kernel_selector::count_nonzero_optional_params>(impl_param.get_program());
         return {params, optional_params};
     }
-
-    static size_t update_hash(size_t seed, const kernel_selector::count_nonzero_params& params) {
-        return seed;
-    }
 };
 
 struct gather_nonzero_impl : typed_primitive_impl_ocl<gather_nonzero> {
@@ -59,11 +55,6 @@ struct gather_nonzero_impl : typed_primitive_impl_ocl<gather_nonzero> {
         params.inputs.push_back(convert_data_tensor(impl_param.get_input_layout(1)));
         params.ov_input_rank = impl_param.get_input_layout().get_shape().size();
         return {params, optional_params};
-    }
-
-    static size_t update_hash(size_t seed, const kernel_selector::gather_nonzero_params& params) {
-        seed = hash_combine(seed, params.ov_input_rank);
-        return seed;
     }
 };
 

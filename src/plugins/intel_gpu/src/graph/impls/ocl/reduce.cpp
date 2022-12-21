@@ -97,13 +97,6 @@ struct reduce_impl : typed_primitive_impl_ocl<reduce> {
 
         return {params, optional_params};
     }
-
-    static size_t update_hash(size_t seed, const kernel_selector::reduce_params& params) {
-        seed = hash_combine(seed, params.reduceMode);
-        seed = hash_combine_vec(seed, params.reduceAxes);
-        seed = hash_combine(seed, params.keepDims);
-        return seed;
-    }
 };
 
 namespace detail {

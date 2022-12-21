@@ -39,11 +39,6 @@ struct eye_impl : typed_primitive_impl_ocl<eye> {
 
         return {params, {}};
     }
-
-    static size_t update_hash(size_t seed, const kernel_selector::eye_params& params) {
-        seed = hash_combine(seed, params.diagonal_index);
-        return seed;
-    }
 };
 
 namespace detail {

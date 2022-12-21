@@ -51,13 +51,6 @@ public:
 
         return {params, optional_params};
     }
-
-    static size_t update_hash(size_t seed, const kernel_selector::convert_color_params& params) {
-        seed = hash_combine(seed, params.input_color_format);
-        seed = hash_combine(seed, params.output_color_format);
-        seed = hash_combine(seed, params.mem_type);
-        return seed;
-    }
 };
 
 namespace detail {

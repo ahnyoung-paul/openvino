@@ -95,21 +95,6 @@ public:
 
         return {params, optional_params};
     }
-
-    static size_t update_hash(size_t seed, const kernel_selector::multiclass_nms_params& params) {
-        seed = hash_combine(seed, params.sort_result_type);
-        seed = hash_combine(seed, params.sort_result_across_batch);
-        seed = hash_combine(seed, params.indices_output_type);
-        seed = hash_combine(seed, params.iou_threshold);
-        seed = hash_combine(seed, params.score_threshold);
-        seed = hash_combine(seed, params.nms_top_k);
-        seed = hash_combine(seed, params.keep_top_k);
-        seed = hash_combine(seed, params.background_class);
-        seed = hash_combine(seed, params.normalized);
-        seed = hash_combine(seed, params.nms_eta);
-        seed = hash_combine(seed, params.has_roisnum);
-        return seed;
-    }
 };
 
 namespace detail {

@@ -77,14 +77,6 @@ public:
 
         return {params, optional_params};
     }
-
-    static size_t update_hash(size_t seed, const kernel_selector::roi_align_params& params) {
-        seed = hash_combine(seed, params.sampling_ratio);
-        seed = hash_combine(seed, params.spatial_scale);
-        seed = hash_combine(seed, params.pooling_mode);
-        seed = hash_combine(seed, params.aligned_mode);
-        return seed;
-    }
 };
 
 namespace detail {

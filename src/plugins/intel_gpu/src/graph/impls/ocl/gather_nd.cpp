@@ -38,13 +38,6 @@ struct gather_nd_impl : typed_primitive_impl_ocl<gather_nd> {
         params.inputs.push_back(convert_data_tensor(impl_param.get_input_layout(1)));
         return {params, optional_params};
     }
-
-    static size_t update_hash(size_t seed, const kernel_selector::gather_nd_params& params) {
-        seed = hash_combine(seed, params.indices_rank);
-        seed = hash_combine(seed, params.batch_dims);
-        seed = hash_combine(seed, params.batch_merged_output);
-        return seed;
-    }
 };
 
 namespace detail {

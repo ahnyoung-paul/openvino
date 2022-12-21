@@ -64,11 +64,6 @@ public:
         params.inputs.push_back(convert_data_tensor(impl_param.get_input_layout(2)));
         return {params, optional_params};
     }
-
-    static size_t update_hash(size_t seed, const kernel_selector::scatter_update_params& params) {
-        seed = hash_combine(seed, params.axis);
-        return seed;
-    }
 };
 
 namespace detail {

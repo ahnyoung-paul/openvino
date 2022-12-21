@@ -40,13 +40,6 @@ struct shape_of_impl : typed_primitive_impl_ocl<shape_of> {
         auto kernel_params = get_kernel_params(impl_param);
         (_kernel_data.update_dispatch_data_func)(kernel_params.first, _kernel_data);
     }
-
-    static size_t update_hash(size_t seed, const kernel_selector::shape_of_params& params) {
-        seed = hash_combine(seed, params.input_rank);
-        for (auto& dim : params.input_dims)
-            seed = hash_combine(seed, dim);
-        return seed;
-    }
 };
 
 namespace detail {

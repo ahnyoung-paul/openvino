@@ -66,13 +66,6 @@ struct grid_sample_impl : public typed_primitive_impl_ocl<grid_sample> {
 
         return {params, optional_params};
     }
-
-    static size_t update_hash(size_t seed, const kernel_selector::grid_sample_params& params) {
-        seed = hash_combine(seed, params.align_corners);
-        seed = hash_combine(seed, params.interpolation_mode);
-        seed = hash_combine(seed, params.padding_mode);
-        return seed;
-    }
 };
 
 namespace detail {

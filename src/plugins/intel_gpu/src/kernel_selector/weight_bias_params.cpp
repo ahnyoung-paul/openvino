@@ -5,6 +5,7 @@
 #include "weight_bias_params.h"
 #include "kernel_selector_common.h"
 #include "intel_gpu/runtime/utils.hpp"
+#include "kernel_selector_utils.h"
 #include <sstream>
 
 namespace kernel_selector {

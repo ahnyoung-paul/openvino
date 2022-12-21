@@ -63,11 +63,6 @@ public:
         auto optional_params = get_default_weights_bias_optional_params<kernel_selector::lstm_dynamic_input_optional_params>(impl_param.get_program());
         return {params, optional_params};
     }
-
-    static size_t update_hash(size_t seed, const kernel_selector::lstm_dynamic_input_params& params) {
-        seed = hash_combine(seed, params.direction);
-        return seed;
-    }
 };
 
 namespace detail {

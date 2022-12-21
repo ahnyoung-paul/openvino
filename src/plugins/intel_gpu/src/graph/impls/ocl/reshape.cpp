@@ -33,10 +33,6 @@ struct reshape_impl : public typed_primitive_impl_ocl<reshape> {
     }
 
     void update_dispatch_data(const kernel_impl_params& impl_param) override { }
-
-    static size_t update_hash(size_t seed, const kernel_selector::reshape_params& params) {
-        return seed;
-    }
 };
 
 namespace detail {

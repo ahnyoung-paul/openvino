@@ -62,10 +62,6 @@ struct select_impl : typed_primitive_impl_ocl<select> {
         }
         return {params, optional_params};
     }
-
-    static size_t update_hash(size_t seed, const kernel_selector::select_params& params) {
-        return seed;
-    }
 };
 
 namespace detail {

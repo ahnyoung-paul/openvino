@@ -98,38 +98,7 @@ public:
     static size_t get_impl_key(const quantize_node& arg, const kernel_impl_params& impl_param) {
         auto kernel_params = get_kernel_params(arg, impl_param);
         auto params = kernel_params.first;
-        auto seed = params.hash();
-        seed = hash_combine(seed, params.levels);
-        seed = hash_combine(seed, params.packed_binary_output);
-        seed = hash_combine(seed, params.scale_shift_opt);
-
-        seed = hash_combine(seed, params.has_post_scale);
-        seed = hash_combine(seed, params.has_post_shift);
-        seed = hash_combine(seed, params.has_pre_shift);
-
-        seed = hash_combine(seed, params.has_clamp);
-        seed = hash_combine(seed, params.has_min_clamp);
-        seed = hash_combine(seed, params.has_max_clamp);
-
-        seed = hash_combine(seed, params.per_tensor_input_range);
-        seed = hash_combine(seed, params.per_tensor_input_scale);
-        seed = hash_combine(seed, params.per_tensor_input_shift);
-
-        seed = hash_combine(seed, params.per_tensor_output_range);
-        seed = hash_combine(seed, params.per_tensor_output_scale);
-        seed = hash_combine(seed, params.per_tensor_output_shift);
-
-        seed = hash_combine(seed, params.in_lo);
-        seed = hash_combine(seed, params.in_hi);
-        seed = hash_combine(seed, params.in_scale);
-        seed = hash_combine(seed, params.in_shift);
-
-        seed = hash_combine(seed, params.out_lo);
-        seed = hash_combine(seed, params.out_hi);
-        seed = hash_combine(seed, params.out_scale);
-        seed = hash_combine(seed, params.out_shift);
-
-        return seed;
+        return params.hash();
     }
 };
 

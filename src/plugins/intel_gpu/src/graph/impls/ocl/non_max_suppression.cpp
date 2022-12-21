@@ -159,30 +159,7 @@ public:
     static size_t get_impl_key(const non_max_suppression_node& arg, const kernel_impl_params& impl_param) {
         auto kernel_params = get_kernel_params(arg, impl_param);
         auto params = kernel_params.first;
-        auto seed = params.hash();
-
-        seed = hash_combine(seed, params.num_select_per_class_type);
-        if (params.num_select_per_class_type == kernel_selector::NmsArgType::Input)
-            seed = hash_combine(seed, params.num_select_per_class);
-
-        seed = hash_combine(seed, params.iou_threshold_type);
-        if (params.iou_threshold_type == kernel_selector::NmsArgType::Input)
-            seed = hash_combine(seed, params.iou_threshold);
-
-        seed = hash_combine(seed, params.score_threshold_type);
-        if (params.score_threshold_type == kernel_selector::NmsArgType::Input)
-            seed = hash_combine(seed, params.score_threshold);
-
-        seed = hash_combine(seed, params.soft_nms_sigma_type);
-        if (params.soft_nms_sigma_type == kernel_selector::NmsArgType::Input)
-            seed = hash_combine(seed, params.soft_nms_sigma);
-
-        seed = hash_combine(seed, params.has_second_output);
-        seed = hash_combine(seed, params.has_third_output);
-        seed = hash_combine(seed, params.use_multiple_outputs);
-        seed = hash_combine(seed, params.sort_result_descending);
-        seed = hash_combine(seed, params.box_encoding);
-        return seed;
+        return params.hash();
     }
 
 private:

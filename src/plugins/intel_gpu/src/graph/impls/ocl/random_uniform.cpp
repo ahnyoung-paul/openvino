@@ -35,12 +35,6 @@ struct random_uniform_impl : typed_primitive_impl_ocl<random_uniform> {
 
         return {params, {}};
     }
-
-    static size_t update_hash(size_t seed, const kernel_selector::random_uniform_params& params) {
-        seed = hash_combine(seed, params.global_seed);
-        seed = hash_combine(seed, params.op_seed);
-        return seed;
-    }
 };
 
 namespace detail {
