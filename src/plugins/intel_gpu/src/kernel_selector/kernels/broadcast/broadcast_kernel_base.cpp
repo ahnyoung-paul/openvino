@@ -7,6 +7,12 @@
 #include "kernel_selector_utils.h"
 
 namespace kernel_selector {
+size_t broadcast_params::hash() const {
+    auto seed = base_params::hash();
+    seed = hash_combine_vec(seed, input_order);
+    return seed;
+}
+
 JitConstants BroadcastKernelBase::GetJitConstants(const broadcast_params& params) const {
     JitConstants jit = MakeBaseParamsJitConstants(params);
 

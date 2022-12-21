@@ -55,11 +55,11 @@ struct embedding_bag_impl : typed_primitive_impl_ocl<embedding_bag> {
         return {params, optional_params};
     }
 
-    static size_t update_hash(size_t seed, const kernel_selector::embedding_bag_params& params) {
-        seed = hash_combine(seed, params.type);
-        seed = hash_combine(seed, params.default_index);
-        return seed;
-    }
+    // static size_t update_hash(size_t seed, const kernel_selector::embedding_bag_params& params) {
+    //     seed = hash_combine(seed, params.type);
+    //     seed = hash_combine(seed, params.default_index);
+    //     return seed;
+    // }
 };
 
 namespace detail {

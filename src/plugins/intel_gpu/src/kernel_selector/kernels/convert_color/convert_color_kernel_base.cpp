@@ -7,6 +7,13 @@
 #include <string>
 
 namespace kernel_selector {
+size_t convert_color_params::hash() const {
+    auto seed = base_params::hash();
+    seed = hash_combine(seed, input_color_format);
+    seed = hash_combine(seed, output_color_format);
+    seed = hash_combine(seed, mem_type);
+    return seed;
+}
 
 bool ConvertColorKernelBase::Validate(const Params& p, const optional_params& o) const {
     if (p.GetType() != KernelType::CONVERT_COLOR ||

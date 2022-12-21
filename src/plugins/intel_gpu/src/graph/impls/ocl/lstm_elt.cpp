@@ -92,27 +92,27 @@ public:
         return make_unique<lstm_elt_impl>(arg, best_kernel);
     }
 
-    static size_t get_impl_key(const lstm_elt_node& arg, const kernel_impl_params& impl_param) {
-        auto kernel_params = get_kernel_params(arg, impl_param);
-        auto params = kernel_params.first;
-        auto seed = params.hash();
-        using namespace kernel_selector;
+    // static size_t get_impl_key(const lstm_elt_node& arg, const kernel_impl_params& impl_param) {
+    //     auto kernel_params = get_kernel_params(arg, impl_param);
+    //     auto params = kernel_params.first;
+    //     auto seed = params.hash();
+    //     using namespace kernel_selector;
 
-        seed = hash_combine(seed, params.has_cell);
-        if (params.has_cell)
-            seed = hash_combine_dt(seed, params.cell);
-        seed = hash_combine(seed, params.gate_order);
-        seed = hash_combine(seed, params.clip);
-        seed = hash_combine(seed, params.input_forget);
-        seed = hash_combine(seed, params.direction);
-        seed = hash_combine(seed, params.cell_direction);
+    //     seed = hash_combine(seed, params.has_cell);
+    //     if (params.has_cell)
+    //         seed = hash_combine_dt(seed, params.cell);
+    //     seed = hash_combine(seed, params.gate_order);
+    //     seed = hash_combine(seed, params.clip);
+    //     seed = hash_combine(seed, params.input_forget);
+    //     seed = hash_combine(seed, params.direction);
+    //     seed = hash_combine(seed, params.cell_direction);
 
-        seed = hash_combine(seed, params.GetOffsetIndexI());
-        seed = hash_combine(seed, params.GetOffsetIndexO());
-        seed = hash_combine(seed, params.GetOffsetIndexF());
-        seed = hash_combine(seed, params.GetOffsetIndexZ());
-        return seed;
-    }
+    //     seed = hash_combine(seed, params.GetOffsetIndexI());
+    //     seed = hash_combine(seed, params.GetOffsetIndexO());
+    //     seed = hash_combine(seed, params.GetOffsetIndexF());
+    //     seed = hash_combine(seed, params.GetOffsetIndexZ());
+    //     return seed;
+    // }
 };
 
 namespace detail {
@@ -125,7 +125,7 @@ attach_lstm_elt_impl::attach_lstm_elt_impl() {
         std::make_tuple(data_types::f16, format::fyxb),
     });
 
-    impl_hash_key<lstm_elt>::add(lstm_elt_impl::get_impl_key);
+    impl_hash_key<lstm_elt>::add(typed_primitive_impl_ocl<lstm_elt>::get_impl_key<lstm_elt_impl>);
 }
 
 }  // namespace detail

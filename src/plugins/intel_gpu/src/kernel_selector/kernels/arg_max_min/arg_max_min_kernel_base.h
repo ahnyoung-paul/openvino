@@ -29,6 +29,18 @@ struct arg_max_min_params : public base_params {
 
         return k;
     }
+
+    size_t hash() const override {
+        auto seed = base_params::hash();
+        seed = hash_combine(seed, argMaxMinAxis);
+        seed = hash_combine(seed, argMaxMinOut);
+        seed = hash_combine(seed, argMaxMinSortType);
+        seed = hash_combine(seed, topK);
+        seed = hash_combine(seed, values_first);
+        seed = hash_combine(seed, has_second_output);
+        seed = hash_combine(seed, use_multiple_outputs);
+        return seed;
+    }
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

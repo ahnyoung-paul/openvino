@@ -69,6 +69,28 @@ struct lstm_dynamic_timeloop_params : public base_params {
 
         return k;
     }
+
+    size_t hash() const override {
+        auto seed = base_params::hash();
+        seed = hash_combine(seed, input_forget);
+        seed = hash_combine(seed, has_hidden);
+        seed = hash_combine(seed, has_cell);
+        seed = hash_combine(seed, has_last_hidden_output);
+        seed = hash_combine(seed, has_last_cell_output);
+        seed = hash_combine(seed, clip);
+
+        seed = hash_combine_dt(seed, recurrent);
+        if (has_hidden)
+            seed = hash_combine_dt(seed, hidden);
+        if (has_cell)
+            seed = hash_combine_dt(seed, cell);
+        if (has_last_hidden_output)
+            seed = hash_combine_dt(seed, last_hidden_output);
+        if (has_last_cell_output)
+            seed = hash_combine_dt(seed, last_cell_output);
+        seed = hash_combine(seed, direction);
+        return seed;
+    }
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -26,6 +26,16 @@ struct gemm_params : public base_params {
         k.EnableQuantization(quantization);
         return k;
     }
+
+    size_t hash() const override {
+        auto seed = base_params::hash();
+        seed = hash_combine(seed, alpha);
+        seed = hash_combine(seed, beta);
+        seed = hash_combine(seed, transpose_input0);
+        seed = hash_combine(seed, transpose_input1);
+        seed = hash_combine(seed, quantization);
+        return seed;
+    }
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

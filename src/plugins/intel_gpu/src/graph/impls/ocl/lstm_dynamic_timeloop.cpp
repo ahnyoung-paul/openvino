@@ -91,30 +91,30 @@ public:
         return make_unique<lstm_dynamic_timeloop_impl>(arg, best_kernel);
     }
 
-    static size_t get_impl_key(const lstm_dynamic_timeloop_node& arg, const kernel_impl_params& impl_param) {
-        auto kernel_params = get_kernel_params(arg, impl_param);
-        auto params = kernel_params.first;
-        auto seed = params.hash();
-        using namespace kernel_selector;
-        seed = hash_combine(seed, params.input_forget);
-        seed = hash_combine(seed, params.has_hidden);
-        seed = hash_combine(seed, params.has_cell);
-        seed = hash_combine(seed, params.has_last_hidden_output);
-        seed = hash_combine(seed, params.has_last_cell_output);
-        seed = hash_combine(seed, params.clip);
-        using namespace kernel_selector;
-        seed = hash_combine_dt(seed, params.recurrent);
-        if (params.has_hidden)
-            seed = hash_combine_dt(seed, params.hidden);
-        if (params.has_cell)
-            seed = hash_combine_dt(seed, params.cell);
-        if (params.has_last_hidden_output)
-            seed = hash_combine_dt(seed, params.last_hidden_output);
-        if (params.has_last_cell_output)
-            seed = hash_combine_dt(seed, params.last_cell_output);
-        seed = hash_combine(seed, params.direction);
-        return seed;
-    }
+    // static size_t get_impl_key(const lstm_dynamic_timeloop_node& arg, const kernel_impl_params& impl_param) {
+    //     auto kernel_params = get_kernel_params(arg, impl_param);
+    //     auto params = kernel_params.first;
+    //     auto seed = params.hash();
+    //     using namespace kernel_selector;
+    //     seed = hash_combine(seed, params.input_forget);
+    //     seed = hash_combine(seed, params.has_hidden);
+    //     seed = hash_combine(seed, params.has_cell);
+    //     seed = hash_combine(seed, params.has_last_hidden_output);
+    //     seed = hash_combine(seed, params.has_last_cell_output);
+    //     seed = hash_combine(seed, params.clip);
+    //     using namespace kernel_selector;
+    //     seed = hash_combine_dt(seed, params.recurrent);
+    //     if (params.has_hidden)
+    //         seed = hash_combine_dt(seed, params.hidden);
+    //     if (params.has_cell)
+    //         seed = hash_combine_dt(seed, params.cell);
+    //     if (params.has_last_hidden_output)
+    //         seed = hash_combine_dt(seed, params.last_hidden_output);
+    //     if (params.has_last_cell_output)
+    //         seed = hash_combine_dt(seed, params.last_cell_output);
+    //     seed = hash_combine(seed, params.direction);
+    //     return seed;
+    // }
 };
 
 namespace detail {
@@ -125,7 +125,7 @@ attach_lstm_dynamic_timeloop_impl::attach_lstm_dynamic_timeloop_impl() {
         std::make_tuple(data_types::f16, format::bfyx),
     });
 
-    impl_hash_key<lstm_dynamic_timeloop>::add(lstm_dynamic_timeloop_impl::get_impl_key);
+    impl_hash_key<lstm_dynamic_timeloop>::add(typed_primitive_impl_ocl<lstm_dynamic_timeloop>::get_impl_key<lstm_dynamic_timeloop_impl>);
 }
 
 }  // namespace detail

@@ -93,22 +93,22 @@ public:
         return make_unique<lstm_gemm_impl>(arg, best_kernel);
     }
 
-    static size_t get_impl_key(const lstm_gemm_node& arg, const kernel_impl_params& impl_param) {
-        auto kernel_params = get_kernel_params(arg, impl_param);
-        auto params = kernel_params.first;
-        auto seed = params.hash();
-        using namespace kernel_selector;
-        seed = hash_combine_dt(seed, params.weights);
-        seed = hash_combine_dt(seed, params.recurrent);
-        if (params.hasBias)
-            seed = hash_combine_dt(seed, params.bias);
-        if (params.hasHidden)
-            seed = hash_combine_dt(seed, params.hidden);
-        seed = hash_combine(seed, params.direction);
-        seed = hash_combine(seed, params.input_direction);
-        seed = hash_combine(seed, params.hidden_direction);
-        return seed;
-    }
+    // static size_t get_impl_key(const lstm_gemm_node& arg, const kernel_impl_params& impl_param) {
+    //     auto kernel_params = get_kernel_params(arg, impl_param);
+    //     auto params = kernel_params.first;
+    //     auto seed = params.hash();
+    //     using namespace kernel_selector;
+    //     seed = hash_combine_dt(seed, params.weights);
+    //     seed = hash_combine_dt(seed, params.recurrent);
+    //     if (params.hasBias)
+    //         seed = hash_combine_dt(seed, params.bias);
+    //     if (params.hasHidden)
+    //         seed = hash_combine_dt(seed, params.hidden);
+    //     seed = hash_combine(seed, params.direction);
+    //     seed = hash_combine(seed, params.input_direction);
+    //     seed = hash_combine(seed, params.hidden_direction);
+    //     return seed;
+    // }
 };
 
 namespace detail {
@@ -121,7 +121,7 @@ attach_lstm_gemm_impl::attach_lstm_gemm_impl() {
         std::make_tuple(data_types::f16, format::fyxb),
     });
 
-    impl_hash_key<lstm_gemm>::add(lstm_gemm_impl::get_impl_key);
+    impl_hash_key<lstm_gemm>::add(typed_primitive_impl_ocl<lstm_gemm>::get_impl_key<lstm_gemm_impl>);
 }
 
 }  // namespace detail

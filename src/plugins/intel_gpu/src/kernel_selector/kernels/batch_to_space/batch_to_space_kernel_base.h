@@ -17,6 +17,25 @@ struct batch_to_space_params : public base_params {
     DimTensor<uint32_t> block_shape;
     DimTensor<uint32_t> crops_begin;
     DimTensor<uint32_t> crops_end;
+
+    size_t hash() const override {
+        auto seed = base_params::hash();
+        auto hash_combine_dimtensor = [&](size_t s, kernel_selector::DimTensor<> tensor) -> size_t {
+            s = hash_combine(s, tensor.b);
+            s = hash_combine(s, tensor.f);
+            s = hash_combine(s, tensor.w);
+            s = hash_combine(s, tensor.x);
+            s = hash_combine(s, tensor.y);
+            s = hash_combine(s, tensor.x);
+            return s;
+        };
+
+        seed = hash_combine_dimtensor(seed, params.block_shape);
+        seed = hash_combine_dimtensor(seed, params.crops_begin);
+        seed = hash_combine_dimtensor(seed, params.crops_end);
+    }
+
+
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

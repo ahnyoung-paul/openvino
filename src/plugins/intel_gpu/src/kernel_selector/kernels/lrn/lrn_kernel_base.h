@@ -29,6 +29,17 @@ struct lrn_params : public base_params {
 
         return _k;
     }
+
+    size_t hash() const override {
+        auto seed = base_params::hash();
+        seed = hash_combine(seed, alpha);
+        seed = hash_combine(seed, beta);
+        seed = hash_combine(seed, k);
+        seed = hash_combine(seed, localSize);
+        seed = hash_combine(seed, divMode);
+        seed = hash_combine(seed, normMode);
+        return seed;
+    }
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -70,10 +70,10 @@ struct gather_elements_impl : typed_primitive_impl_ocl<gather_elements> {
         return {params, optional_params};
     }
 
-    static size_t update_hash(size_t seed, const kernel_selector::gather_elements_params& params) {
-        seed = hash_combine(seed, params.axis);
-        return seed;
-    }
+    // static size_t update_hash(size_t seed, const kernel_selector::gather_elements_params& params) {
+    //     seed = hash_combine(seed, params.axis);
+    //     return seed;
+    // }
 };
 
 namespace detail {

@@ -66,11 +66,11 @@ public:
         return {params, optional_params};
     }
 
-    static size_t update_hash(size_t seed, const kernel_selector::adaptive_pooling_params& params) {
-        seed = hash_combine(seed, params.mode);
-        seed = hash_combine(seed, params.poolIndexElementType);
-        return seed;
-    }
+    // static size_t update_hash(size_t seed, const kernel_selector::adaptive_pooling_params& params) {
+    //     seed = hash_combine(seed, params.mode);
+    //     seed = hash_combine(seed, params.poolIndexElementType);
+    //     return seed;
+    // }
 };
 
 namespace detail {

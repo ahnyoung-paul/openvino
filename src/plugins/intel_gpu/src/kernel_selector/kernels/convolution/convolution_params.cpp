@@ -71,4 +71,24 @@ ParamsKey convolution_params::GetParamsKey() const {
 
     return k;
 }
+
+size_t convolution_params::hash() const {
+    auto seed = weight_bias_zero_point_params::hash();
+    seed = hash_combine_usize(seed, filterSize);
+    seed = hash_combine_usize(seed, stride);
+    seed = hash_combine_usize(seed, dilation);
+    seed = hash_combine_usize(seed, padding);
+
+    seed = hash_combine(seed, split);
+    seed = hash_combine(seed, depthwise_separable_opt);
+    seed = hash_combine(seed, transposed);
+    seed = hash_combine(seed, quantization);
+    seed = hash_combine(seed, deformable_mode);
+    seed = hash_combine(seed, groups);
+    seed = hash_combine_usize(seed, kernelSize);
+    seed = hash_combine(seed, deformable_groups);
+    seed = hash_combine(seed, bilinear_interpolation_pad);
+    seed = hash_combine(seed, deformable_mask_enabled);
+    return seed;
+}
 }  // namespace kernel_selector

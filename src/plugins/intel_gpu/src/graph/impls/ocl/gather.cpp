@@ -91,12 +91,12 @@ public:
         (_kernel_data.update_dispatch_data_func)(kernel_params.first, _kernel_data);
     }
 
-    static size_t update_hash(size_t seed, const kernel_selector::gather_params& params) {
-        seed = hash_combine(seed, params.axis);
-        seed = hash_combine(seed, params.batch_dim);
-        seed = hash_combine(seed, params.support_neg_ind);
-        return seed;
-    }
+    // static size_t update_hash(size_t seed, const kernel_selector::gather_params& params) {
+    //     seed = hash_combine(seed, params.axis);
+    //     seed = hash_combine(seed, params.batch_dim);
+    //     seed = hash_combine(seed, params.support_neg_ind);
+    //     return seed;
+    // }
 };
 
 namespace detail {

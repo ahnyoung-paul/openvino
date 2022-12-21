@@ -12,6 +12,13 @@ struct adaptive_pooling_params : public base_params {
 
     PoolType mode{PoolType::MAX};
     Datatype poolIndexElementType = Datatype::INT64;
+
+    size_t hash() const override {
+        auto seed = base_params::hash();
+        seed = hash_combine(seed, mode);
+        seed = hash_combine(seed, poolIndexElementType);
+        return seed;
+    }
 };
 
 struct adaptive_pooling_optional_params : public optional_params {

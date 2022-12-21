@@ -40,10 +40,10 @@ public:
         return {params, optional_params};
     }
 
-    static size_t update_hash(size_t seed, const kernel_selector::grn_params& params) {
-        seed = hash_combine(seed, params.bias);
-        return seed;
-    }
+    // static size_t update_hash(size_t seed, const kernel_selector::grn_params& params) {
+    //     seed = hash_combine(seed, params.bias);
+    //     return seed;
+    // }
 };
 
 namespace detail {

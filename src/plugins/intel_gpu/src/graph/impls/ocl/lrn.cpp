@@ -42,15 +42,15 @@ struct lrn_impl : typed_primitive_impl_ocl<lrn> {
         return {params, optional_params};
     }
 
-    static size_t update_hash(size_t seed, const kernel_selector::lrn_params& params) {
-        seed = hash_combine(seed, params.alpha);
-        seed = hash_combine(seed, params.beta);
-        seed = hash_combine(seed, params.k);
-        seed = hash_combine(seed, params.localSize);
-        seed = hash_combine(seed, params.divMode);
-        seed = hash_combine(seed, params.normMode);
-        return seed;
-    }
+    // static size_t update_hash(size_t seed, const kernel_selector::lrn_params& params) {
+    //     seed = hash_combine(seed, params.alpha);
+    //     seed = hash_combine(seed, params.beta);
+    //     seed = hash_combine(seed, params.k);
+    //     seed = hash_combine(seed, params.localSize);
+    //     seed = hash_combine(seed, params.divMode);
+    //     seed = hash_combine(seed, params.normMode);
+    //     return seed;
+    // }
 };
 
 namespace detail {

@@ -38,11 +38,11 @@ struct depth_to_space_impl : typed_primitive_impl_ocl<depth_to_space> {
         return {params, optional_params};
     }
 
-    static size_t update_hash(size_t seed, const kernel_selector::depth_to_space_params& params) {
-        seed = hash_combine(seed, params.block_size);
-        seed = hash_combine(seed, params.mode);
-        return seed;
-    }
+    // static size_t update_hash(size_t seed, const kernel_selector::depth_to_space_params& params) {
+    //     seed = hash_combine(seed, params.block_size);
+    //     seed = hash_combine(seed, params.mode);
+    //     return seed;
+    // }
 };
 
 namespace detail {

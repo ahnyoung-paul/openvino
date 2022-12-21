@@ -35,10 +35,10 @@ struct experimental_detectron_topk_rois_impl : typed_primitive_impl_ocl<experime
         return {params, {}};
     }
 
-    static size_t update_hash(size_t seed, const kernel_selector::experimental_detectron_topk_roi_params& params) {
-        seed = hash_combine(seed, params.max_rois);
-        return seed;
-    }
+    // static size_t update_hash(size_t seed, const kernel_selector::experimental_detectron_topk_roi_params& params) {
+    //     seed = hash_combine(seed, params.max_rois);
+    //     return seed;
+    // }
 };
 
 namespace detail {

@@ -110,19 +110,19 @@ public:
         return make_unique<arg_max_min_impl>(arg, best_kernel);
     }
 
-    static size_t get_impl_key(const arg_max_min_node& arg, const kernel_impl_params& impl_param) {
-        auto kernel_params = get_kernel_params(arg, impl_param);
-        auto params = kernel_params.first;
-        auto seed = params.hash();
-        seed = hash_combine(seed, params.argMaxMinAxis);
-        seed = hash_combine(seed, params.argMaxMinOut);
-        seed = hash_combine(seed, params.argMaxMinSortType);
-        seed = hash_combine(seed, params.topK);
-        seed = hash_combine(seed, params.values_first);
-        seed = hash_combine(seed, params.has_second_output);
-        seed = hash_combine(seed, params.use_multiple_outputs);
-        return seed;
-    }
+    // static size_t get_impl_key(const arg_max_min_node& arg, const kernel_impl_params& impl_param) {
+    //     auto kernel_params = get_kernel_params(arg, impl_param);
+    //     auto params = kernel_params.first;
+    //     auto seed = params.hash();
+    //     seed = hash_combine(seed, params.argMaxMinAxis);
+    //     seed = hash_combine(seed, params.argMaxMinOut);
+    //     seed = hash_combine(seed, params.argMaxMinSortType);
+    //     seed = hash_combine(seed, params.topK);
+    //     seed = hash_combine(seed, params.values_first);
+    //     seed = hash_combine(seed, params.has_second_output);
+    //     seed = hash_combine(seed, params.use_multiple_outputs);
+    //     return seed;
+    // }
 };
 
 namespace detail {

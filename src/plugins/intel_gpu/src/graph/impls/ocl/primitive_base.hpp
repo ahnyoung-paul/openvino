@@ -102,8 +102,12 @@ struct typed_primitive_impl_ocl : public typed_primitive_impl<PType> {
     static size_t get_impl_key(const typed_program_node<PType>& /*arg*/, const kernel_impl_params& impl_param) {
         auto kernel_params = ImplType::get_kernel_params(impl_param);
         auto params = kernel_params.first;
+#if 1
+        return params.hash();
+#else
         auto seed = params.hash();
         return ImplType::update_hash(seed, params);
+#endif
     }
 
 protected:

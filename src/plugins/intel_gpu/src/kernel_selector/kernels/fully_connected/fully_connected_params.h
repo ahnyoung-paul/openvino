@@ -23,6 +23,12 @@ struct fully_connected_params : public weight_bias_params {
 
         return k;
     }
+
+    size_t hash() const override {
+        auto seed = weight_bias_params::hash();
+        seed = hash_combine(seed, quantization);
+        return seed;
+    }
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

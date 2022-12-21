@@ -10,6 +10,12 @@ namespace kernel_selector {
 
 namespace {
 
+size_t bucketize_params::hash() const {
+    auto seed = base_params::hash();
+    seed = hash_combine(seed, with_right_bound);
+    return seed;
+}
+
 CommonDispatchData SetDefault(const bucketize_params& kernel_params) {
     CommonDispatchData dispatch_data;
     const auto in_layout = kernel_params.inputs.front().GetLayout();

@@ -18,6 +18,14 @@ struct gather_nd_params : public base_params {
     uint8_t batch_dims;
 
     bool batch_merged_output;
+
+    size_t hash() const override {
+        auto seed = base_params::hash();
+        seed = hash_combine(seed, indices_rank);
+        seed = hash_combine(seed, batch_dims);
+        seed = hash_combine(seed, batch_merged_output);
+        return seed;
+    }
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

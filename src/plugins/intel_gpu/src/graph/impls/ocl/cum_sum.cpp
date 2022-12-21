@@ -77,12 +77,12 @@ public:
         (_kernel_data.update_dispatch_data_func)(kernel_params.first, _kernel_data);
     }
 
-    static size_t update_hash(size_t seed, const kernel_selector::cum_sum_params& params) {
-        seed = hash_combine(seed, params.axis);
-        seed = hash_combine(seed, params.exclusive);
-        seed = hash_combine(seed, params.reverse);
-        return seed;
-    }
+    // static size_t update_hash(size_t seed, const kernel_selector::cum_sum_params& params) {
+    //     seed = hash_combine(seed, params.axis);
+    //     seed = hash_combine(seed, params.exclusive);
+    //     seed = hash_combine(seed, params.reverse);
+    //     return seed;
+    // }
 };
 
 namespace detail {

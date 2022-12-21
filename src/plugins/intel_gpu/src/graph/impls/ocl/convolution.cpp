@@ -192,29 +192,28 @@ public:
         return make_unique<convolution_impl>(arg, best_kernel);
     }
 
-    static size_t get_impl_key(const convolution_node& arg, const kernel_impl_params& impl_param) {
-        auto kernel_params = get_kernel_params(arg, impl_param);
-        auto params = kernel_params.first;
-        auto seed = params.hash();
-        using namespace kernel_selector;
-        seed = hash_combine_usize(seed, params.filterSize);
-        seed = hash_combine_usize(seed, params.stride);
-        seed = hash_combine_usize(seed, params.dilation);
-        seed = hash_combine_usize(seed, params.padding);
+    // static size_t get_impl_key(const convolution_node& arg, const kernel_impl_params& impl_param) {
+    //     auto kernel_params = get_kernel_params(arg, impl_param);
+    //     auto params = kernel_params.first;
+    //     auto seed = params.hash();
+    //     using namespace kernel_selector;
+    //     seed = hash_combine_usize(seed, params.filterSize);
+    //     seed = hash_combine_usize(seed, params.stride);
+    //     seed = hash_combine_usize(seed, params.dilation);
+    //     seed = hash_combine_usize(seed, params.padding);
 
-        seed = hash_combine(seed, params.split);
-        seed = hash_combine(seed, params.depthwise_separable_opt);
-        seed = hash_combine(seed, params.transposed);
-        seed = hash_combine(seed, params.quantization);
-        seed = hash_combine(seed, params.deformable_mode);
-        seed = hash_combine(seed, params.groups);
-        seed = hash_combine_usize(seed, params.kernelSize);
-        seed = hash_combine(seed, params.deformable_groups);
-        seed = hash_combine(seed, params.bilinear_interpolation_pad);
-        seed = hash_combine(seed, params.deformable_mask_enabled);
-        return seed;
-    }
-
+    //     seed = hash_combine(seed, params.split);
+    //     seed = hash_combine(seed, params.depthwise_separable_opt);
+    //     seed = hash_combine(seed, params.transposed);
+    //     seed = hash_combine(seed, params.quantization);
+    //     seed = hash_combine(seed, params.deformable_mode);
+    //     seed = hash_combine(seed, params.groups);
+    //     seed = hash_combine_usize(seed, params.kernelSize);
+    //     seed = hash_combine(seed, params.deformable_groups);
+    //     seed = hash_combine(seed, params.bilinear_interpolation_pad);
+    //     seed = hash_combine(seed, params.deformable_mask_enabled);
+    //     return seed;
+    // }
 private:
     int32_t _split;
     uint32_t _groups;
@@ -303,7 +302,7 @@ attach_convolution_impl::attach_convolution_impl() {
         std::make_tuple(data_types::i8, format::bs_fs_yx_bsv4_fsv2),
     });
 
-    impl_hash_key<convolution>::add(convolution_impl::get_impl_key);
+    impl_hash_key<convolution>::add(typed_primitive_impl_ocl<convolution>::get_impl_key<convolution_impl>);
 }
 
 }  // namespace detail

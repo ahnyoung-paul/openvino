@@ -23,6 +23,14 @@ struct concatenation_params : public base_params {
         k.EnableConcatAxis(axis);
         return k;
     }
+
+    size_t hash() const override {
+        auto seed base_params::hash();
+        seed = hash_combine(seed, axis);
+        seed = hash_combine(seed, isAligned);
+        seed = hash_combine(seed, misalignment);
+        return seed;
+    }
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -16,6 +16,13 @@ struct average_unpooling_params : public base_params {
 
     uSize unpoolSize;
     uSize unpoolStride;
+
+    size_t hash() const override {
+        auto seed = base_params::hash();
+        seed = hash_combine_usize(seed, unpoolSize);
+        seed = hash_combine_usize(seed, unpoolStride);
+        return seed;
+    }
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

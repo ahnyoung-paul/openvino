@@ -57,10 +57,10 @@ struct broadcast_impl : typed_primitive_impl_ocl<broadcast> {
         (_kernel_data.update_dispatch_data_func)(kernel_params.first, _kernel_data);
     }
 
-    static size_t update_hash(size_t seed, const kernel_selector::broadcast_params& params) {
-        seed = hash_combine_vec(seed, params.input_order);
-        return seed;
-    }
+    // static size_t update_hash(size_t seed, const kernel_selector::broadcast_params& params) {
+    //     seed = hash_combine_vec(seed, params.input_order);
+    //     return seed;
+    // }
 };
 
 namespace detail {
