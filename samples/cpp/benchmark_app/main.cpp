@@ -1215,6 +1215,9 @@ int main(int argc, char* argv[]) {
 
             execTime = std::chrono::duration_cast<ns>(Time::now() - startTime).count();
             processedFramesN += batchSize;
+
+            if (iteration % 1000 == 0)
+                slog::info << iteration << " .... " << slog::endl;
         }
 
         // wait the latest inference executions

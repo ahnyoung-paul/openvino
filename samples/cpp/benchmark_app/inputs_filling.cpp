@@ -385,7 +385,8 @@ std::map<std::string, ov::TensorVector> get_tensors_random(std::string input_sha
     }
     std::vector<int> lengths;
     std::string line;
-    while (n_shape < 2000 && fin >> line) { // create 1000 random inputs
+    // while (n_shape < 2000 && fin >> line) { // create 1000 random inputs
+    while (fin >> line) { // create 1000 random inputs
         std::getline(fin, line);
         std::stringstream words(line);
         std::string word;
