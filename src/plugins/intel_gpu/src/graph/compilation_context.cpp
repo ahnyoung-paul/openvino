@@ -14,20 +14,26 @@ public:
     using data_list_type = std::list<data_type>;
     using data_list_iter = typename data_list_type::iterator;
 
+    CompilationContext(CompilationContext&& other) = default;
+
     CompilationContext(cldnn::engine& engine, size_t program_id) {
-        _kernels_cache = cldnn::make_unique<kernels_cache>(engine, program_id, kernel_selector::KernelBase::get_db().get_batch_header_str());
-        _worker = std::thread([this](){
-            while (!_stop_compilation) {
-                CompilationContext::Task task;
-                bool success = try_pop_task(task);
-                if (success) {
-                    task(*_kernels_cache);
-                } else {
-                    std::chrono::milliseconds ms{1};
-                    std::this_thread::sleep_for(ms);
+        const size_t max_num_threads = 8;
+        for (size_t i = 0; i < max_num_threads; i++) {
+            auto thread = std::thread([this, &program_id, &engine](){
+                auto m_kernels_cache = cldnn::make_unique<kernels_cache>(engine, program_id, kernel_selector::KernelBase::get_db().get_batch_header_str());
+                while (!_stop_compilation) {
+                    CompilationContext::Task task;
+                    bool success = try_pop_task(task);
+                    if (success) {
+                        task(*m_kernels_cache);
+                    } else {
+                        std::chrono::milliseconds ms{1};
+                        std::this_thread::sleep_for(ms);
+                    }
                 }
-            }
-        });
+            });
+            _workers.push_back(std::move(thread));
+        }
     }
 
     void push_task(size_t key, ICompilationContext::Task&& task) override {
@@ -43,8 +49,10 @@ public:
 
     void cancel() noexcept override {
         _stop_compilation = true;
-        if (_worker.joinable())
-            _worker.join();
+        for (size_t i = 0; i < _workers.size(); i++) {
+            if (_workers[i].joinable())
+                _workers.at(i).join();
+        }
     }
 
     ~CompilationContext() noexcept { cancel(); }
@@ -64,7 +72,7 @@ private:
 
 private:
     std::unique_ptr<kernels_cache> _kernels_cache;
-    std::thread _worker;
+    std::vector<std::thread> _workers;
     std::atomic_bool _stop_compilation{false};
 
     data_list_type _data_list;
