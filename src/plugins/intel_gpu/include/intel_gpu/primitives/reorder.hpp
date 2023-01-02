@@ -149,6 +149,15 @@ struct reorder : public primitive_base<reorder> {
                input_mem_type == memory_type::surface;
     }
 
+    size_t hash() const override {
+        if (!seed) {
+            seed = hash_combine(seed, mean_mode);
+            seed = hash_combine(seed, input_mem_type);
+            seed = hash_range(seed, subtract_per_feature.begin(), subtract_per_feature.end());
+        }
+        return seed;
+    }
+
 protected:
     std::vector<std::reference_wrapper<const primitive_id>> get_dependencies() const override {
         if (mean.empty())
