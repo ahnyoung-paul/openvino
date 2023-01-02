@@ -65,6 +65,13 @@ struct concatenation : public primitive_base<concatenation> {
 
     /// @brief Dimension along which concatenation should take place
     int64_t axis;
+
+    size_t hash() const override {
+        if (!seed) {
+            seed = hash_combine(seed, axis);
+        }
+        return seed;
+    }
 };
 /// @}
 /// @}

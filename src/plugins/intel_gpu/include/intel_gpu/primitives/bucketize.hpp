@@ -31,6 +31,13 @@ struct bucketize : primitive_base<bucketize> {
           with_right_bound(with_right_bound) {}
 
     bool with_right_bound;
+
+    size_t hash() const override {
+        if (!seed) {
+            seed = hash_combine(seed, with_right_bound);
+        }
+        return seed;
+    }
 };
 
 /// @}

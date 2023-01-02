@@ -398,6 +398,7 @@ public:
     void set_preferred_input_fmt(size_t idx, format::type type);
     void set_preferred_output_fmt(size_t idx, format::type type);
 
+    virtual size_t hash() const { return seed; }
 
 protected:
     size_t unique_id = 0;
@@ -451,6 +452,8 @@ protected:
 
     void invalidate_users() const;
 
+    mutable size_t seed = 0;
+
 private:
 #ifdef ENABLE_ONEDNN_FOR_GPU
     std::vector<fused_primitive_desc_onednn> fused_prims_onednn;
@@ -492,6 +495,54 @@ public:
 
     std::shared_ptr<const PType> get_primitive() const {
         return std::static_pointer_cast<const PType>(program_node::get_primitive());
+    }
+
+    size_t hash() const override {
+        if (!seed) {
+            // hash for primitive
+            seed = get_primitive()->hash();
+
+            // hash for type
+            primitive_id type_str = get_primitive()->type_string();
+            for (size_t idx = 0; idx < type_str.size(); idx++) {
+                seed = hash_combine(seed, type_str[idx]);
+            }
+
+            // hash for activations
+            for (auto& act : fused_activations) {
+                seed = hash_combine(seed, act.func);
+                seed = hash_combine(seed, act.params.a);
+                seed = hash_combine(seed, act.params.b);
+            }
+
+            // hash for fused prims
+            for (auto& prim : fused_prims) {
+                seed = hash_combine(seed, prim.desc->type_string());
+                seed = hash_combine(seed, prim.activation);
+                seed = hash_combine(seed, prim.activation_params.a);
+                seed = hash_combine(seed, prim.activation_params.b);
+            }
+
+            if (!is_dynamic()) {
+                // input layouts
+                for (auto& in : get_input_layouts()) {
+                    seed = hash_combine(seed, in.format.value);
+                    for (auto& d : in.get_shape()) {
+                        seed = hash_combine(seed, d);
+                    }
+                }
+
+                // output layouts
+                for (auto& out : get_output_layouts()) {
+                    seed = hash_combine(seed, out.format.value);
+                    seed = hash_combine(seed, out.data_type);
+                    for (auto& d : out.get_shape()) {
+                        seed = hash_combine(seed, d);
+                    }
+                }
+            }
+        }
+        return seed;
     }
 
 protected:

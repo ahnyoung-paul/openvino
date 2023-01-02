@@ -773,6 +773,20 @@ struct convolution : public primitive_base<convolution> {
     /// @brief On how many cards split the computation to.
     int32_t split() const { return static_cast<int32_t>(weights.size()); }
 
+    size_t hash() const override {
+        if (!seed) {
+            seed = hash_range(seed, pad.begin(), pad.end());
+            seed = hash_range(seed, stride.begin(), stride.end());
+            seed = hash_range(seed, dilation.begin(), dilation.end());
+            seed = hash_combine(seed, groups);
+            seed = hash_combine(seed, deformable_groups);
+            seed = hash_combine(seed, deformable_mode);
+            seed = hash_combine(seed, bilinear_interpolation_pad);
+            seed = hash_combine(seed, grouped_weights_shape);
+        }
+        return seed;
+    }
+
     std::vector<std::reference_wrapper<const primitive_id>> get_dependencies() const override {
         std::vector<std::reference_wrapper<const primitive_id>> ret;
         ret.reserve(weights.size() + bias.size() + weights_zero_points.size() +
@@ -836,6 +850,21 @@ struct deformable_interp : public primitive_base<deformable_interp> {
     /// @brief if bilinear_interpolation_pad is true and the sampling location is within one pixel outside
     /// of the feature map boundary, then bilinear interpolation is performed on the zero padded feature map.
     bool bilinear_interpolation_pad {false};
+
+    size_t hash() const override {
+        if (!seed) {
+            seed = cldnn::hash_range(seed, pad.begin(), pad.end());
+            seed = cldnn::hash_range(seed, stride.begin(), stride.end());
+            seed = cldnn::hash_range(seed, dilation.begin(), dilation.end());
+            seed = cldnn::hash_combine(seed, kernel_size.hash());
+            seed = cldnn::hash_combine(seed, groups);
+            seed = cldnn::hash_combine(seed, deformable_groups);
+            seed = cldnn::hash_range(seed, padding_above.begin(), padding_above.end());
+            seed = cldnn::hash_range(seed, padding_below.begin(), padding_below.end());
+            seed = cldnn::hash_combine(seed, bilinear_interpolation_pad);
+        }
+        return seed;
+    }
 };
 
 struct deformable_conv : public primitive_base<deformable_conv> {
@@ -865,6 +894,13 @@ struct deformable_conv : public primitive_base<deformable_conv> {
 
     /// @brief On how many cards split the computation to.
     int32_t split() const { return static_cast<int32_t>(weights.size()); }
+
+    size_t hash() const override {
+        if (!seed) {
+            seed = hash_combine(seed, groups);
+        }
+        return seed;
+    }
 
     std::vector<std::reference_wrapper<const primitive_id>> get_dependencies() const override {
         std::vector<std::reference_wrapper<const primitive_id>> ret;
