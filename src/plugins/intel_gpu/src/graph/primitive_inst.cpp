@@ -293,24 +293,6 @@ void primitive_inst::update_impl() {
         return l.transform(format::bfwzyx).to_shape();
     };
 
-    auto get_layout_key = [&](const kernel_impl_params& params) -> size_t {
-        size_t seed = 0;
-        auto& id = params.desc->id;
-        for (size_t i = 0; i < id.size(); i++) {
-            seed = hash_combine(seed, id[i]);
-        }
-        seed = hash_combine(seed, _node->get_unique_id());
-        for (auto& layout : params.input_layouts) {
-            for (auto& d : layout.get_shape()) {
-                seed = hash_combine(seed, d);
-            }
-        }
-        for (auto& d : params.get_output_layout().get_shape()) {
-            seed = hash_combine(seed, d);
-        }
-        return seed;
-    };
-
     auto update_shape_info = [this, extend_to_6d, prev_impl_str](const kernel_impl_params& params) {
         mem_lock<int32_t> lock(_shape_info_memory, _network.get_stream());
         size_t offset = 0;
@@ -1253,5 +1235,23 @@ void primitive_inst::load(cldnn::BinaryInputBuffer& ib) {
 
         _intermediates_memory[i] = get_network().get_engine().allocate_memory(ibuf_layout, _allocation_type);
     }
+}
+
+size_t primitive_inst::get_layout_key(const kernel_impl_params& params) const {
+    size_t seed = 0;
+    seed = hash_combine(seed, _node->hash());
+    for (auto& in : params.input_layouts) {
+        seed = hash_combine(seed, in.format.to_string());
+        for (auto& d : in.get_shape()) {
+            seed = hash_combine(seed, d);
+        }
+    }
+    for (auto& out : params.output_layouts) {
+        seed = hash_combine(seed, out.format.to_string());
+        for (auto& d : out.get_shape()) {
+            seed = hash_combine(seed, d);
+        }
+    }
+    return seed;
 }
 }  // namespace cldnn

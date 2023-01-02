@@ -35,6 +35,13 @@ struct scatter_nd_update : public primitive_base<scatter_nd_update> {
 
     /// @brief ScatterNDUpdate indices_rank
     size_t indices_rank;
+
+    size_t hash() const override {
+        if (!seed) {
+            seed = hash_combine(seed, indices_rank);
+        }
+        return seed;
+    }
 };
 /// @}
 /// @}

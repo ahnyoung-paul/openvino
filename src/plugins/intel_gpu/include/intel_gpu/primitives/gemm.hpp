@@ -73,6 +73,18 @@ struct gemm : public primitive_base<gemm> {
     size_t input_rank;
      /// @brief Second matrix rank
     size_t weight_rank;
+
+    size_t hash() const override {
+        if (!seed) {
+            seed = hash_combine(seed, transpose_input0);
+            seed = hash_combine(seed, transpose_input1);
+            seed = hash_combine(seed, alpha);
+            seed = hash_combine(seed, beta);
+            seed = hash_combine(seed, input_rank);
+            seed = hash_combine(seed, weight_rank);
+        }
+        return seed;
+    }
 };
 
 }  // namespace cldnn

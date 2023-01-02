@@ -135,6 +135,13 @@ struct broadcast : public primitive_base<broadcast> {
     /// @brief Array of axes positions from output shape (0-based, from left to right)
     ///        along which broadcast should happen.
     std::vector<uint16_t> broadcast_axes;
+
+    size_t hash() const override {
+        if (!seed) {
+            seed = hash_range(seed, broadcast_axes.begin(), broadcast_axes.end());
+        }
+        return seed;
+    }
 };
 /// @}
 /// @}

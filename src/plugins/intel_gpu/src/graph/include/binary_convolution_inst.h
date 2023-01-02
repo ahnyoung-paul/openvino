@@ -47,6 +47,15 @@ public:
         return params;
     }
 
+    size_t hash() const override {
+        if (!seed) {
+            seed = parent::hash();
+            seed = hash_combine(seed, split);
+            seed = hash_combine(seed, depthwise_sep_opt);
+        }
+        return seed;
+    }
+
 private:
     int32_t split;
     bool depthwise_sep_opt;

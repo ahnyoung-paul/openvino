@@ -41,6 +41,14 @@ struct average_unpooling : public primitive_base<average_unpooling> {
     tensor size;
     /// @brief Output size of this primitive.
     tensor output_size;
+
+    size_t hash() const override {
+        if (!seed) {
+            seed = hash_combine(seed, stride.hash());
+            seed = hash_combine(seed, size.hash());
+        }
+        return seed;
+    }
 };
 /// @}
 /// @}

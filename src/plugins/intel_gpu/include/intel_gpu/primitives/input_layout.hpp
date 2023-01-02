@@ -37,6 +37,13 @@ struct input_layout : public primitive_base<input_layout> {
     void change_layout(const cldnn::layout& new_layout) {
         layout = new_layout;
     }
+
+    size_t hash() const override {
+        if (!seed) {
+            seed = hash_combine(seed, id);
+        }
+        return seed;
+    }
 };
 /// @}
 /// @}

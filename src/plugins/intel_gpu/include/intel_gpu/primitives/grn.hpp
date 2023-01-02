@@ -33,6 +33,13 @@ struct grn : public primitive_base<grn> {
 
     /// @brief Bias value for whole output tensor.
     float bias;
+
+    size_t hash() const override {
+        if (!seed) {
+            seed = hash_combine(seed, bias);
+        }
+        return seed;
+    }
 };
 /// @}
 /// @}

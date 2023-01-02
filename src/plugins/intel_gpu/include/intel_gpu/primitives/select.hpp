@@ -47,6 +47,14 @@ struct select : public primitive_base<select> {
 
     /// @brief Define auto broadcast rule specification.
     ov::op::AutoBroadcastSpec broadcast_spec;
+
+    size_t hash() const override {
+        if (!seed) {
+            seed = hash_combine(seed, broadcast_spec.m_axis);
+            seed = hash_combine(seed, broadcast_spec.m_type);
+        }
+        return seed;
+    }
 };
 /// @}
 /// @}

@@ -43,6 +43,13 @@ struct shape_of : public primitive_base<shape_of> {
         , output_rank(0) {}
 
     size_t output_rank;
+
+    size_t hash() const override {
+        if (!seed) {
+            seed = hash_combine(seed, output_rank);
+        }
+        return seed;
+    }
 };
 /// @}
 /// @}
