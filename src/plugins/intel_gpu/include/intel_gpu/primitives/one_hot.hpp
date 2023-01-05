@@ -98,7 +98,6 @@ struct one_hot : public primitive_base<one_hot> {
     size_t hash() const override {
         if (!seed) {
             seed = hash_combine(seed, one_hot_axis);
-            seed = hash_combine(seed, depth);
             seed = hash_combine(seed, on_value);
             seed = hash_combine(seed, off_value);
         }

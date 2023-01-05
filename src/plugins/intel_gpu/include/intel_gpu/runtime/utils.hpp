@@ -198,7 +198,7 @@ static size_t hash_combine(size_t seed, const T &v) {
 template <class It>
 static size_t hash_range(size_t seed, It first, It last) {
     for (; first != last; ++first) {
-        hash_combine(seed, *first);
+        seed = hash_combine(seed, *first);
     }
     return seed;
 }

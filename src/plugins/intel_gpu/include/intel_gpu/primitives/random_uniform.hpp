@@ -52,7 +52,6 @@ struct random_uniform : public primitive_base<random_uniform> {
         if (!seed) {
             seed = hash_combine(seed, global_seed);
             seed = hash_combine(seed, op_seed);
-            seed = hash_combine(seed, output_format.value);
         }
         return seed;
     }

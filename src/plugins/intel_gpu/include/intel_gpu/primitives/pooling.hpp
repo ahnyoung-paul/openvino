@@ -171,13 +171,12 @@ struct pooling : public primitive_base<pooling> {
             seed = hash_combine(seed, mode);
             seed = hash_range(seed, size.begin(), size.end());
             seed = hash_range(seed, stride.begin(), stride.end());
-            seed = hash_range(seed, dilation.begin(), dilation.end());
             seed = hash_range(seed, pads_begin.begin(), pads_begin.end());
+            seed = hash_range(seed, dilation.begin(), dilation.end());
             seed = hash_range(seed, pads_end.begin(), pads_end.end());
             seed = hash_combine(seed, auto_pad);
             seed = hash_combine(seed, rounding_type);
             seed = hash_combine(seed, axis);
-            seed = hash_combine(seed, with_output_size);
             seed = hash_combine(seed, index_element_type);
             seed = hash_combine(seed, maxPoolOpset8Features);
         }

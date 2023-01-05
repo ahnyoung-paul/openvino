@@ -72,7 +72,6 @@ struct non_max_suppression : public primitive_base<non_max_suppression> {
 
     size_t hash() const override {
         if (!seed) {
-            seed = hash_combine(seed, selected_indices_num);
             seed = hash_combine(seed, center_point_box);
             seed = hash_combine(seed, sort_result_descending);
         }

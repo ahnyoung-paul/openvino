@@ -160,7 +160,6 @@ struct resample : public primitive_base<resample> {
     size_t hash() const override {
         if (!seed) {
             seed = hash_combine(seed, num_filter);
-            seed = hash_range(seed, sizes.begin(), sizes.end());
             seed = hash_range(seed, scales.begin(), scales.end());
             seed = hash_range(seed, axes.begin(), axes.end());
             seed = hash_range(seed, pads_begin.begin(), pads_begin.end());

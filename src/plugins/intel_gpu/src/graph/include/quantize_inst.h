@@ -99,31 +99,31 @@ public:
     std::vector<size_t> get_shape_infer_dependencies() const override { return {}; }
     size_t hash() const override {
         if (!seed) {
-            seed = cldnn::hash_combine(seed, parent::hash());
+            seed = parent::hash();
 
-            seed = cldnn::hash_combine(seed, scale_shift_opt);
-            seed = cldnn::hash_combine(seed, need_post_scale);
-            seed = cldnn::hash_combine(seed, need_post_shift);
-            seed = cldnn::hash_combine(seed, need_pre_shift);
-            seed = cldnn::hash_combine(seed, need_clamp);
-            seed = cldnn::hash_combine(seed, need_min_clamp);
-            seed = cldnn::hash_combine(seed, need_max_clamp);
+            seed = hash_combine(seed, scale_shift_opt);
+            seed = hash_combine(seed, need_post_scale);
+            seed = hash_combine(seed, need_post_shift);
+            seed = hash_combine(seed, need_pre_shift);
+            seed = hash_combine(seed, need_clamp);
+            seed = hash_combine(seed, need_min_clamp);
+            seed = hash_combine(seed, need_max_clamp);
 
-            seed = cldnn::hash_combine(seed, per_tensor_input_range);
-            seed = cldnn::hash_combine(seed, per_tensor_input_scale);
-            seed = cldnn::hash_combine(seed, per_tensor_input_shift);
-            seed = cldnn::hash_combine(seed, per_tensor_output_range);
-            seed = cldnn::hash_combine(seed, per_tensor_output_scale);
-            seed = cldnn::hash_combine(seed, per_tensor_output_shift);
+            seed = hash_combine(seed, per_tensor_input_range);
+            seed = hash_combine(seed, per_tensor_input_scale);
+            seed = hash_combine(seed, per_tensor_input_shift);
+            seed = hash_combine(seed, per_tensor_output_range);
+            seed = hash_combine(seed, per_tensor_output_scale);
+            seed = hash_combine(seed, per_tensor_output_shift);
 
-            seed = cldnn::hash_combine(seed, in_lo);
-            seed = cldnn::hash_combine(seed, in_hi);
-            seed = cldnn::hash_combine(seed, in_scale);
-            seed = cldnn::hash_combine(seed, in_shift);
-            seed = cldnn::hash_combine(seed, out_lo);
-            seed = cldnn::hash_combine(seed, out_hi);
-            seed = cldnn::hash_combine(seed, out_scale);
-            seed = cldnn::hash_combine(seed, out_shift);
+            seed = hash_combine(seed, in_lo);
+            seed = hash_combine(seed, in_hi);
+            seed = hash_combine(seed, in_scale);
+            seed = hash_combine(seed, in_shift);
+            seed = hash_combine(seed, out_lo);
+            seed = hash_combine(seed, out_hi);
+            seed = hash_combine(seed, out_scale);
+            seed = hash_combine(seed, out_shift);
         }
         return seed;
     }

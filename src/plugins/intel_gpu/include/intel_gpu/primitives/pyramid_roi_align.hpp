@@ -67,7 +67,6 @@ struct pyramid_roi_align : public primitive_base<pyramid_roi_align> {
 
     size_t hash() const override {
         if (!seed) {
-            seed = hash_combine(seed, output_size);
             seed = hash_combine(seed, sampling_ratio);
             seed = hash_range(seed, pyramid_scales.begin(), pyramid_scales.end());
             seed = hash_combine(seed, pyramid_starting_level);

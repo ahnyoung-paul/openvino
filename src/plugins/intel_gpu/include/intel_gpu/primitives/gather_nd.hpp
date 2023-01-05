@@ -58,7 +58,6 @@ struct gather_nd : public primitive_base<gather_nd> {
 
     size_t hash() const override {
         if (!seed) {
-            seed = hash_combine(seed, input_rank);
             seed = hash_combine(seed, indices_rank);
             seed = hash_combine(seed, batch_dims);
             seed = hash_combine(seed, batch_merged_output);
