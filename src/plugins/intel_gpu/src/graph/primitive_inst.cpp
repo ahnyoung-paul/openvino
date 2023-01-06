@@ -302,10 +302,15 @@ void primitive_inst::update_impl() {
         GPU_DEBUG_TRACE_DETAIL << id() << ": update dynamic impl " << prev_impl_str << " to new shape: " << s.str() << std::endl;
     };
 
+    auto get_layout_key = [&](const cldnn::program_node& node, const kernel_impl_params& params) -> size_t {
+        GPU_DEBUG_PROFILED_STAGE(instrumentation::pipeline_stage::gen_impl_key);
+        return _node->type()->get_impl_hash_key(node, params);
+    };
+
     if (!_node->is_type<data>() && !(_node->is_type<mutable_data>() && _node->get_dependencies().empty())) {
         // Update param if fake_alignment is available
         auto updated_params = _node->type()->get_fake_aligned_params(*_impl_params);
-        auto impl_key = _node->type()->get_impl_hash_key(*_node, updated_params);
+        auto impl_key = get_layout_key(*_node, updated_params);
         auto& cache = get_network().get_implementations_cache();
         bool has_cached_impl = false;
         {
