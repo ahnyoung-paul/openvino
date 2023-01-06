@@ -99,7 +99,8 @@ enum class pipeline_stage : uint8_t {
     update_weights = 2,
     memory_allocation = 3,
     set_arguments = 4,
-    inference = 5
+    inference = 5,
+    gen_impl_key = 6
 };
 
 inline std::ostream& operator<<(std::ostream& os, const pipeline_stage& stage) {
@@ -110,6 +111,7 @@ inline std::ostream& operator<<(std::ostream& os, const pipeline_stage& stage) {
         case pipeline_stage::update_weights:        return os << "update_weights";
         case pipeline_stage::memory_allocation:     return os << "memory_allocation";
         case pipeline_stage::inference:             return os << "inference";
+        case pipeline_stage::gen_impl_key:          return os << "gen_impl_key";
         default: OPENVINO_ASSERT(false, "[GPU] Unexpected pipeline stage");
     }
 }

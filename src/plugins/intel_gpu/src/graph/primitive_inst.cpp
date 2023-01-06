@@ -302,6 +302,18 @@ void primitive_inst::update_impl() {
         GPU_DEBUG_TRACE_DETAIL << id() << ": update dynamic impl " << prev_impl_str << " to new shape: " << s.str() << std::endl;
     };
 
+    auto get_layout_key = [&](const kernel_impl_params& params) -> size_t {
+        GPU_DEBUG_PROFILED_STAGE(instrumentation::pipeline_stage::gen_impl_key);
+        size_t seed = _node->hash();
+        for (auto& in : params.input_layouts) {
+            seed = hash_combine(seed, in.hash());
+        }
+        for (auto& out : params.output_layouts) {
+            seed = hash_combine(seed, out.hash());
+        }
+        return seed;
+    };
+
     if (!_node->is_type<data>() && !(_node->is_type<mutable_data>() && _node->get_dependencies().empty())) {
         // Update param if fake_alignment is available
         auto updated_params = _node->type()->get_fake_aligned_params(*_impl_params);
@@ -1224,14 +1236,15 @@ void primitive_inst::load(cldnn::BinaryInputBuffer& ib) {
     }
 }
 
-size_t primitive_inst::get_layout_key(const kernel_impl_params& params) const {
-    size_t seed = _node->hash();
-    for (auto& in : params.input_layouts) {
-        seed = hash_combine(seed, in.hash());
-    }
-    for (auto& out : params.output_layouts) {
-        seed = hash_combine(seed, out.hash());
-    }
-    return seed;
-}
+// size_t primitive_inst::get_layout_key(const kernel_impl_params& params) const {
+//     GPU_DEBUG_PROFILED_STAGE(instrumentation::pipeline_stage::gen_impl_key);
+//     size_t seed = _node->hash();
+//     for (auto& in : params.input_layouts) {
+//         seed = hash_combine(seed, in.hash());
+//     }
+//     for (auto& out : params.output_layouts) {
+//         seed = hash_combine(seed, out.hash());
+//     }
+//     return seed;
+// }
 }  // namespace cldnn
