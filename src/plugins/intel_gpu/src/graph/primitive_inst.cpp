@@ -324,25 +324,27 @@ void primitive_inst::update_impl() {
         if (!has_cached_impl) {
             if (_dynamic_impl) {
                 auto& compilation_context = get_network().get_compilation_context();
-                compilation_context.push_task(impl_key, [this, updated_params, impl_key](kernels_cache& kc) {
+                compilation_context.push_task(impl_key, [this, updated_params, impl_key]()
+                    -> std::unique_ptr<cldnn::primitive_impl> {
                     auto& cache = get_network().get_implementations_cache();
                     {
                         std::lock_guard<std::mutex> lock(get_network().get_impl_cache_mutex());
                         // Check existense in the cache one more time as several iterations of model execution could happens and multiple compilation
                         // tasks created for same shapes
                         if (cache.has(impl_key))
-                            return;
+                            return nullptr;
                     }
 
-                    auto impl = _node->type()->choose_impl(*_node, updated_params);
-                    auto kernel_ids = kc.add_kernels_source(impl->get_kernels_source());
-                    impl->set_kernel_ids(kernel_ids);
-                    kc.compile();
-                    impl->init_kernels(kc);
-                    kc.reset();
+                    return _node->type()->choose_impl(*_node, updated_params);
+                    // auto impl = _node->type()->choose_impl(*_node, updated_params);
+                    // auto kernel_ids = kc.add_kernels_source(impl->get_kernels_source());
+                    // impl->set_kernel_ids(kernel_ids);
+                    // kc.compile();
+                    // impl->init_kernels(kc);
+                    // kc.reset();
 
-                    std::lock_guard<std::mutex> lock(get_network().get_impl_cache_mutex());
-                    cache.add(impl_key, impl->clone());
+                    // std::lock_guard<std::mutex> lock(get_network().get_impl_cache_mutex());
+                    // cache.add(impl_key, impl->clone());
                 });
 
                 _impl = _dynamic_impl->clone();

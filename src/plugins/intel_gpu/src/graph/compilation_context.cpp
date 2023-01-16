@@ -19,22 +19,23 @@ public:
         }
     }
 
-    bool pop_front_task(size_t& task_key, ICompilationContext::Task& task) {
+    std::vector<CompilationTaskData> pop_tasks() {
         std::lock_guard<std::mutex> lock(_mutex);
-        if (!_queue.empty()) {
-            auto front = _queue.front();
-            task = front.second;
-            task_key = front.first;
+        std::vector<CompilationTaskData> tasks;
+        size_t idx = 0;
+        size_t max_num_compiled = 30;
+        while (!_queue.empty() && idx < max_num_compiled) {
+            tasks.push_back(_queue.front());
             _queue.pop_front();
-            return true;
+            idx++;
         }
-        return false;
+        return tasks;
     }
 
-    void erase_task_key(size_t removed_key) {
+    void erase_task_key(std::vector<size_t>& removed_keys) {
         std::lock_guard<std::mutex> lock(_mutex);
-        if (_queue_keymap.find(removed_key) != _queue_keymap.end()) {
-            _queue_keymap.erase(removed_key);
+        for (auto key : removed_keys) {
+            _queue_keymap.erase(key);
         }
     }
 
@@ -46,16 +47,45 @@ private:
 
 class CompilationContext : public ICompilationContext {
 public:
-    CompilationContext(cldnn::engine& engine, const ExecutionConfig& config, size_t program_id) {
+    CompilationContext(cldnn::network& network) {
+        cldnn::program::ptr program = network.get_program();
+        cldnn::engine& engine = program->get_engine();
+        const ExecutionConfig& config = program->get_config();
+        size_t program_id = program->get_id();
+
         _kernels_cache = cldnn::make_unique<kernels_cache>(engine, config, program_id, nullptr, kernel_selector::KernelBase::get_db().get_batch_header_str());
-        _worker = std::thread([this](){
+        _worker = std::thread([this, &network](){
+            auto& cache = network.get_implementations_cache();
             while (!_stop_compilation) {
                 CompilationContext::Task task;
-                size_t task_key;
-                bool success = _queue.pop_front_task(task_key, task);
-                if (success) {
-                    task(*_kernels_cache);
-                    _queue.erase_task_key(task_key);
+                auto task_data_list = _queue.pop_tasks();
+                if (!task_data_list.empty()) {
+                    std::vector<size_t> impl_key_list;
+                    std::vector<std::pair<size_t, std::unique_ptr<cldnn::primitive_impl>>> impl_list;
+                    for (auto& task_data : task_data_list) {
+                        auto impl_key = task_data.first;
+                        auto& task = task_data.second;
+                        auto impl = task();
+                        if (impl != nullptr) {
+                            auto kernel_ids = _kernels_cache->add_kernels_source(impl->get_kernels_source());
+                            impl->set_kernel_ids(kernel_ids);
+                            impl_list.push_back(std::make_pair(impl_key, std::move(impl)));
+                        }
+                        impl_key_list.push_back(impl_key);
+                    }
+
+                    _kernels_cache->build_all();
+
+                    for (auto& impl_data : impl_list) {
+                        auto impl_key = impl_data.first;
+                        auto impl = std::move(impl_data.second);
+                        impl->init_kernels(*_kernels_cache);
+                        cache.add(impl_key, impl->clone());
+                    }
+
+                    _kernels_cache->reset();
+                    _queue.erase_task_key(impl_key_list);
+
                 } else {
                     std::chrono::milliseconds ms{1};
                     std::this_thread::sleep_for(ms);
@@ -84,8 +114,8 @@ private:
     CompilationTaskQueue _queue;
 };
 
-std::unique_ptr<ICompilationContext> ICompilationContext::create(cldnn::engine& engine, const ExecutionConfig& config, size_t program_id) {
-    return cldnn::make_unique<CompilationContext>(engine, config, program_id);
+std::unique_ptr<ICompilationContext> ICompilationContext::create(cldnn::network& network) {
+    return cldnn::make_unique<CompilationContext>(network);
 }
 
 }  // namespace cldnn
