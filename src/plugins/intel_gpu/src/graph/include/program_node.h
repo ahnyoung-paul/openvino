@@ -36,6 +36,8 @@ struct typed_program_node;
 class json_composite;
 class xml_composite;
 
+// #define USE_DYNAMIC_IMPL
+
 /*
     Base class for all primitives which wraps API class and extends it to be used
     in graph context.

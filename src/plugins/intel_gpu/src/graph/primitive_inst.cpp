@@ -267,6 +267,7 @@ void primitive_inst::realloc_if_needed() {
 void primitive_inst::update_impl() {
     GPU_DEBUG_PROFILED_STAGE(instrumentation::pipeline_stage::update_implementation);
     auto prev_impl_str =  _impl != nullptr ? _impl->get_kernel_name() : "nullptr";
+#ifdef USE_DYNAMIC_IMPL
     auto extend_to_6d = [this](ov::PartialShape ps) -> std::vector<size_t> {
         // For shape_of we extend shape with 1-s to 6d rank to make kernel simpler
         if (_node->is_type<shape_of>()) {
@@ -305,6 +306,7 @@ void primitive_inst::update_impl() {
             s << lock[i] << " ";
         GPU_DEBUG_TRACE_DETAIL << id() << ": update dynamic impl " << prev_impl_str << " to new shape: " << s.str() << std::endl;
     };
+#endif
 
     if (!_node->is_type<data>() && !(_node->is_type<mutable_data>() && _node->get_dependencies().empty())) {
         // Update param if fake_alignment is available
@@ -321,10 +323,12 @@ void primitive_inst::update_impl() {
                 GPU_DEBUG_TRACE_DETAIL << id() << ": get impl from cache " << _impl->get_kernel_name() << std::endl;
             }
         }
+
         if (!has_cached_impl) {
+#ifdef USE_DYNAMIC_IMPL
             if (_dynamic_impl) {
                 auto& compilation_context = get_network().get_compilation_context();
-                compilation_context.push_task(impl_key, [this, updated_params, impl_key](kernels_cache& kc) {
+                size_t queue_size = compilation_context.push_task(impl_key, [this, updated_params, impl_key](kernels_cache& kc) {
                     auto& cache = get_network().get_implementations_cache();
                     {
                         std::lock_guard<std::mutex> lock(get_network().get_impl_cache_mutex());
@@ -349,11 +353,17 @@ void primitive_inst::update_impl() {
                 _impl->update_dispatch_data(updated_params);
                 update_shape_info(updated_params);
             } else {
+#else
+            {
+#endif
                 _impl = _node->type()->choose_impl(*_node, updated_params);
                 auto& kernels_cache = get_network().get_kernels_cache();
                 auto kernel_ids = kernels_cache.add_kernels_source(_impl->get_kernels_source());
                 _impl->set_kernel_ids(kernel_ids);
-                kernels_cache.compile();
+                {
+                    GPU_DEBUG_PROFILED_STAGE(instrumentation::pipeline_stage::build_time);
+                    kernels_cache.compile();
+                }
                 _impl->init_kernels(kernels_cache);
                 kernels_cache.reset();
                 std::lock_guard<std::mutex> lock(get_network().get_impl_cache_mutex());
@@ -565,6 +575,7 @@ primitive_inst::primitive_inst(network& network, program_node const& node, bool 
     }
     if (_impl) {
         _impl->set_node_params(node);
+#ifdef USE_DYNAMIC_IMPL
         if (_impl->is_dynamic()) {
             _dynamic_impl = _impl->clone();
             // Actual shape info layout is the following:
@@ -575,6 +586,7 @@ primitive_inst::primitive_inst(network& network, program_node const& node, bool 
             const int64_t shape_elements = buffers_count * tensor_dims_count;
             _shape_info_memory = _network.get_engine().allocate_memory(layout{{shape_elements}, data_types::i32, format::bfyx});
         }
+#endif
     }
 
     if (_outputs[0])

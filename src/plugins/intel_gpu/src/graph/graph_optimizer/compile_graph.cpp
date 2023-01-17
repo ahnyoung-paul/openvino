@@ -33,6 +33,7 @@ void compile_graph::run(program& p) {
     std::exception_ptr exception;
     for (size_t idx = 0; idx < proc_order.size(); idx++) {
         auto& node = *(std::next(proc_order.begin(), idx));
+#ifdef USE_DYNAMIC_IMPL
         bool can_select_impl = !node->is_type<data>() &&
                                !(node->is_type<mutable_data>() && node->get_dependencies().empty()) &&
                                (!node->is_dynamic() || node->type()->does_dynamic_implementation_exist(*node));
@@ -52,6 +53,11 @@ void compile_graph::run(program& p) {
 
         if (node->is_dynamic() && !is_planar)
             can_select_impl = false;
+
+#else
+        bool can_select_impl = !node->is_type<data>() &&
+                               !(node->is_type<mutable_data>() && node->get_dependencies().empty()) && !node->is_dynamic();
+#endif
 
         if (can_select_impl) {
             tasks.push_back([node, &p, &exception] {
