@@ -16,6 +16,7 @@ public:
     virtual void push_task(size_t key, Task&& task) = 0;
     virtual void cancel() noexcept = 0;
     virtual ~ICompilationContext() = default;
+    virtual std::string summary() = 0;
 
     static std::unique_ptr<ICompilationContext> create(cldnn::engine& engine, const ExecutionConfig& config, size_t program_id);
 };

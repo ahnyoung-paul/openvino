@@ -58,6 +58,7 @@ public:
             return false;
         }
 
+        total_size++;
         bool popped_last_element = false;
         if (_capacity > 0 && _capacity == _key_map.size()) {
             pop();
@@ -76,7 +77,12 @@ public:
      * @return false otherwise
      */
     bool has(const Key& key) const {
-        return (_key_map.find(key) != _key_map.end());
+        total_trial_count++;
+        if (_key_map.find(key) != _key_map.end()) {
+            total_found_count++;
+            return true;
+        }
+        return false;
     }
 
     /**
@@ -134,6 +140,17 @@ public:
         return key_list;
     }
 
+    size_t get_max_size() const { return total_size; }
+
+    std::string summary() const {
+        std::stringstream ss;
+        ss << "impl_cache_max_cache_size:" << get_max_size() << std::endl;
+        ss << "impl_cache_capacity:" << capacity() << std::endl;
+        ss << "impl_cache_total_count:" << total_trial_count << std::endl;
+        ss << "impl_cache_found_count:" << total_found_count << std::endl;
+        return ss.str();
+    }
+
 private:
     using lru_data_list_type = std::list<data_type>;
     using lru_data_list_iter = typename lru_data_list_type::iterator;
@@ -141,6 +158,8 @@ private:
     std::list<data_type> _lru_data_list;
     std::unordered_map<Key, lru_data_list_iter> _key_map;
     const size_t _capacity;
+    mutable size_t total_trial_count = 0;
+    mutable size_t total_found_count = 0;
 
     /**
      * @brief Move data to front of list because the data is touched.
@@ -162,6 +181,7 @@ private:
             _lru_data_list.pop_back();
         }
     }
+    size_t total_size = 0;
 };
 
 using ImplementationsCache = cldnn::LruCache<size_t, std::shared_ptr<primitive_impl>>;

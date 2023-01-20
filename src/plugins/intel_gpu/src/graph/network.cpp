@@ -57,6 +57,7 @@ namespace cldnn {
 namespace {
 
 #ifdef GPU_DEBUG_CONFIG
+#if 0
 void dump_perf_data_raw(std::string dump_path, const std::list<std::shared_ptr<primitive_inst>>& exec_order) {
     auto layouts_to_str = [](const std::vector<layout>& layouts) -> std::string {
         std::stringstream s;
@@ -125,6 +126,7 @@ void dump_perf_data_raw(std::string dump_path, const std::list<std::shared_ptr<p
         }
     }
 }
+#endif
 
 float convert_element(int32_t i) { return static_cast<float>(i); }
 
@@ -262,7 +264,7 @@ void wait_for_the_turn() {
 }
 
 #else
-void dump_perf_data_raw(std::string, const std::list<std::shared_ptr<primitive_inst>>&) {}
+// void dump_perf_data_raw(std::string, const std::list<std::shared_ptr<primitive_inst>>&) {}
 void log_memory_to_file(memory::ptr, stream&, std::string) {}
 void wait_for_the_turn() {}
 #endif
@@ -437,13 +439,23 @@ network::network(cldnn::BinaryInputBuffer& ib, const ExecutionConfig& config, st
 }
 
 network::~network() {
+    GPU_DEBUG_GET_INSTANCE(debug_config);
+    GPU_DEBUG_IF(!debug_config->dump_profiling_data.empty()) {
+        auto dump_path = debug_config->dump_profiling_data + "/perf_cache" + std::to_string(net_id) + ".csv";
+        std::ofstream of(dump_path);
+        if (of.is_open()) {
+            of << _compilation_context->summary() << _impls_cache->summary();
+        }
+    }
+    std::cout << _compilation_context->summary();
+    std::cout << _impls_cache->summary();
     if (_compilation_context)
         _compilation_context->cancel();
     _memory_pool->clear_pool_for_network(net_id);
-    GPU_DEBUG_GET_INSTANCE(debug_config);
-    GPU_DEBUG_IF(!debug_config->dump_profiling_data.empty()) {
-        dump_perf_data_raw(debug_config->dump_profiling_data + "/perf_raw" + std::to_string(net_id) + ".csv", _exec_order);
-    }
+    // GPU_DEBUG_GET_INSTANCE(debug_config);
+    // GPU_DEBUG_IF(!debug_config->dump_profiling_data.empty()) {
+    //     dump_perf_data_raw(debug_config->dump_profiling_data + "/perf_raw" + std::to_string(net_id) + ".csv", _exec_order);
+    // }
 }
 
 // Cache blob format:

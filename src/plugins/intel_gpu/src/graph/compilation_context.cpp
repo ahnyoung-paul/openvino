@@ -16,6 +16,8 @@ public:
         if (_queue_keymap.find(task_key) == _queue_keymap.end()) {
             auto insert_it = _queue.insert(_queue.end(), {task_key, task});
             _queue_keymap.insert({task_key, insert_it});
+            _max_queue_size = std::max(_max_queue_size, _queue.size());
+            _total_quque_inputs++;
         }
     }
 
@@ -38,10 +40,26 @@ public:
         }
     }
 
+    std::string summary() {
+        std::lock_guard<std::mutex> lock(_mutex);
+        {
+            std::stringstream ss;
+            ss << "async_compilation_queue_size: " << _max_queue_size << std::endl;
+            ss << "async_compilation_number_inputs: " << _total_quque_inputs << std::endl;
+            ss << "async_compilation_remained: " << _queue.size() << std::endl;
+            return ss.str();
+        }
+    }
+
+    size_t max_size() { return _max_queue_size; }
+    size_t total_queue_inputs() { return _total_quque_inputs; }
+
 private:
     std::deque<CompilationTaskData> _queue;
     std::unordered_map<size_t, std::deque<CompilationTaskData>::iterator> _queue_keymap;
     std::mutex _mutex;
+    size_t _max_queue_size = 0;
+    size_t _total_quque_inputs = 0;
 };
 
 class CompilationContext : public ICompilationContext {
@@ -72,6 +90,10 @@ public:
         _stop_compilation = true;
         if (_worker.joinable())
             _worker.join();
+    }
+
+    std::string summary() override {
+        return _queue.summary();
     }
 
     ~CompilationContext() noexcept { cancel(); }
