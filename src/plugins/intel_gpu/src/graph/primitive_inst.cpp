@@ -326,7 +326,7 @@ void primitive_inst::update_impl() {
             }
         }
         if (!has_cached_impl) {
-#if 1
+#if 0
 #if 1
             if (_dynamic_impl && ( _node->is_type<fully_connected>() ||
                 _node->is_type<gemm>() ||
