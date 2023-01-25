@@ -449,6 +449,9 @@ network::~network() {
     }
     std::cout << _compilation_context->summary();
     std::cout << _impls_cache->summary();
+    std::cout << "Filter some prims such as FC, GEMM, MVN and PERMUTE, REORDER, SOFTMAX, ELTWISE" << std::endl;
+    // std::cout << "Filter some prims such as FC, GEMM, MVN and PERMUTE" << std::endl;
+    // std::cout << "No filter prim in update_impl" << std::endl;
     if (_compilation_context)
         _compilation_context->cancel();
     _memory_pool->clear_pool_for_network(net_id);

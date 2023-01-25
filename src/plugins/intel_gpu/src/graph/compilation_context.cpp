@@ -47,12 +47,15 @@ public:
             ss << "async_compilation_queue_size: " << _max_queue_size << std::endl;
             ss << "async_compilation_number_inputs: " << _total_quque_inputs << std::endl;
             ss << "async_compilation_remained: " << _queue.size() << std::endl;
+            ss << "async_compilation_num_compiled:" << num_compiled_tasks << std::endl;
             return ss.str();
         }
     }
 
     size_t max_size() { return _max_queue_size; }
     size_t total_queue_inputs() { return _total_quque_inputs; }
+
+    size_t num_compiled_tasks = 0;
 
 private:
     std::deque<CompilationTaskData> _queue;
@@ -72,7 +75,10 @@ public:
                 size_t task_key;
                 bool success = _queue.pop_front_task(task_key, task);
                 if (success) {
-                    task(*_kernels_cache);
+                    auto ret = task(*_kernels_cache);
+                    if (ret) {
+                        _queue.num_compiled_tasks++;
+                    }
                     _queue.erase_task_key(task_key);
                 } else {
                     std::chrono::milliseconds ms{1};
