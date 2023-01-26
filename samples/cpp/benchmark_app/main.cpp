@@ -1237,7 +1237,23 @@ int main(int argc, char* argv[]) {
                 groupLatencies.emplace_back(lats, data_shapes_string, FLAGS_latency_percentile);
             }
         }
-
+        {
+            std::cout << std::endl;
+            std::cout << "latencies=np.array([";
+            auto latencies = inferRequestsQueue.get_latencies();
+            // latencies.insert(latencies.begin(), duration_ms);
+            const size_t len_latency = latencies.size();
+            for (size_t idx = 0; idx < len_latency; idx++) {
+                std::cout << latencies[idx];
+                if (idx < len_latency)
+                    std::cout << ",";
+                if (idx != 0 && (idx % 20 == 0))
+                    std::cout << std::endl;
+            }
+            std::cout << "])" << std::endl << std::endl;
+            double totalDuration = inferRequestsQueue.get_duration_in_milliseconds();
+            double fps = 1000.0 * processedFramesN / totalDuration;
+        }
         double totalDuration = inferRequestsQueue.get_duration_in_milliseconds();
         double fps = 1000.0 * processedFramesN / totalDuration;
 

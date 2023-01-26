@@ -450,8 +450,8 @@ network::~network() {
     std::cout << _compilation_context->summary();
     std::cout << _impls_cache->summary();
     // std::cout << "Working.filter_02 version (Filter some prims such as FC, GEMM, MVN and PERMUTE, REORDER, SOFTMAX, ELTWISE)" << std::endl;
-    // std::cout << "Working.filter version (Filter some prims such as FC, GEMM, MVN and PERMUTE)" << std::endl;
-    std::cout << "Working version" << std::endl;
+    std::cout << "Working.filter version (Filter some prims such as FC, GEMM, MVN and PERMUTE)" << std::endl;
+    // std::cout << "Working version" << std::endl;
     if (_compilation_context)
         _compilation_context->cancel();
     _memory_pool->clear_pool_for_network(net_id);
