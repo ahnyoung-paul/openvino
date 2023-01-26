@@ -291,7 +291,8 @@ protected:
 
     virtual void update_shape();
     virtual event::ptr update_weights();
-    void update_impl();
+    // if primitive_inst doesn't replace impl to new impl(static impl with opt kerenl or dynamic impl), return false
+    bool update_impl();
     void realloc_if_needed();
 
     cldnn::network::ptr get_unfused_subgraph();
