@@ -93,12 +93,16 @@ private:
     bool is_cache_enabled() const;
     size_t get_max_kernels_per_batch() const;
 
+    const size_t default_max_kernels_per_batch = 8;
+    size_t _max_kernels_per_batch = default_max_kernels_per_batch;
+
 public:
     explicit kernels_cache(engine& engine,
                            const ExecutionConfig& config,
                            uint32_t prog_id,
                            InferenceEngine::CPUStreamsExecutor::Ptr task_executor = nullptr,
                            const std::vector<std::string>& batch_header_str = {});
+    void set_single_kernel_per_batch(bool flag = false);
     kernel_id set_kernel_source(const std::shared_ptr<kernel_string>& kernel_string,
                                 bool dump_custom_program);
     kernel::ptr get_kernel(kernel_id id) const;

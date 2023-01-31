@@ -84,9 +84,16 @@ size_t kernels_cache::get_max_kernels_per_batch() const {
     GPU_DEBUG_IF(debug_config->max_kernels_per_batch >= 1) {
         return static_cast<size_t>(debug_config->max_kernels_per_batch);
     }
-    return 8;
+    return _max_kernels_per_batch;
 }
 
+void kernels_cache::set_single_kernel_per_batch(bool flag) {
+    if (flag) {
+        _max_kernels_per_batch = 1;
+    } else {
+        _max_kernels_per_batch = default_max_kernels_per_batch;
+    }
+}
 
 void kernels_cache::get_program_source(const kernels_code& kernels_source_code, std::vector<kernels_cache::batch_program>* all_batches) const {
     OV_ITT_SCOPED_TASK(ov::intel_gpu::itt::domains::intel_gpu_plugin, "KernelsCache::BuildAll::GetProgramSource");
@@ -430,6 +437,7 @@ void kernels_cache::reset() {
     _kernels.clear();
     _kernels_code.clear();
     _pending_compilation = false;
+    _max_kernels_per_batch = default_max_kernels_per_batch;
 }
 
 std::vector<kernel_id> kernels_cache::add_kernels_source(std::vector<std::shared_ptr<kernel_string>> kernel_sources, bool dump_custom_program) {

@@ -31,11 +31,19 @@ public:
         return false;
     }
 
-    void erase_task_key(size_t removed_key) {
+    void erase_task_keys(std::vector<size_t> removed_keys) {
         std::lock_guard<std::mutex> lock(_mutex);
-        if (_queue_keymap.find(removed_key) != _queue_keymap.end()) {
-            _queue_keymap.erase(removed_key);
+        for (auto rm_key : removed_keys) {
+            _queue_keymap.erase(rm_key);
+            // if (_queue_keymap.find(removed_key) != _queue_keymap.end()) {
+            //     _queue_keymap.erase(removed_key);
+            // }
         }
+    }
+
+    bool empty() {
+        std::lock_guard<std::mutex> lock(_mutex);
+        return _queue.empty();
     }
 
 private:
@@ -49,13 +57,47 @@ public:
     CompilationContext(cldnn::engine& engine, const ExecutionConfig& config, size_t program_id) {
         _kernels_cache = cldnn::make_unique<kernels_cache>(engine, config, program_id, nullptr, kernel_selector::KernelBase::get_db().get_batch_header_str());
         _worker = std::thread([this](){
+            const size_t max_num_compiled_tasks = 50;
             while (!_stop_compilation) {
-                CompilationContext::Task task;
-                size_t task_key;
-                bool success = _queue.pop_front_task(task_key, task);
-                if (success) {
-                    task(*_kernels_cache);
-                    _queue.erase_task_key(task_key);
+                if (!_queue.empty()) {
+                    std::unordered_map<size_t, std::unique_ptr<cldnn::primitive_impl>> impl_key_map;
+                    for (size_t idx = 0; idx < max_num_compiled_tasks; idx++) {
+                        CompilationContext::Task task;
+                        size_t task_key;
+                        if (_queue.pop_front_task(task_key, task)) {
+                            auto new_impl = task();
+                            if (new_impl != nullptr) {
+                                impl_key_map.insert({task_key, std::move(new_impl)});
+                            }
+                        }
+                        if (_queue.empty())
+                            break;
+                    }
+                    if (impl_key_map.size() > 0) {
+                        std::vector<size_t> working_task_keys;
+                        for (auto& v : impl_key_map) {
+                            working_task_keys.push_back(v.first);
+                        }
+
+                        for (auto working_key : working_task_keys) {
+                            auto& working_impl = *impl_key_map[working_key];
+                            auto kernel_ids = _kernels_cache->add_kernels_source(working_impl.get_kernels_source());
+                            working_impl.set_kernel_ids(kernel_ids);
+                        }
+
+                        _kernels_cache->set_single_kernel_per_batch(true);
+                        _kernels_cache->build_all();
+
+                        for (auto working_key : working_task_keys) {
+                            auto& working_impl = *impl_key_map[working_key];
+                            working_impl.init_kernels(*_kernels_cache);
+                            _store_func(working_key, working_impl);
+                        }
+
+                        _kernels_cache->reset();
+                        _queue.erase_task_keys(working_task_keys);
+                    }
+
                 } else {
                     std::chrono::milliseconds ms{1};
                     std::this_thread::sleep_for(ms);
@@ -74,6 +116,10 @@ public:
             _worker.join();
     }
 
+    void SetStoreFunc(Store&& store) override {
+        _store_func = store;
+    }
+
     ~CompilationContext() noexcept { cancel(); }
 
 private:
@@ -81,6 +127,7 @@ private:
     std::thread _worker;
     std::atomic_bool _stop_compilation{false};
 
+    ICompilationContext::Store _store_func;
     CompilationTaskQueue _queue;
 };
 

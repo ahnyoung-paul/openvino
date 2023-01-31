@@ -5,6 +5,7 @@
 #pragma once
 
 #include "kernels_cache.hpp"
+#include "primitive_inst.h"
 #include <functional>
 #include <memory>
 
@@ -12,10 +13,12 @@ namespace cldnn {
 
 class ICompilationContext {
 public:
-    using Task = std::function<void(kernels_cache&)>;
+    using Store = std::function<void(size_t, cldnn::primitive_impl&)>;
+    using Task = std::function<std::unique_ptr<cldnn::primitive_impl>()>;
     virtual void push_task(size_t key, Task&& task) = 0;
     virtual void cancel() noexcept = 0;
     virtual ~ICompilationContext() = default;
+    virtual void SetStoreFunc(Store&& store) = 0;
 
     static std::unique_ptr<ICompilationContext> create(cldnn::engine& engine, const ExecutionConfig& config, size_t program_id);
 };
