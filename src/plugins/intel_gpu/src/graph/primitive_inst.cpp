@@ -461,9 +461,9 @@ event::ptr primitive_inst::execute(const std::vector<event::ptr>& events) {
         GPU_DEBUG_PROFILED_STAGE(instrumentation::pipeline_stage::inference);
         auto ev = _impl->execute(dependencies, *this);
 
-        GPU_DEBUG_IF(!debug_config->dump_profiling_data.empty()) {
-            get_network().get_stream().wait_for_events({ev});
-        }
+        // GPU_DEBUG_IF(!debug_config->dump_profiling_data.empty()) {
+        //     get_network().get_stream().wait_for_events({ev});
+        // }
 
         return ev;
     }

@@ -45,10 +45,8 @@ enum class LogLevel : int8_t {
 #define GPU_DEBUG_CODE(...) __VA_ARGS__
 #define GPU_DEBUG_DEFINE_MEM_LOGGER(stage) \
     cldnn::instrumentation::mem_usage_logger mem_logger{stage, cldnn::debug_configuration::get_instance()->verbose >= 2};
-#define GPU_DEBUG_PROFILED_STAGE(stage) \
-    auto stage_prof = cldnn::instrumentation::profiled_stage<primitive_inst>(\
-        !cldnn::debug_configuration::get_instance()->dump_profiling_data.empty(), *this, stage)
-#define GPU_DEBUG_PROFILED_STAGE_CACHE_HIT(val) stage_prof.set_cache_hit(val)
+#define GPU_DEBUG_PROFILED_STAGE(stage)
+#define GPU_DEBUG_PROFILED_STAGE_CACHE_HIT(val)
 
 #define GPU_DEBUG_LOG_RAW_INT(min_verbose_level) if (cldnn::debug_configuration::get_instance()->verbose >= min_verbose_level) \
                                                 std::cout << cldnn::debug_configuration::prefix
