@@ -57,74 +57,74 @@ namespace cldnn {
 namespace {
 
 #ifdef GPU_DEBUG_CONFIG
-void dump_perf_data_raw(std::string dump_path, const std::list<std::shared_ptr<primitive_inst>>& exec_order) {
-    auto layouts_to_str = [](const std::vector<layout>& layouts) -> std::string {
-        std::stringstream s;
-        for (size_t i = 0; i < layouts.size(); i++) {
-            s << layouts[i].to_short_string();
-            if (i != layouts.size() - 1)
-                s << ";";
-        }
-        return s.str();
-    };
+// void dump_perf_data_raw(std::string dump_path, const std::list<std::shared_ptr<primitive_inst>>& exec_order) {
+//     auto layouts_to_str = [](const std::vector<layout>& layouts) -> std::string {
+//         std::stringstream s;
+//         for (size_t i = 0; i < layouts.size(); i++) {
+//             s << layouts[i].to_short_string();
+//             if (i != layouts.size() - 1)
+//                 s << ";";
+//         }
+//         return s.str();
+//     };
 
-    const std::string perf_raw_csv_header = "prim_id,prim_type,stage,net_in_shapes,in_shapes,out_shapes,impl,iters,time_usec\n";
-    std::ofstream of(dump_path);
-    if (of.is_open()) {
-        of << perf_raw_csv_header;
-        for (auto& inst : exec_order) {
-            auto prim_id = inst->id();
-            auto& perf_data = inst->get_profiling_data();
-            auto& perf_info = inst->get_profiling_info();
-            std::vector<size_t> sorted_entries;
-            std::transform(perf_data.begin(), perf_data.end(), std::back_inserter(sorted_entries),
-            [](const std::pair<size_t, std::tuple<int64_t, size_t>>& e) {
-                return e.first;
-            });
-            std::sort(sorted_entries.begin(), sorted_entries.end(), [&](size_t a, size_t b) -> bool {
-                auto& a_info = perf_info.at(a);
-                auto& b_info = perf_info.at(b);
+//     const std::string perf_raw_csv_header = "prim_id,prim_type,stage,net_in_shapes,in_shapes,out_shapes,impl,iters,time_usec\n";
+//     std::ofstream of(dump_path);
+//     if (of.is_open()) {
+//         of << perf_raw_csv_header;
+//         for (auto& inst : exec_order) {
+//             auto prim_id = inst->id();
+//             auto& perf_data = inst->get_profiling_data();
+//             auto& perf_info = inst->get_profiling_info();
+//             std::vector<size_t> sorted_entries;
+//             std::transform(perf_data.begin(), perf_data.end(), std::back_inserter(sorted_entries),
+//             [](const std::pair<size_t, std::tuple<int64_t, size_t>>& e) {
+//                 return e.first;
+//             });
+//             std::sort(sorted_entries.begin(), sorted_entries.end(), [&](size_t a, size_t b) -> bool {
+//                 auto& a_info = perf_info.at(a);
+//                 auto& b_info = perf_info.at(b);
 
-                if (a_info.stage != b_info.stage) {
-                    return static_cast<std::underlying_type<instrumentation::pipeline_stage>::type>(a_info.stage) <
-                           static_cast<std::underlying_type<instrumentation::pipeline_stage>::type>(b_info.stage);
-                }
+//                 if (a_info.stage != b_info.stage) {
+//                     return static_cast<std::underlying_type<instrumentation::pipeline_stage>::type>(a_info.stage) <
+//                            static_cast<std::underlying_type<instrumentation::pipeline_stage>::type>(b_info.stage);
+//                 }
 
-                if (a_info.cache_hit != b_info.cache_hit)
-                    return a_info.cache_hit;
+//                 if (a_info.cache_hit != b_info.cache_hit)
+//                     return a_info.cache_hit;
 
-                size_t total_out_size_a = 0;
-                size_t total_out_size_b = 0;
-                for (auto& ol : a_info.output_layouts) {
-                    total_out_size_a += ol.count();
-                }
-                for (auto& ol : b_info.output_layouts) {
-                    total_out_size_b += ol.count();
-                }
-                return total_out_size_a < total_out_size_b;
-            });
-            for (auto& hash : sorted_entries) {
-                auto& key = perf_info.at(hash);
-                auto& entry = perf_data.at(hash);
-                auto& time = std::get<0>(entry);
-                auto& num_iters = std::get<1>(entry);
-                int64_t time_avg = time / num_iters;
-                std::string net_in_l_str = layouts_to_str(key.network_input_layouts);
-                std::string in_l_str = layouts_to_str(key.input_layouts);
-                std::string out_l_str = layouts_to_str(key.output_layouts);
-                of << prim_id << ","
-                << inst->desc()->type_string() << ","
-                << key.stage << (key.cache_hit ? " (cache_hit)" : "") << ","
-                << net_in_l_str << ","
-                << in_l_str << ","
-                << out_l_str << ","
-                << (key.stage == instrumentation::pipeline_stage::inference ? key.impl_name : "undef") << ","
-                << num_iters << ","
-                << time_avg << "\n";
-            }
-        }
-    }
-}
+//                 size_t total_out_size_a = 0;
+//                 size_t total_out_size_b = 0;
+//                 for (auto& ol : a_info.output_layouts) {
+//                     total_out_size_a += ol.count();
+//                 }
+//                 for (auto& ol : b_info.output_layouts) {
+//                     total_out_size_b += ol.count();
+//                 }
+//                 return total_out_size_a < total_out_size_b;
+//             });
+//             for (auto& hash : sorted_entries) {
+//                 auto& key = perf_info.at(hash);
+//                 auto& entry = perf_data.at(hash);
+//                 auto& time = std::get<0>(entry);
+//                 auto& num_iters = std::get<1>(entry);
+//                 int64_t time_avg = time / num_iters;
+//                 std::string net_in_l_str = layouts_to_str(key.network_input_layouts);
+//                 std::string in_l_str = layouts_to_str(key.input_layouts);
+//                 std::string out_l_str = layouts_to_str(key.output_layouts);
+//                 of << prim_id << ","
+//                 << inst->desc()->type_string() << ","
+//                 << key.stage << (key.cache_hit ? " (cache_hit)" : "") << ","
+//                 << net_in_l_str << ","
+//                 << in_l_str << ","
+//                 << out_l_str << ","
+//                 << (key.stage == instrumentation::pipeline_stage::inference ? key.impl_name : "undef") << ","
+//                 << num_iters << ","
+//                 << time_avg << "\n";
+//             }
+//         }
+//     }
+// }
 
 float convert_element(int32_t i) { return static_cast<float>(i); }
 
@@ -262,7 +262,7 @@ void wait_for_the_turn() {
 }
 
 #else
-void dump_perf_data_raw(std::string, const std::list<std::shared_ptr<primitive_inst>>&) {}
+// void dump_perf_data_raw(std::string, const std::list<std::shared_ptr<primitive_inst>>&) {}
 void log_memory_to_file(memory::ptr, stream&, std::string) {}
 void wait_for_the_turn() {}
 #endif
@@ -452,9 +452,9 @@ network::~network() {
     if (_compilation_context)
         _compilation_context->cancel();
     _memory_pool->clear_pool_for_network(net_id);
-    GPU_DEBUG_IF(!debug_config->dump_profiling_data.empty()) {
-        dump_perf_data_raw(debug_config->dump_profiling_data + "/perf_raw" + std::to_string(net_id) + ".csv", _exec_order);
-    }
+    // GPU_DEBUG_IF(!debug_config->dump_profiling_data.empty()) {
+    //     dump_perf_data_raw(debug_config->dump_profiling_data + "/perf_raw" + std::to_string(net_id) + ".csv", _exec_order);
+    // }
 }
 
 // Cache blob format:
