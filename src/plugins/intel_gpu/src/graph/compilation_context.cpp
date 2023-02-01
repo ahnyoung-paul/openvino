@@ -16,6 +16,8 @@ public:
         if (_queue_keymap.find(task_key) == _queue_keymap.end()) {
             auto insert_it = _queue.insert(_queue.end(), {task_key, task});
             _queue_keymap.insert({task_key, insert_it});
+            _max_enqueue_size = std::max(_max_enqueue_size, _queue.size());
+            _total_num_inputs++;
         }
     }
 
@@ -42,10 +44,26 @@ public:
         return _queue.empty();
     }
 
+    std::string summary() {
+        std::lock_guard<std::mutex> lock(_mutex);
+        {
+            std::stringstream ss;
+            ss << "async_compilation_max_enqueue_size: " << _max_enqueue_size << std::endl;
+            ss << "async_compilation_number_inputs: " << _total_num_inputs << std::endl;
+            ss << "async_compilation_remained: " << _queue.size() << std::endl;
+            ss << "async_compilation_num_compiled:" << num_compiled_tasks << std::endl;
+            return ss.str();
+        }
+    }
+
+    size_t num_compiled_tasks = 0;
+
 private:
     std::deque<CompilationTaskData> _queue;
     std::unordered_map<size_t, std::deque<CompilationTaskData>::iterator> _queue_keymap;
     std::mutex _mutex;
+    size_t _max_enqueue_size = 0;
+    size_t _total_num_inputs = 0;
 };
 
 class CompilationContext : public ICompilationContext {
@@ -62,6 +80,7 @@ public:
                     if (working_task_key_pairs.size() > 0) {
                         std::vector<size_t> compiled_keys;
                         std::vector<ImplKeyPairType> compiled_impl_key_sets;
+
                         // Add kernels sources
                         for (auto& key_task_pair : working_task_key_pairs) {
                             auto key = key_task_pair.first;
@@ -111,6 +130,10 @@ public:
 
     void SetStoreFunc(Store&& store) override {
         _store_func = store;
+    }
+
+    std::string summary() override {
+        return _queue.summary();
     }
 
     ~CompilationContext() noexcept { cancel(); }

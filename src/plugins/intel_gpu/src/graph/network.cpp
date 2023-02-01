@@ -446,10 +446,21 @@ network::network(cldnn::BinaryInputBuffer& ib, const ExecutionConfig& config, st
 }
 
 network::~network() {
+    GPU_DEBUG_GET_INSTANCE(debug_config);
+    GPU_DEBUG_IF(!debug_config->dump_profiling_data.empty()) {
+        auto dump_path = debug_config->dump_profiling_data + "/perf_cache" + std::to_string(net_id) + ".csv";
+        std::ofstream of(dump_path);
+        if (of.is_open()) {
+            of << _compilation_context->summary() << _impls_cache->summary();
+        }
+    }
+    std::cout << _compilation_context->summary();
+    std::cout << _impls_cache->summary();
+    std::cout << "Filter some prims such as FC, GEMM, MVN and PERMUTE, REORDER, SOFTMAX, ELTWISE" << std::endl;
+
     if (_compilation_context)
         _compilation_context->cancel();
     _memory_pool->clear_pool_for_network(net_id);
-    GPU_DEBUG_GET_INSTANCE(debug_config);
     GPU_DEBUG_IF(!debug_config->dump_profiling_data.empty()) {
         dump_perf_data_raw(debug_config->dump_profiling_data + "/perf_raw" + std::to_string(net_id) + ".csv", _exec_order);
     }

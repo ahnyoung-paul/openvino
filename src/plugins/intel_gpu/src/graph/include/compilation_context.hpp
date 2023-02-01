@@ -20,6 +20,7 @@ public:
     virtual void cancel() noexcept = 0;
     virtual ~ICompilationContext() = default;
     virtual void SetStoreFunc(Store&& store) = 0;
+    virtual std::string summary() = 0;
 
     static std::unique_ptr<ICompilationContext> create(cldnn::engine& engine, const ExecutionConfig& config,
                                                     size_t program_id, InferenceEngine::CPUStreamsExecutor::Ptr task_executor);
