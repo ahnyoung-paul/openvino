@@ -334,14 +334,14 @@ bool primitive_inst::update_impl() {
         if (!has_cached_impl) {
             if (_dynamic_impl) {
                 auto& compilation_context = get_network().get_compilation_context();
-                compilation_context.push_task(impl_key, [this, updated_params, impl_key](kernels_cache& kc) {
+                compilation_context.push_task(impl_key, [this, updated_params, impl_key](kernels_cache& kc) -> bool {
                     auto& cache = get_network().get_implementations_cache();
                     {
                         std::lock_guard<std::mutex> lock(get_network().get_impl_cache_mutex());
                         // Check existense in the cache one more time as several iterations of model execution could happens and multiple compilation
                         // tasks created for same shapes
                         if (cache.has(impl_key))
-                            return;
+                            return false;
                     }
 
                     auto impl = _node->type()->choose_impl(*_node, updated_params);
@@ -353,6 +353,7 @@ bool primitive_inst::update_impl() {
 
                     std::lock_guard<std::mutex> lock(get_network().get_impl_cache_mutex());
                     cache.add(impl_key, impl->clone());
+                    return true;
                 });
 
                 _impl = _dynamic_impl->clone();

@@ -16,6 +16,8 @@ public:
         if (_queue_keymap.find(task_key) == _queue_keymap.end()) {
             auto insert_it = _queue.insert(_queue.end(), {task_key, task});
             _queue_keymap.insert({task_key, insert_it});
+            _max_enqueue_size = std::max(_max_enqueue_size, _queue.size());
+            _total_num_inputs++;
         }
     }
 
@@ -38,10 +40,26 @@ public:
         }
     }
 
+    std::string summary() {
+        std::lock_guard<std::mutex> lock(_mutex);
+        {
+            std::stringstream ss;
+            ss << "async_compilation_max_enqueue_size: " << _max_enqueue_size << std::endl;
+            ss << "async_compilation_number_inputs: " << _total_num_inputs << std::endl;
+            ss << "async_compilation_remained: " << _queue.size() << std::endl;
+            ss << "async_compilation_num_compiled:" << num_compiled_tasks << std::endl;
+            return ss.str();
+        }
+    }
+
+    size_t num_compiled_tasks = 0;
+
 private:
     std::deque<CompilationTaskData> _queue;
     std::unordered_map<size_t, std::deque<CompilationTaskData>::iterator> _queue_keymap;
     std::mutex _mutex;
+    size_t _max_enqueue_size = 0;
+    size_t _total_num_inputs = 0;
 };
 
 class CompilationContext : public ICompilationContext {
@@ -54,7 +72,9 @@ public:
                 size_t task_key;
                 bool success = _queue.pop_front_task(task_key, task);
                 if (success) {
-                    task(*_kernels_cache);
+                    if (task(*_kernels_cache)) {
+                        _queue.num_compiled_tasks++;
+                    }
                     _queue.erase_task_key(task_key);
                 } else {
                     std::chrono::milliseconds ms{1};
@@ -72,6 +92,10 @@ public:
         _stop_compilation = true;
         if (_worker.joinable())
             _worker.join();
+    }
+
+    std::string summary() override {
+        return _queue.summary();
     }
 
     ~CompilationContext() noexcept { cancel(); }
