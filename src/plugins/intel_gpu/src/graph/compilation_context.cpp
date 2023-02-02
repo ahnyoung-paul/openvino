@@ -19,25 +19,21 @@ public:
         }
     }
 
-    bool pop_front_task(size_t& task_key, ICompilationContext::Task& task) {
+    std::vector<CompilationTaskData> pop_front_tasks(size_t max_num_popped_tasks = 1) {
         std::lock_guard<std::mutex> lock(_mutex);
-        if (!_queue.empty()) {
-            auto front = _queue.front();
-            task = front.second;
-            task_key = front.first;
+        std::vector<CompilationTaskData> tasks;
+        for (size_t idx = 0; (idx < max_num_popped_tasks) && (!_queue.empty()); idx++) {
+            auto& front_task = _queue.front();
             _queue.pop_front();
-            return true;
+            tasks.push_back(std::move(front_task));
         }
-        return false;
+        return tasks;
     }
 
     void erase_task_keys(std::vector<size_t> removed_keys) {
         std::lock_guard<std::mutex> lock(_mutex);
         for (auto rm_key : removed_keys) {
             _queue_keymap.erase(rm_key);
-            // if (_queue_keymap.find(removed_key) != _queue_keymap.end()) {
-            //     _queue_keymap.erase(removed_key);
-            // }
         }
     }
 
@@ -62,50 +58,39 @@ public:
             const size_t max_num_compiled_tasks = 8;
             while (!_stop_compilation) {
                 if (!_queue.empty()) {
-                    std::unordered_map<size_t, std::unique_ptr<cldnn::primitive_impl>> impl_key_map;
-                    // Gather tasks from queue
-                    for (size_t idx = 0; idx < max_num_compiled_tasks; idx++) {
-                        CompilationContext::Task task;
-                        size_t task_key;
-                        if (_queue.pop_front_task(task_key, task)) {
-                            auto new_impl = task();
-                            if (new_impl != nullptr) {
-                                impl_key_map.insert({task_key, std::move(new_impl)});
+                    auto working_task_key_pairs = _queue.pop_front_tasks(max_num_compiled_tasks);
+                    if (working_task_key_pairs.size() > 0) {
+                        std::vector<size_t> compiled_keys;
+                        std::vector<ImplKeyPairType> compiled_impl_key_sets;
+                        // Add kernels sources
+                        for (auto& key_task_pair : working_task_key_pairs) {
+                            auto key = key_task_pair.first;
+                            compiled_keys.push_back(key_task_pair.first);
+                            auto& task = key_task_pair.second;
+                            if (auto impl = task()) {
+                                auto kernel_ids = _kernels_cache->add_kernels_source(impl->get_kernels_source());
+                                impl->set_kernel_ids(kernel_ids);
+                                compiled_impl_key_sets.push_back({key, std::move(impl)});
                             }
                         }
-                        if (_queue.empty())
-                            break;
-                    }
 
-                    if (impl_key_map.size() > 0) {
-                        std::vector<size_t> working_task_keys;
-                        for (auto& v : impl_key_map) {
-                            working_task_keys.push_back(v.first);
-                        }
+                        if (compiled_impl_key_sets.size() > 0) {
+                            // Build all
+                            _kernels_cache->set_single_kernel_per_batch(true);
+                            _kernels_cache->build_all();
 
-                        // Add kernels sources
-                        for (auto working_key : working_task_keys) {
-                            auto& working_impl = *impl_key_map[working_key];
-                            auto kernel_ids = _kernels_cache->add_kernels_source(working_impl.get_kernels_source());
-                            working_impl.set_kernel_ids(kernel_ids);
-                        }
-
-                        // Build all
-                        _kernels_cache->set_single_kernel_per_batch(true);
-                        _kernels_cache->build_all();
-
-                        // Init kernels
-                        for (auto working_key : working_task_keys) {
-                            auto& working_impl = *impl_key_map[working_key];
-                            working_impl.init_kernels(*_kernels_cache);
-                            _store_func(working_key, working_impl);
+                            // Init kernels
+                            for (auto& key_impl_pair : compiled_impl_key_sets) {
+                                auto& impl = *key_impl_pair.second;
+                                impl.init_kernels(*_kernels_cache);
+                            }
+                            _store_func(compiled_impl_key_sets);
                         }
 
                         // reset and remove tasks from queue
                         _kernels_cache->reset();
-                        _queue.erase_task_keys(working_task_keys);
+                        _queue.erase_task_keys(compiled_keys);
                     }
-
                 } else {
                     std::chrono::milliseconds ms{1};
                     std::this_thread::sleep_for(ms);

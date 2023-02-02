@@ -13,7 +13,8 @@ namespace cldnn {
 
 class ICompilationContext {
 public:
-    using Store = std::function<void(size_t, cldnn::primitive_impl&)>;
+    using ImplKeyPairType = std::pair<size_t, std::unique_ptr<cldnn::primitive_impl>>;
+    using Store = std::function<void(std::vector<ImplKeyPairType>&)>;
     using Task = std::function<std::unique_ptr<cldnn::primitive_impl>()>;
     virtual void push_task(size_t key, Task&& task) = 0;
     virtual void cancel() noexcept = 0;

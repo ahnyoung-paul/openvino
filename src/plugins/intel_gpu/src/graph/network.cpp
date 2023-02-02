@@ -315,9 +315,13 @@ network::network(program::ptr program, const ExecutionConfig& config, stream::pt
         _in_mem_kernels_cache = std::unique_ptr<KernelsCache>(new KernelsCache(_in_mem_kernels_cache_capacity));
         _compilation_context = std::move(ICompilationContext::create(program->get_engine(), program->get_config(),
                                                                         program->get_id(), program->get_task_executor()));
-        _compilation_context->SetStoreFunc([this](size_t impl_key, cldnn::primitive_impl& new_impl) {
+        _compilation_context->SetStoreFunc([this](std::vector<cldnn::ICompilationContext::ImplKeyPairType>& key_impl_data) {
                     std::lock_guard<std::mutex> lock(get_impl_cache_mutex());
-                    _impls_cache->add(impl_key, new_impl.clone());
+                    for (auto& key_impl : key_impl_data) {
+                        auto key   = key_impl.first;
+                        auto& impl = *key_impl.second;
+                        _impls_cache->add(key, impl.clone());
+                    }
                 });
     }
 }
