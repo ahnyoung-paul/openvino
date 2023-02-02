@@ -16,7 +16,7 @@ public:
         if (_queue_keymap.find(task_key) == _queue_keymap.end()) {
             auto insert_it = _queue.insert(_queue.end(), {task_key, task});
             _queue_keymap.insert({task_key, insert_it});
-            _max_enqueue_size = std::max(_max_enqueue_size, _queue.size());
+            _max_queue_length = std::max(_max_queue_length, _queue.size());
             _total_num_inputs++;
         }
     }
@@ -24,6 +24,7 @@ public:
     std::vector<CompilationTaskData> pop_front_tasks(size_t max_num_popped_tasks = 1) {
         std::lock_guard<std::mutex> lock(_mutex);
         std::vector<CompilationTaskData> tasks;
+
         for (size_t idx = 0; (idx < max_num_popped_tasks) && (!_queue.empty()); idx++) {
             auto& front_task = _queue.front();
             _queue.pop_front();
@@ -44,26 +45,52 @@ public:
         return _queue.empty();
     }
 
+    size_t size() {
+        std::lock_guard<std::mutex> lock(_mutex);
+        return _queue.size();
+    }
+
     std::string summary() {
         std::lock_guard<std::mutex> lock(_mutex);
         {
             std::stringstream ss;
-            ss << "async_compilation_max_enqueue_size: " << _max_enqueue_size << std::endl;
-            ss << "async_compilation_number_inputs: " << _total_num_inputs << std::endl;
-            ss << "async_compilation_remained: " << _queue.size() << std::endl;
+            ss << "async_compilation_max_enqueue_size:" << _max_enqueue_size << std::endl;
+            ss << "async_compilation_number_inputs:" << _total_num_inputs << std::endl;
+            ss << "async_compilation_remained:" << _queue.size() << std::endl;
             ss << "async_compilation_num_compiled:" << num_compiled_tasks << std::endl;
+            ss << "async_compilation_max_queue_length:" << _max_queue_length << std::endl;
+            {
+                auto max_num = *std::max_element(num_impl_key_map_list.begin(), num_impl_key_map_list.end());
+                auto min_num = *std::min_element(num_impl_key_map_list.begin(), num_impl_key_map_list.end());
+                auto avg_num = std::accumulate(num_impl_key_map_list.begin(), num_impl_key_map_list.end(), 0) / num_impl_key_map_list.size();
+                ss << "async_compilation_num_concur_compiled_tasks:(" << max_num << "," << min_num << ", " << avg_num << ")" << std::endl;
+            }
             return ss.str();
         }
     }
 
     size_t num_compiled_tasks = 0;
 
+    void add_num_impl_key_map(int num) {
+        std::lock_guard<std::mutex> lock(_mutex);
+        num_impl_key_map_list.push_back(num);
+    }
+
+    void set_max_enqueue_size() {
+        std::lock_guard<std::mutex> lock(_mutex);
+        _max_enqueue_size = std::max(_max_enqueue_size, _queue.size());
+    }
+
+    std::vector<size_t> num_impl_key_map_list;
+
 private:
     std::deque<CompilationTaskData> _queue;
     std::unordered_map<size_t, std::deque<CompilationTaskData>::iterator> _queue_keymap;
     std::mutex _mutex;
-    size_t _max_enqueue_size = 0;
+
     size_t _total_num_inputs = 0;
+    size_t _max_enqueue_size = 0;
+    size_t _max_queue_length = 0;
 };
 
 class CompilationContext : public ICompilationContext {
@@ -73,7 +100,7 @@ public:
         _kernels_cache = cldnn::make_unique<kernels_cache>(engine, config, program_id, task_executor,
                                                 kernel_selector::KernelBase::get_db().get_batch_header_str());
         _worker = std::thread([this](){
-            const size_t max_num_compiled_tasks = 8;
+            const size_t max_num_compiled_tasks = 24;
             while (!_stop_compilation) {
                 if (!_queue.empty()) {
                     auto working_task_key_pairs = _queue.pop_front_tasks(max_num_compiled_tasks);
@@ -94,6 +121,7 @@ public:
                         }
 
                         if (compiled_impl_key_sets.size() > 0) {
+                            _queue.add_num_impl_key_map(compiled_impl_key_sets.size());
                             // Build all
                             _kernels_cache->set_single_kernel_per_batch(true);
                             _kernels_cache->build_all();
@@ -106,7 +134,7 @@ public:
                             _store_func(compiled_impl_key_sets);
                         }
 
-                        // reset and remove tasks from queue
+                        // Reset and remove tasks from queue
                         _kernels_cache->reset();
                         _queue.erase_task_keys(compiled_keys);
                     }
