@@ -57,7 +57,7 @@ public:
     CompilationContext(cldnn::engine& engine, const ExecutionConfig& config, size_t program_id) {
         _kernels_cache = cldnn::make_unique<kernels_cache>(engine, config, program_id, nullptr, kernel_selector::KernelBase::get_db().get_batch_header_str());
         _worker = std::thread([this](){
-            const size_t max_num_compiled_tasks = 50;
+            const size_t max_num_compiled_tasks = 8;
             while (!_stop_compilation) {
                 if (!_queue.empty()) {
                     std::unordered_map<size_t, std::unique_ptr<cldnn::primitive_impl>> impl_key_map;
@@ -85,7 +85,7 @@ public:
                             working_impl.set_kernel_ids(kernel_ids);
                         }
 
-                        _kernels_cache->set_single_kernel_per_batch(true);
+                        _kernels_cache->set_single_kernel_per_batch(false);
                         _kernels_cache->build_all();
 
                         for (auto working_key : working_task_keys) {
