@@ -20,7 +20,8 @@ public:
     virtual ~ICompilationContext() = default;
     virtual void SetStoreFunc(Store&& store) = 0;
 
-    static std::unique_ptr<ICompilationContext> create(cldnn::engine& engine, const ExecutionConfig& config, size_t program_id);
+    static std::unique_ptr<ICompilationContext> create(cldnn::engine& engine, const ExecutionConfig& config,
+                                                    size_t program_id, InferenceEngine::CPUStreamsExecutor::Ptr task_executor);
 };
 
 }  // namespace cldnn

@@ -54,13 +54,16 @@ private:
 
 class CompilationContext : public ICompilationContext {
 public:
-    CompilationContext(cldnn::engine& engine, const ExecutionConfig& config, size_t program_id) {
-        _kernels_cache = cldnn::make_unique<kernels_cache>(engine, config, program_id, nullptr, kernel_selector::KernelBase::get_db().get_batch_header_str());
+    CompilationContext(cldnn::engine& engine, const ExecutionConfig& config,
+                            size_t program_id, InferenceEngine::CPUStreamsExecutor::Ptr task_executor) {
+        _kernels_cache = cldnn::make_unique<kernels_cache>(engine, config, program_id, task_executor,
+                                                kernel_selector::KernelBase::get_db().get_batch_header_str());
         _worker = std::thread([this](){
             const size_t max_num_compiled_tasks = 8;
             while (!_stop_compilation) {
                 if (!_queue.empty()) {
                     std::unordered_map<size_t, std::unique_ptr<cldnn::primitive_impl>> impl_key_map;
+                    // Gather tasks from queue
                     for (size_t idx = 0; idx < max_num_compiled_tasks; idx++) {
                         CompilationContext::Task task;
                         size_t task_key;
@@ -73,27 +76,32 @@ public:
                         if (_queue.empty())
                             break;
                     }
+
                     if (impl_key_map.size() > 0) {
                         std::vector<size_t> working_task_keys;
                         for (auto& v : impl_key_map) {
                             working_task_keys.push_back(v.first);
                         }
 
+                        // Add kernels sources
                         for (auto working_key : working_task_keys) {
                             auto& working_impl = *impl_key_map[working_key];
                             auto kernel_ids = _kernels_cache->add_kernels_source(working_impl.get_kernels_source());
                             working_impl.set_kernel_ids(kernel_ids);
                         }
 
-                        _kernels_cache->set_single_kernel_per_batch(false);
+                        // Build all
+                        _kernels_cache->set_single_kernel_per_batch(true);
                         _kernels_cache->build_all();
 
+                        // Init kernels
                         for (auto working_key : working_task_keys) {
                             auto& working_impl = *impl_key_map[working_key];
                             working_impl.init_kernels(*_kernels_cache);
                             _store_func(working_key, working_impl);
                         }
 
+                        // reset and remove tasks from queue
                         _kernels_cache->reset();
                         _queue.erase_task_keys(working_task_keys);
                     }
@@ -131,8 +139,9 @@ private:
     CompilationTaskQueue _queue;
 };
 
-std::unique_ptr<ICompilationContext> ICompilationContext::create(cldnn::engine& engine, const ExecutionConfig& config, size_t program_id) {
-    return cldnn::make_unique<CompilationContext>(engine, config, program_id);
+std::unique_ptr<ICompilationContext> ICompilationContext::create(cldnn::engine& engine, const ExecutionConfig& config,
+                                                size_t program_id, InferenceEngine::CPUStreamsExecutor::Ptr task_executor) {
+    return cldnn::make_unique<CompilationContext>(engine, config, program_id, task_executor);
 }
 
 }  // namespace cldnn
