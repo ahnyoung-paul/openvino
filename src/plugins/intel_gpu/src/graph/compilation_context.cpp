@@ -25,11 +25,13 @@ public:
         std::lock_guard<std::mutex> lock(_mutex);
         std::vector<CompilationTaskData> tasks;
 
+        _max_enqueue_size = std::max(_max_enqueue_size, _queue.size());
         for (size_t idx = 0; (idx < max_num_popped_tasks) && (!_queue.empty()); idx++) {
             auto& front_task = _queue.front();
+            tasks.push_back(front_task);
             _queue.pop_front();
-            tasks.push_back(std::move(front_task));
         }
+
         return tasks;
     }
 
@@ -75,12 +77,6 @@ public:
         std::lock_guard<std::mutex> lock(_mutex);
         num_impl_key_map_list.push_back(num);
     }
-
-    void set_max_enqueue_size() {
-        std::lock_guard<std::mutex> lock(_mutex);
-        _max_enqueue_size = std::max(_max_enqueue_size, _queue.size());
-    }
-
     std::vector<size_t> num_impl_key_map_list;
 
 private:
@@ -99,7 +95,7 @@ public:
                             size_t program_id, InferenceEngine::CPUStreamsExecutor::Ptr task_executor) {
         _kernels_cache = cldnn::make_unique<kernels_cache>(engine, config, program_id, task_executor,
                                                 kernel_selector::KernelBase::get_db().get_batch_header_str());
-        _worker = std::thread([this](){
+        _worker = std::thread([this]() {
             const size_t max_num_compiled_tasks = 24;
             while (!_stop_compilation) {
                 if (!_queue.empty()) {
@@ -113,10 +109,11 @@ public:
                             auto key = key_task_pair.first;
                             compiled_keys.push_back(key_task_pair.first);
                             auto& task = key_task_pair.second;
-                            if (auto impl = task()) {
+                            auto impl = task();
+                            if (impl != nullptr) {
                                 auto kernel_ids = _kernels_cache->add_kernels_source(impl->get_kernels_source());
                                 impl->set_kernel_ids(kernel_ids);
-                                compiled_impl_key_sets.push_back({key, std::move(impl)});
+                                compiled_impl_key_sets.push_back({key, impl->clone()});
                             }
                         }
 
@@ -179,5 +176,4 @@ std::unique_ptr<ICompilationContext> ICompilationContext::create(cldnn::engine& 
                                                 size_t program_id, InferenceEngine::CPUStreamsExecutor::Ptr task_executor) {
     return cldnn::make_unique<CompilationContext>(engine, config, program_id, task_executor);
 }
-
 }  // namespace cldnn

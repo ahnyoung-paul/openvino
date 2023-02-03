@@ -10,6 +10,7 @@
 #include <memory>
 
 namespace cldnn {
+class MyDefaultTest : InferenceEngine::CPUStreamsExecutor {};
 
 class ICompilationContext {
 public:
