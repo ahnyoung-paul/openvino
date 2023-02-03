@@ -182,6 +182,19 @@ protected:
         return _kernels;
     }
 
+    void set_kernels(std::map<const std::string, kernel::ptr>& kernels) override {
+        if (is_cpu())
+            return;
+
+        _kernel_ids.clear();
+        _kernels.clear();
+        _kernels.reserve(kernels.size());
+        for (auto& k : kernels) {
+            _kernel_ids.push_back(k.first);
+            _kernels.emplace_back(std::move(k.second));
+        }
+    }
+
     std::vector<layout> get_internal_buffer_layouts_impl() const override {
         if (_kernel_data.internalBufferSizes.empty())
             return {};

@@ -81,13 +81,14 @@ private:
     ExecutionConfig _config;
     uint32_t _prog_id = 0;
     kernels_code _kernels_code;
-    size_t _kernel_idx = 0;
+    static std::atomic<size_t> _kernels_counts;
+    static std::atomic<size_t> _kernel_idx;
     std::atomic<bool> _pending_compilation{false};
     std::map<const std::string, kernel::ptr> _kernels;
     std::vector<std::string> batch_header_str;
 
     void get_program_source(const kernels_code& kernels_source_code, std::vector<batch_program>*) const;
-    void build_batch(const engine& build_engine, const batch_program& batch);
+    void build_batch(const engine& build_engine, const batch_program& batch, std::map<const std::string, kernel::ptr>& compiled_kernels);
 
     std::string get_cache_path() const;
     bool is_cache_enabled() const;
@@ -105,6 +106,8 @@ public:
     void set_batch_header_str(const std::vector<std::string> &batch_headers) {
         batch_header_str = std::move(batch_headers);
     }
+
+    std::map<const std::string, kernel::ptr> compile_threadsafe(std::vector<std::shared_ptr<kernel_string>> kernel_sources, bool dump_custom_program = false);
 
     bool validate_simple_kernel_execution(kernel::ptr kernel);
 

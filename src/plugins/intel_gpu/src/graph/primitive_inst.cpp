@@ -24,6 +24,7 @@
 #include "intel_gpu/runtime/memory.hpp"
 #include "intel_gpu/runtime/error_handler.hpp"
 #include "intel_gpu/runtime/debug_configuration.hpp"
+#include "intel_gpu/runtime/async_compilation_context.hpp"
 
 #include "json_object.h"
 #include <string>
@@ -333,6 +334,35 @@ bool primitive_inst::update_impl() {
         }
         if (!has_cached_impl) {
             if (_dynamic_impl) {
+                auto& async_compilation_context = get_network().get_program()->get_compilation_context();
+                async_compilation_context.push_task(impl_key, [this, &async_compilation_context, updated_params, impl_key]() {
+                    auto& cache = get_network().get_implementations_cache();
+                    {
+                        bool found_key = false;
+                        {
+                            std::lock_guard<std::mutex> lock(get_network().get_impl_cache_mutex());
+                            // Check existense in the cache one more time as several iterations of model execution could happens and multiple compilation
+                            // tasks created for same shapes
+                            found_key = cache.has(impl_key);
+                        }
+                        if (found_key) {
+                            async_compilation_context.remove_keys({impl_key});
+                            return;
+                        }
+                    }
+                    auto& kc = get_network().get_kernels_cache();
+                    auto impl = _node->type()->choose_impl(*_node, updated_params);
+                    auto kernels = kc.compile_threadsafe(impl->get_kernels_source());
+                    impl->set_kernels(kernels);
+                    kc.reset();
+
+                    {
+                        std::lock_guard<std::mutex> lock(get_network().get_impl_cache_mutex());
+                        cache.add(impl_key, impl->clone());
+                    }
+                    async_compilation_context.remove_keys({impl_key});
+                });
+
                 auto& compilation_context = get_network().get_compilation_context();
                 compilation_context.push_task(impl_key, [this, updated_params, impl_key](kernels_cache& kc) {
                     auto& cache = get_network().get_implementations_cache();

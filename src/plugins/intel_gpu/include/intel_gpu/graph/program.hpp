@@ -8,6 +8,7 @@
 #include "intel_gpu/runtime/stream.hpp"
 #include "intel_gpu/runtime/lru_cache.hpp"
 #include "intel_gpu/runtime/execution_config.hpp"
+#include "intel_gpu/runtime/async_compilation_context.hpp"
 
 #include <list>
 #include <string>
@@ -252,6 +253,9 @@ public:
     void query_local_block_io_supported();
     void calc_nodes_hash();
 
+    InferenceEngine::CPUStreamsExecutor::Config get_task_executor_config(const ExecutionConfig& config, std::string label = "") const;
+    AsyncCompilationContext& get_compilation_context() { return *_async_compilation_context; }
+
 private:
     uint32_t prog_id = 0;
     engine& _engine;
@@ -266,6 +270,7 @@ private:
     std::unique_ptr<pass_manager> pm;
     bool is_body_program;
     int8_t is_subgroup_local_block_io_supported;
+    std::shared_ptr<AsyncCompilationContext> _async_compilation_context;
 
     std::map<primitive_id, std::shared_ptr<program_node>> nodes_map;
     std::list<primitive_id> optimized_out;

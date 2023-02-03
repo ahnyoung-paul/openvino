@@ -147,6 +147,9 @@ program::program(engine& engine_ref,
 
     _task_executor = make_task_executor(_config);
 
+    auto context_config = get_task_executor_config(_config);
+    _async_compilation_context = std::make_shared<AsyncCompilationContext>(context_config);
+
     _kernels_cache = std::unique_ptr<kernels_cache>(new kernels_cache(_engine, _config, prog_id, _task_executor,
                                                                       kernel_selector::KernelBase::get_db().get_batch_header_str()));
     pm = std::unique_ptr<pass_manager>(new pass_manager(*this));
@@ -198,18 +201,24 @@ static void adjust_num_cores(InferenceEngine::CPUStreamsExecutor::Config& config
     config._streams = std::min(config._streams, num_cores);
 }
 
-std::shared_ptr<InferenceEngine::CPUStreamsExecutor> program::make_task_executor(const ExecutionConfig& config) const {
-    InferenceEngine::CPUStreamsExecutor::Config task_executor_config("CPU Tasks executor for GPU plugin", 1);
+InferenceEngine::CPUStreamsExecutor::Config program::get_task_executor_config(const ExecutionConfig& config, std::string label) const {
+    InferenceEngine::CPUStreamsExecutor::Config task_executor_config(label, 1);
     task_executor_config._streams = config.get_property(ov::compilation_num_threads);
     auto priority = config.get_property(ov::intel_gpu::hint::host_task_priority);
     switch (priority) {
         case ov::hint::Priority::LOW: task_executor_config._threadPreferredCoreType = InferenceEngine::IStreamsExecutor::Config::LITTLE; break;
         case ov::hint::Priority::MEDIUM: task_executor_config._threadPreferredCoreType = InferenceEngine::IStreamsExecutor::Config::ANY; break;
         case ov::hint::Priority::HIGH: task_executor_config._threadPreferredCoreType = InferenceEngine::IStreamsExecutor::Config::BIG; break;
-        default: OPENVINO_ASSERT(false, "[GPU] Can't create task executor: invalid host task priority value: ", priority);
+        default: OPENVINO_ASSERT(false, "[GPU] Can't create task executor config: invalid host task priority value: ", priority);
     }
 
     adjust_num_cores(task_executor_config);
+
+    return task_executor_config;
+}
+
+std::shared_ptr<InferenceEngine::CPUStreamsExecutor> program::make_task_executor(const ExecutionConfig& config) const {
+    auto task_executor_config = get_task_executor_config(config, "CPU Tasks executor for GPU plugin");
 
     return std::make_shared<InferenceEngine::CPUStreamsExecutor>(task_executor_config);
 }
