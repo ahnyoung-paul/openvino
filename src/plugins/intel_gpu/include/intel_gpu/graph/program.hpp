@@ -8,7 +8,6 @@
 #include "intel_gpu/runtime/stream.hpp"
 #include "intel_gpu/runtime/lru_cache.hpp"
 #include "intel_gpu/runtime/execution_config.hpp"
-#include "intel_gpu/runtime/async_compilation_context.hpp"
 
 #include <list>
 #include <string>
@@ -27,7 +26,7 @@ class pass_manager;
 class base_pass;
 class program_wrapper;
 class kernels_cache;
-
+class IAsyncCompilationContext;
 
 struct program {
     using ptr = std::shared_ptr<program>;
@@ -270,7 +269,7 @@ private:
     std::unique_ptr<pass_manager> pm;
     bool is_body_program;
     int8_t is_subgroup_local_block_io_supported;
-    std::shared_ptr<IAsyncCompilationContext> _async_compilation_context;
+    std::unique_ptr<IAsyncCompilationContext> _async_compilation_context;
 
     std::map<primitive_id, std::shared_ptr<program_node>> nodes_map;
     std::list<primitive_id> optimized_out;

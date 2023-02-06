@@ -10,6 +10,7 @@
 
 #include <ie_system_conf.h>
 
+#include "async_compilation_context.hpp"
 #include "kernel_selector_helper.h"
 #include "auto_tuner.h"
 #include "layout_optimizer.h"
