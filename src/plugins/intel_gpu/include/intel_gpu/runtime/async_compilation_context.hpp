@@ -17,7 +17,8 @@ public:
     virtual void remove_keys(std::vector<size_t>&& keys) = 0;
     virtual ~IAsyncCompilationContext() = default;
 
-    static std::unique_ptr<IAsyncCompilationContext> create(InferenceEngine::CPUStreamsExecutor::Config config);
+    static std::unique_ptr<IAsyncCompilationContext> create(InferenceEngine::CPUStreamsExecutor::Ptr task_executor,
+                                                            engine& engine, const ExecutionConfig& config, uint32_t prog_id);
 };
 
 }  // namespace cldnn
