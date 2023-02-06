@@ -334,8 +334,10 @@ bool primitive_inst::update_impl() {
         }
         if (!has_cached_impl) {
             if (_dynamic_impl) {
+#if 1
                 auto& async_compilation_context = get_network().get_program()->get_compilation_context();
                 async_compilation_context.push_task(impl_key, [this, &async_compilation_context, updated_params, impl_key]() {
+                    // try {
                     auto& cache = get_network().get_implementations_cache();
                     {
                         bool found_key = false;
@@ -350,19 +352,23 @@ bool primitive_inst::update_impl() {
                             return;
                         }
                     }
-                    auto& kc = get_network().get_kernels_cache();
+                    auto& kc = get_network().get_program()->get_kernels_cache();
+                    kc.reset();
                     auto impl = _node->type()->choose_impl(*_node, updated_params);
                     auto kernels = kc.compile_threadsafe(impl->get_kernels_source());
                     impl->set_kernels(kernels);
-                    kc.reset();
 
                     {
                         std::lock_guard<std::mutex> lock(get_network().get_impl_cache_mutex());
                         cache.add(impl_key, impl->clone());
                     }
                     async_compilation_context.remove_keys({impl_key});
+                    // } catch (std::exception& ex) {
+                    //     std::cout << "Fail to run in async compilation : " << ex.what() << std::endl;
+                    //     throw ex;
+                    // }
                 });
-
+#else
                 auto& compilation_context = get_network().get_compilation_context();
                 compilation_context.push_task(impl_key, [this, updated_params, impl_key](kernels_cache& kc) {
                     auto& cache = get_network().get_implementations_cache();
@@ -384,7 +390,7 @@ bool primitive_inst::update_impl() {
                     std::lock_guard<std::mutex> lock(get_network().get_impl_cache_mutex());
                     cache.add(impl_key, impl->clone());
                 });
-
+#endif
                 _impl = _dynamic_impl->clone();
                 _impl->update_dispatch_data(updated_params);
 

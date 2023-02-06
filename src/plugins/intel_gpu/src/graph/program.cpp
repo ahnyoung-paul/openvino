@@ -118,6 +118,10 @@ program::program(engine& engine_ref,
 
     pm = std::unique_ptr<pass_manager>(new pass_manager(*this));
     prepare_nodes(topology);
+
+    auto context_config = get_task_executor_config(_config, "Task executor for async compilation");
+    _async_compilation_context = IAsyncCompilationContext::create(context_config);
+
     _kernels_cache = std::unique_ptr<kernels_cache>(new kernels_cache(_engine, _config, prog_id, _task_executor,
                                                                       kernel_selector::KernelBase::get_db().get_batch_header_str()));
     program_node::reset_unique_id();
@@ -147,8 +151,8 @@ program::program(engine& engine_ref,
 
     _task_executor = make_task_executor(_config);
 
-    auto context_config = get_task_executor_config(_config);
-    _async_compilation_context = std::make_shared<AsyncCompilationContext>(context_config);
+    auto context_config = get_task_executor_config(_config, "Task executor for async compilation");
+    _async_compilation_context = IAsyncCompilationContext::create(context_config);
 
     _kernels_cache = std::unique_ptr<kernels_cache>(new kernels_cache(_engine, _config, prog_id, _task_executor,
                                                                       kernel_selector::KernelBase::get_db().get_batch_header_str()));

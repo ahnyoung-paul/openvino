@@ -10,8 +10,6 @@
 
 namespace cldnn {
 
-class program;
-
 class ICompilationContext {
 public:
     using Task = std::function<void(kernels_cache&)>;

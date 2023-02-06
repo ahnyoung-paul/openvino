@@ -474,6 +474,7 @@ std::map<const std::string, kernel::ptr> kernels_cache::compile_threadsafe(std::
     _pending_compilation = false;
     kernels_code t_kernels_code;
 
+    // Get kernels code from kernel sources
     for (size_t idx = 0; idx < kernel_sources.size(); ++idx) {
         auto kernel_string = kernel_sources[idx];
         const auto kernel_num = _kernels_counts + (_kernel_idx++);
@@ -486,14 +487,14 @@ std::map<const std::string, kernel::ptr> kernels_cache::compile_threadsafe(std::
         _build_engine = std::unique_ptr<ocl::ocl_engine>(new ocl::ocl_engine(_engine.get_device(), runtime_types::ocl));
     }
 
-    // create batches
+    // Create batches
     std::vector<batch_program> batches;
     get_program_source(t_kernels_code, &batches);
 
-    std::map<const std::string, kernel::ptr> compiled_kernels;
-    // build batches
+    std::map<const std::string, kernel::ptr> output_kernels;
+    // Build batches
     for (size_t idx = 0; idx < batches.size(); ++idx) {
-        build_batch(*_build_engine, batches[idx], compiled_kernels);
+        build_batch(*_build_engine, batches[idx], output_kernels);
     }
 
     t_kernels_code.clear();
@@ -506,7 +507,7 @@ std::map<const std::string, kernel::ptr> kernels_cache::compile_threadsafe(std::
         malloc_trim(0);
 #endif
 
-    return compiled_kernels;
+    return output_kernels;
 }
 
 void kernels_cache::compile() {
