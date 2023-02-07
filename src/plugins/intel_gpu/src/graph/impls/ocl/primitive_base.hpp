@@ -309,6 +309,19 @@ protected:
             _kernel_data.kernels[i].code.kernelString.reset();
         }
     }
+
+    void set_kernels(std::map<const std::string, kernel::ptr>& kernels) override {
+        if (is_cpu())
+            return;
+
+        _kernel_ids.clear();
+        _kernels.clear();
+        _kernels.reserve(kernels.size());
+        for (auto& k : kernels) {
+            _kernel_ids.push_back(k.first);
+            _kernels.emplace_back(std::move(k.second));
+        }
+    }
 };
 
 }  // namespace ocl
