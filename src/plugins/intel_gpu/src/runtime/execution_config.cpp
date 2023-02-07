@@ -115,6 +115,11 @@ Any ExecutionConfig::get_property(const std::string& name) const {
         return user_properties.at(name);
     }
 
+    if (internal_properties.find(name) == internal_properties.end() &&
+        name == "CACHE_DIR") {
+            std::cout << "[GPU] Can't get internal property with name" << std::endl;
+    }
+
     OPENVINO_ASSERT(internal_properties.find(name) != internal_properties.end(), "[GPU] Can't get internal property with name ", name);
     return internal_properties.at(name);
 }

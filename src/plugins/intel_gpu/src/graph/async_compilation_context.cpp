@@ -33,13 +33,34 @@ public:
     }
 
     ~AsyncCompilationContext() noexcept {
+        std::cout << "START AsyncCompilationContext is destroyed ..." << std::endl;
+        cancel();
+        _task_executor = nullptr;
         _task_keys.clear();
+        std::cout << "END.. AsyncCompilationContext is destroyed ..." << std::endl;
+    }
+
+    bool is_stopped() override {
+        // std::lock_guard<std::mutex> lock(_async_mutex);
+        return _is_stopped;
+    }
+
+    void cancel() override {
+        if (_is_stopped)
+            return;
+
+        {
+            // std::lock_guard<std::mutex> lock(_async_mutex);
+            _is_stopped = true;
+        }
+        _task_executor->Execute({[this](){ std::cout << "it is called " << std::endl; }});
     }
 
 private:
     InferenceEngine::CPUStreamsExecutor::Ptr _task_executor;
     std::mutex _async_mutex;
     std::unordered_set<size_t> _task_keys;
+    bool _is_stopped = false;
 };
 
 std::unique_ptr<IAsyncCompilationContext> IAsyncCompilationContext::create(InferenceEngine::CPUStreamsExecutor::Ptr task_executor) {

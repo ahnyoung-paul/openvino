@@ -86,6 +86,18 @@ private:
     std::atomic<bool> _pending_compilation{false};
     std::map<const std::string, kernel::ptr> _kernels;
     std::vector<std::string> batch_header_str;
+    bool _is_cache_enabled = false;
+
+    void set_cache_is_enabled() {
+        if (const char* env_p = std::getenv("OV_GPU_CACHE_MODEL")) {
+            if (env_p[0] == '1') {
+                _is_cache_enabled = false;
+                return;
+            }
+        }
+
+        _is_cache_enabled = !_config.get_property(ov::cache_dir).empty();
+    }
 
     void get_program_source(const kernels_code& kernels_source_code, std::vector<batch_program>*) const;
     void build_batch(const engine& build_engine, const batch_program& batch, std::map<const std::string, kernel::ptr>& compiled_kernels);

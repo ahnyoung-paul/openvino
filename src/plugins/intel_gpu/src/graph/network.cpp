@@ -445,6 +445,11 @@ network::network(cldnn::BinaryInputBuffer& ib, const ExecutionConfig& config, st
 }
 
 network::~network() {
+    std::cout << "START destroy network ..." << std::endl;
+    _kernels_cache = nullptr;
+
+    get_program()->reset_handlers();
+
     if (_compilation_context)
         _compilation_context->cancel();
     _memory_pool->clear_pool_for_network(net_id);
@@ -452,6 +457,7 @@ network::~network() {
     GPU_DEBUG_IF(!debug_config->dump_profiling_data.empty()) {
         dump_perf_data_raw(debug_config->dump_profiling_data + "/perf_raw" + std::to_string(net_id) + ".csv", _exec_order);
     }
+    std::cout << "END.. destroy network ..." << std::endl;
 }
 
 // Cache blob format:

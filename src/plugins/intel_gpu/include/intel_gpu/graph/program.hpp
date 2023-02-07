@@ -256,6 +256,8 @@ public:
     ImplementationsCache& get_implementations_cache() const { return *_impls_cache; }
     IAsyncCompilationContext& get_compilation_context() const { return *_compilation_context; }
 
+    void reset_handlers();
+
 private:
     uint32_t prog_id = 0;
     engine& _engine;

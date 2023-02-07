@@ -21,6 +21,8 @@ public:
     virtual void push_task(size_t key, Task&& task) = 0;
     virtual void remove_keys(std::vector<size_t>&& keys) = 0;
     virtual ~IAsyncCompilationContext() = default;
+    virtual bool is_stopped() = 0;
+    virtual void cancel() = 0;
 
     static std::unique_ptr<IAsyncCompilationContext> create(InferenceEngine::CPUStreamsExecutor::Ptr task_executor);
 };

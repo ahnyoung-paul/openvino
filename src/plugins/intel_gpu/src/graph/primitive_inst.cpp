@@ -335,21 +335,38 @@ bool primitive_inst::update_impl() {
         if (!has_cached_impl) {
             auto& prog_kernels_cache = get_network().get_program()->get_kernels_cache();
             if (_dynamic_impl) {
-                // auto& compilation_context = get_network().get_compilation_context();
+#if 1
                 auto& compilation_context = get_network().get_program()->get_compilation_context();
-                compilation_context.push_task(impl_key, [this, &prog_kernels_cache, updated_params, impl_key]() {
-                    auto& cache = get_network().get_program()->get_implementations_cache();
-                    {
-                        // Check existense in the cache one more time as several iterations of model execution could happens and multiple compilation
-                        // tasks created for same shapes
-                        if (cache.has(impl_key))
-                            return;
+                compilation_context.push_task(impl_key, [this, &compilation_context, &prog_kernels_cache, updated_params, impl_key]() {
+                    if (compilation_context.is_stopped()) {
+                        std::cout << "compilation_context is cancel " << std::endl;
+                        return;
                     }
+#else
+                auto& compilation_context = get_network().get_compilation_context();
+                compilation_context.push_task(impl_key, [this, &prog_kernels_cache, updated_params, impl_key](kernels_cache& kc) {
+#endif
+                    try {
+                        auto& cache = get_network().get_program()->get_implementations_cache();
+                        {
+                            // Check existense in the cache one more time as several iterations of model execution could happens and multiple compilation
+                            // tasks created for same shapes
+                            if (cache.has(impl_key))
+                                return;
+                        }
 
-                    auto impl = _node->type()->choose_impl(*_node, updated_params);
-                    auto kernels = prog_kernels_cache.compile_threadsafe(impl->get_kernels_source());
-                    impl->set_kernels(kernels);
-                    cache.add(impl_key, impl->clone());
+                        auto impl = _node->type()->choose_impl(*_node, updated_params);
+                        if (compilation_context.is_stopped())
+                            return;
+                        auto kernels = get_network().get_program()->get_kernels_cache().compile_threadsafe(impl->get_kernels_source());
+                        if (compilation_context.is_stopped())
+                            return;
+                        impl->set_kernels(kernels);
+                        cache.add(impl_key, impl->clone());
+                    } catch (std::exception& ex) {
+                        std::cout << " Exception " << ex.what() << std::endl;
+                        throw ex;
+                    }
                 });
 
                 _impl = _dynamic_impl->clone();

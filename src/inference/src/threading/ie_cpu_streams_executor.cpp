@@ -22,6 +22,7 @@
 #include "threading/ie_executor_manager.hpp"
 #include "threading/ie_thread_affinity.hpp"
 #include "threading/ie_thread_local.hpp"
+#include <iostream>
 
 using namespace openvino;
 
@@ -371,6 +372,7 @@ int CPUStreamsExecutor::GetNumaNodeId() {
 CPUStreamsExecutor::CPUStreamsExecutor(const IStreamsExecutor::Config& config) : _impl{new Impl{config}} {}
 
 CPUStreamsExecutor::~CPUStreamsExecutor() {
+    std::cout << "START Destory CPUStreamsExecutor" << std::endl;
     {
         std::lock_guard<std::mutex> lock(_impl->_mutex);
         _impl->_isStopped = true;
@@ -381,6 +383,7 @@ CPUStreamsExecutor::~CPUStreamsExecutor() {
             thread.join();
         }
     }
+    std::cout << "END Destory CPUStreamsExecutor" << std::endl;
 }
 
 void CPUStreamsExecutor::Execute(Task task) {

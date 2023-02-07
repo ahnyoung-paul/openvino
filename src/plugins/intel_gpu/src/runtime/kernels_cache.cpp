@@ -71,6 +71,9 @@ std::string kernels_cache::get_cache_path() const {
 }
 
 bool kernels_cache::is_cache_enabled() const {
+#if 0
+    return _is_cache_enabled;
+#else
     if (const char* env_p = std::getenv("OV_GPU_CACHE_MODEL")) {
         if (env_p[0] == '1') {
             return false;
@@ -78,6 +81,7 @@ bool kernels_cache::is_cache_enabled() const {
     }
 
     return !_config.get_property(ov::cache_dir).empty();
+#endif
 }
 
 size_t kernels_cache::get_max_kernels_per_batch() const {
@@ -166,7 +170,7 @@ kernels_cache::kernels_cache(engine& engine,
     , _task_executor(task_executor)
     , _config(config)
     , _prog_id(prog_id)
-    , batch_header_str(std::move(batch_header_str)) { }
+    , batch_header_str(std::move(batch_header_str)) { set_cache_is_enabled(); }
 
 kernel_id kernels_cache::set_kernel_source(
     const std::shared_ptr<kernel_string>& kernel_string,

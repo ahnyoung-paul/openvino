@@ -155,9 +155,11 @@ program::program(engine& engine_ref,
 
     _task_executor = make_task_executor(_config);
 
-    _impls_cache = cldnn::make_unique<ImplementationsCache>(_impls_cache_capacity);
+
     _kernels_cache = std::unique_ptr<kernels_cache>(new kernels_cache(_engine, _config, prog_id, _task_executor,
                                                                       kernel_selector::KernelBase::get_db().get_batch_header_str()));
+
+    _impls_cache = cldnn::make_unique<ImplementationsCache>(_impls_cache_capacity);
     _compilation_context = IAsyncCompilationContext::create(_task_executor);
     _impls_cache->set_callback([this](size_t key) {
         get_compilation_context().remove_keys({key});
@@ -175,8 +177,27 @@ program::program(engine& engine)
       _config(),
       processing_order(),
       is_subgroup_local_block_io_supported(-1) { }
+
 program::~program() {
+    std::cout << "START Destory program()" << std::endl;
+
     query_local_block_io_supported();
+    std::cout << "END Destory program()" << std::endl;
+}
+
+void program::reset_handlers() {
+    std::cout << "START reset_handlers ..." << std::endl;
+    if (_impls_cache)
+        _impls_cache = nullptr;
+    if (_kernels_cache)
+        _kernels_cache = nullptr;
+    if (_task_executor)
+        _task_executor = nullptr;
+    if (_compilation_context) {
+        _compilation_context->cancel();
+        _compilation_context = nullptr;
+    }
+    std::cout << "END.. reset_handlers ..." << std::endl;
 }
 
 void program::init_primitives() {
