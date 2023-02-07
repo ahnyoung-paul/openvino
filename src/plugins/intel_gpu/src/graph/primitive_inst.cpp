@@ -332,9 +332,10 @@ bool primitive_inst::update_impl() {
             }
         }
         if (!has_cached_impl) {
+            auto& prog_kernels_cache = get_network().get_program()->get_kernels_cache();
             if (_dynamic_impl) {
                 auto& compilation_context = get_network().get_compilation_context();
-                compilation_context.push_task(impl_key, [this, updated_params, impl_key](kernels_cache& kc) {
+                compilation_context.push_task(impl_key, [this, &prog_kernels_cache, updated_params, impl_key](kernels_cache& kc) {
                     auto& cache = get_network().get_implementations_cache();
                     {
                         std::lock_guard<std::mutex> lock(get_network().get_impl_cache_mutex());
@@ -345,7 +346,8 @@ bool primitive_inst::update_impl() {
                     }
 #if 1
                     auto impl = _node->type()->choose_impl(*_node, updated_params);
-                    auto kernels = kc.compile_threadsafe(impl->get_kernels_source());
+                    auto kernels = prog_kernels_cache.compile_threadsafe(impl->get_kernels_source());
+                    // auto kernels = kc.compile_threadsafe(impl->get_kernels_source());
                     impl->set_kernels(kernels);
 #else
                     auto kernel_ids = kc.add_kernels_source(impl->get_kernels_source());
@@ -364,11 +366,14 @@ bool primitive_inst::update_impl() {
                 update_shape_info(*_impl_params);
             } else {
                 _impl = _node->type()->choose_impl(*_node, updated_params);
-                auto& kernels_cache = get_network().get_kernels_cache();
+
 #if 1
-                auto kernels = kernels_cache.compile_threadsafe(_impl->get_kernels_source());
+                // auto& kernels_cache = get_network().get_kernels_cache();
+                // auto kernels = kernels_cache.compile_threadsafe(_impl->get_kernels_source());
+                auto kernels = prog_kernels_cache.compile_threadsafe(_impl->get_kernels_source());
                 _impl->set_kernels(kernels);
 #else
+                auto& kernels_cache = get_network().get_kernels_cache();
                 auto kernel_ids = kernels_cache.add_kernels_source(_impl->get_kernels_source());
                 _impl->set_kernel_ids(kernel_ids);
                 kernels_cache.compile();
@@ -714,12 +719,13 @@ event::ptr primitive_inst::update_weights() {
         } else {
             GPU_DEBUG_TRACE_DETAIL << id() << ": reorder weights from " << original_layout.to_short_string()
                                     << " to " << expected_layout.to_short_string() << std::endl;
-            auto& kernels_cache = get_network().get_kernels_cache();
 #if 1
+            auto& kernels_cache = get_network().get_program()->get_kernels_cache();
             auto kernels = kernels_cache.compile_threadsafe({weights_params.clKernel->code.kernelString});
             OPENVINO_ASSERT(kernels.size() == 1, "The output of kernel compile has issue");
             kernel = kernels.begin()->second;
 #else
+            auto& kernels_cache = get_network().get_kernels_cache();
             auto kernel_id = kernels_cache.set_kernel_source(weights_params.clKernel->code.kernelString, false);
             kernels_cache.compile();
             kernel = kernels_cache.get_kernel(kernel_id);
