@@ -471,7 +471,6 @@ void kernels_cache::add_kernels(const std::vector<std::string>& kernel_ids, cons
 std::map<const std::string, kernel::ptr> kernels_cache::compile_threadsafe(std::vector<std::shared_ptr<kernel_string>> kernel_sources,
                                                                                         bool dump_custom_program) {
     OV_ITT_SCOPED_TASK(ov::intel_gpu::itt::domains::intel_gpu_plugin, "KernelsCache::Compile_ThreadSafe");
-    _pending_compilation = false;
     kernels_code t_kernels_code;
 
     // Get kernels code from kernel sources

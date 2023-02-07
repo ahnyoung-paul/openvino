@@ -30,6 +30,10 @@ public:
         }
     }
 
+    // impl cache => program
+    // async compilation => program
+    // kernel cache compile
+    // key only added => key is removed when impl cache is poped
     void push_task(cldnn::network& network, const cldnn::program_node *node,
                             kernel_impl_params params, size_t impl_key) override {
         std::lock_guard<std::mutex> lock(_async_mutex);

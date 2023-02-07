@@ -115,6 +115,11 @@ Any ExecutionConfig::get_property(const std::string& name) const {
         return user_properties.at(name);
     }
 
+    if (internal_properties.find(name) == internal_properties.end()) {
+        std::cout << "[GPU] Can't get internal property with name " << name << std::endl;
+        std::cout << " test " << std::endl;
+    }
+
     OPENVINO_ASSERT(internal_properties.find(name) != internal_properties.end(), "[GPU] Can't get internal property with name ", name);
     return internal_properties.at(name);
 }
