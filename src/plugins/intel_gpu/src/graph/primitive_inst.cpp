@@ -317,7 +317,8 @@ bool primitive_inst::update_impl() {
         // Update param if fake_alignment is available
         auto updated_params = _node->type()->get_fake_aligned_params(*_impl_params);
         auto impl_key = get_impl_key(updated_params);
-        auto& cache = get_network().get_implementations_cache();
+        // auto& cache = get_network().get_implementations_cache();
+        auto& cache = get_network().get_program()->get_implementations_cache();
         bool has_cached_impl = false;
         {
             has_cached_impl = cache.has(impl_key);
@@ -335,7 +336,7 @@ bool primitive_inst::update_impl() {
             if (_dynamic_impl) {
                 auto& compilation_context = get_network().get_compilation_context();
                 compilation_context.push_task(impl_key, [this, &prog_kernels_cache, updated_params, impl_key](kernels_cache& kc) {
-                    auto& cache = get_network().get_implementations_cache();
+                    auto& cache = get_network().get_program()->get_implementations_cache();
                     {
                         // Check existense in the cache one more time as several iterations of model execution could happens and multiple compilation
                         // tasks created for same shapes

@@ -118,8 +118,11 @@ program::program(engine& engine_ref,
 
     pm = std::unique_ptr<pass_manager>(new pass_manager(*this));
     prepare_nodes(topology);
+
+    _impls_cache = cldnn::make_unique<ImplementationsCache>(_impls_cache_capacity);
     _kernels_cache = std::unique_ptr<kernels_cache>(new kernels_cache(_engine, _config, prog_id, _task_executor,
                                                                       kernel_selector::KernelBase::get_db().get_batch_header_str()));
+
     program_node::reset_unique_id();
 
     if (no_optimizations) {
@@ -147,8 +150,11 @@ program::program(engine& engine_ref,
 
     _task_executor = make_task_executor(_config);
 
+    _impls_cache = cldnn::make_unique<ImplementationsCache>(_impls_cache_capacity);
     _kernels_cache = std::unique_ptr<kernels_cache>(new kernels_cache(_engine, _config, prog_id, _task_executor,
                                                                       kernel_selector::KernelBase::get_db().get_batch_header_str()));
+
+
     pm = std::unique_ptr<pass_manager>(new pass_manager(*this));
     prepare_nodes(nodes);
     build_program(is_internal);

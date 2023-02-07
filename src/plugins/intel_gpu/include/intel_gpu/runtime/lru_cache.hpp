@@ -190,7 +190,7 @@ public:
     using callback_func = std::function<void(Key)>;
 
     explicit CacheThreadSafe(size_t caps) {
-        _impl = std::unique_ptr<LRUCacheType>(new LRUCacheType(caps));
+        _impl = cldnn::make_unique<LRUCacheType>(caps);
     }
 
     bool add(const Key& key, const Value& value) {
