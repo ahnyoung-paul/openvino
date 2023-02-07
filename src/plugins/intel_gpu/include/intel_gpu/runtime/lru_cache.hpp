@@ -8,6 +8,8 @@
 #include <unordered_map>
 #include <functional>
 #include <iostream>
+#include <thread>
+#include <mutex>
 
 #include "kernel.hpp"
 
@@ -39,6 +41,19 @@ public:
             return _lru_data_list.back().second;
         } else {
             return Value();
+        }
+    }
+
+    /**
+     * @brief Get the least recently used key in the cache
+     *
+     * @return Key
+     */
+    Key get_lru_key() const {
+        if (_lru_data_list.size()) {
+            return _lru_data_list.back().first;
+        } else {
+            return Key();
         }
     }
 
@@ -164,6 +179,51 @@ private:
     }
 };
 
-using ImplementationsCache = cldnn::LruCache<size_t, std::shared_ptr<primitive_impl>>;
+// using ImplementationsCache = cldnn::CacheThreadSafe<size_t, std::shared_ptr<primitive_impl>>;
 using KernelsCache = cldnn::LruCache<size_t, cldnn::kernel::ptr>;
+
+
+template<typename Key, typename Value>
+class CacheThreadSafe {
+public:
+    using LRUCacheType = cldnn::LruCache<Key, Value>;
+    using callback_func = std::function<void(Key)>;
+
+    explicit CacheThreadSafe(size_t caps) {
+        _impl = std::unique_ptr<LRUCacheType>(new LRUCacheType(caps));
+    }
+
+    bool add(const Key& key, const Value& value) {
+        std::lock_guard<std::mutex> lock(_mmutex);
+        auto popped_lru_key = _impl->get_lru_key();
+        auto ret = _impl->add(key, value);
+        if (ret && _callback_func) {
+            _callback_func(popped_lru_key);
+        }
+        return ret;
+    }
+
+    bool has(const Key& key) const {
+        std::lock_guard<std::mutex> lock(_mmutex);
+        return _impl->has(key);
+    }
+
+    Value get(const Key& key) {
+        std::lock_guard<std::mutex> lock(_mmutex);
+        return _impl->get(key);
+    }
+
+    void set_callback(callback_func callback) {
+        _callback_func = callback;
+    }
+
+private:
+    callback_func _callback_func;
+    std::unique_ptr<LRUCacheType> _impl;
+    mutable std::mutex _mmutex;
+};
+
+
+using ImplementationsCache = cldnn::CacheThreadSafe<size_t, std::shared_ptr<primitive_impl>>;
+
 }  // namespace cldnn

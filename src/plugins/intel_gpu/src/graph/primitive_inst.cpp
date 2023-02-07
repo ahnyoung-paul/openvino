@@ -320,7 +320,6 @@ bool primitive_inst::update_impl() {
         auto& cache = get_network().get_implementations_cache();
         bool has_cached_impl = false;
         {
-            std::lock_guard<std::mutex> lock(get_network().get_impl_cache_mutex());
             has_cached_impl = cache.has(impl_key);
             if (has_cached_impl) {
                 _impl = cache.get(impl_key)->clone();
@@ -338,25 +337,15 @@ bool primitive_inst::update_impl() {
                 compilation_context.push_task(impl_key, [this, &prog_kernels_cache, updated_params, impl_key](kernels_cache& kc) {
                     auto& cache = get_network().get_implementations_cache();
                     {
-                        std::lock_guard<std::mutex> lock(get_network().get_impl_cache_mutex());
                         // Check existense in the cache one more time as several iterations of model execution could happens and multiple compilation
                         // tasks created for same shapes
                         if (cache.has(impl_key))
                             return;
                     }
-#if 1
+
                     auto impl = _node->type()->choose_impl(*_node, updated_params);
                     auto kernels = prog_kernels_cache.compile_threadsafe(impl->get_kernels_source());
-                    // auto kernels = kc.compile_threadsafe(impl->get_kernels_source());
                     impl->set_kernels(kernels);
-#else
-                    auto kernel_ids = kc.add_kernels_source(impl->get_kernels_source());
-                    impl->set_kernel_ids(kernel_ids);
-                    kc.compile();
-                    impl->init_kernels(kc);
-                    kc.reset();
-#endif
-                    std::lock_guard<std::mutex> lock(get_network().get_impl_cache_mutex());
                     cache.add(impl_key, impl->clone());
                 });
 
@@ -367,20 +356,8 @@ bool primitive_inst::update_impl() {
             } else {
                 _impl = _node->type()->choose_impl(*_node, updated_params);
 
-#if 1
-                // auto& kernels_cache = get_network().get_kernels_cache();
-                // auto kernels = kernels_cache.compile_threadsafe(_impl->get_kernels_source());
                 auto kernels = prog_kernels_cache.compile_threadsafe(_impl->get_kernels_source());
                 _impl->set_kernels(kernels);
-#else
-                auto& kernels_cache = get_network().get_kernels_cache();
-                auto kernel_ids = kernels_cache.add_kernels_source(_impl->get_kernels_source());
-                _impl->set_kernel_ids(kernel_ids);
-                kernels_cache.compile();
-                _impl->init_kernels(kernels_cache);
-                kernels_cache.reset();
-#endif
-                std::lock_guard<std::mutex> lock(get_network().get_impl_cache_mutex());
                 cache.add(impl_key, _impl->clone());
 
                 auto new_impl_str = _impl != nullptr ? _impl->get_kernel_name() : "nullptr";
@@ -719,18 +696,10 @@ event::ptr primitive_inst::update_weights() {
         } else {
             GPU_DEBUG_TRACE_DETAIL << id() << ": reorder weights from " << original_layout.to_short_string()
                                     << " to " << expected_layout.to_short_string() << std::endl;
-#if 1
             auto& kernels_cache = get_network().get_program()->get_kernels_cache();
             auto kernels = kernels_cache.compile_threadsafe({weights_params.clKernel->code.kernelString});
             OPENVINO_ASSERT(kernels.size() == 1, "The output of kernel compile has issue");
             kernel = kernels.begin()->second;
-#else
-            auto& kernels_cache = get_network().get_kernels_cache();
-            auto kernel_id = kernels_cache.set_kernel_source(weights_params.clKernel->code.kernelString, false);
-            kernels_cache.compile();
-            kernel = kernels_cache.get_kernel(kernel_id);
-            kernels_cache.reset();
-#endif
             cache.add(kernel_key, kernel);
         }
 
