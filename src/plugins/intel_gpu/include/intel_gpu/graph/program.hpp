@@ -26,6 +26,7 @@ class pass_manager;
 class base_pass;
 class program_wrapper;
 class kernels_cache;
+class IAsyncCompilationContext;
 
 
 struct program {
@@ -253,6 +254,7 @@ public:
     void calc_nodes_hash();
 
     ImplementationsCache& get_implementations_cache() const { return *_impls_cache; }
+    IAsyncCompilationContext& get_compilation_context() const { return *_compilation_context; }
 
 private:
     uint32_t prog_id = 0;
@@ -270,6 +272,7 @@ private:
     int8_t is_subgroup_local_block_io_supported;
     std::unique_ptr<ImplementationsCache> _impls_cache;
     const size_t _impls_cache_capacity = 10000;
+    std::unique_ptr<IAsyncCompilationContext> _compilation_context;
 
     std::map<primitive_id, std::shared_ptr<program_node>> nodes_map;
     std::list<primitive_id> optimized_out;

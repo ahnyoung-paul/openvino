@@ -18,6 +18,7 @@
 #include "program_dump_graph.h"
 #include "sliding_window_utils.hpp"
 #include "program_helpers.h"
+#include "async_compilation_context.hpp"
 
 #include "matrix_nms_inst.h"
 #include "roi_pooling_inst.h"
@@ -122,6 +123,10 @@ program::program(engine& engine_ref,
     _impls_cache = cldnn::make_unique<ImplementationsCache>(_impls_cache_capacity);
     _kernels_cache = std::unique_ptr<kernels_cache>(new kernels_cache(_engine, _config, prog_id, _task_executor,
                                                                       kernel_selector::KernelBase::get_db().get_batch_header_str()));
+    _compilation_context = IAsyncCompilationContext::create(_task_executor);
+    _impls_cache->set_callback([this](size_t key) {
+        get_compilation_context().remove_keys({key});
+    });
 
     program_node::reset_unique_id();
 
@@ -153,7 +158,10 @@ program::program(engine& engine_ref,
     _impls_cache = cldnn::make_unique<ImplementationsCache>(_impls_cache_capacity);
     _kernels_cache = std::unique_ptr<kernels_cache>(new kernels_cache(_engine, _config, prog_id, _task_executor,
                                                                       kernel_selector::KernelBase::get_db().get_batch_header_str()));
-
+    _compilation_context = IAsyncCompilationContext::create(_task_executor);
+    _impls_cache->set_callback([this](size_t key) {
+        get_compilation_context().remove_keys({key});
+    });
 
     pm = std::unique_ptr<pass_manager>(new pass_manager(*this));
     prepare_nodes(nodes);

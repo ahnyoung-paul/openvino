@@ -16,6 +16,7 @@
 #include "gemm_inst.h"
 #include "experimental_detectron_roi_feature_extractor_inst.hpp"
 #include "compilation_context.hpp"
+#include "async_compilation_context.hpp"
 
 #include "intel_gpu/plugin/common_utils.hpp"
 #include "intel_gpu/graph/network.hpp"
@@ -334,8 +335,9 @@ bool primitive_inst::update_impl() {
         if (!has_cached_impl) {
             auto& prog_kernels_cache = get_network().get_program()->get_kernels_cache();
             if (_dynamic_impl) {
-                auto& compilation_context = get_network().get_compilation_context();
-                compilation_context.push_task(impl_key, [this, &prog_kernels_cache, updated_params, impl_key](kernels_cache& kc) {
+                // auto& compilation_context = get_network().get_compilation_context();
+                auto& compilation_context = get_network().get_program()->get_compilation_context();
+                compilation_context.push_task(impl_key, [this, &prog_kernels_cache, updated_params, impl_key]() {
                     auto& cache = get_network().get_program()->get_implementations_cache();
                     {
                         // Check existense in the cache one more time as several iterations of model execution could happens and multiple compilation
