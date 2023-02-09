@@ -448,6 +448,23 @@ network::~network() {
     std::cout << "START destroy network ..." << std::endl;
     _kernels_cache = nullptr;
 
+    {
+        size_t seed = 0;
+        seed = hash_combine(seed, 8);
+        seed = hash_combine(seed, 3);
+        seed = hash_combine(seed, 131);
+        seed = hash_combine(seed, 384);
+        std::cerr << "HASH1: " << seed << std::endl;
+    }
+    {
+        size_t seed = 0;
+        seed = hash_combine(seed, 8);
+        seed = hash_combine(seed, 5);
+        seed = hash_combine(seed, 1);
+        seed = hash_combine(seed, 384);
+        std::cerr << "HASH2: " << seed << std::endl;
+    }
+
     get_program()->reset_handlers();
 
     if (_compilation_context)

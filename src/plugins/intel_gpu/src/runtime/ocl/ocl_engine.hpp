@@ -21,6 +21,9 @@ namespace ocl {
 class ocl_engine : public engine {
 public:
     ocl_engine(const device::ptr dev, runtime_types runtime_type);
+    ~ocl_engine() {
+        std::cout << "Destory ocl_engine ................................" << std::endl;
+    }
     engine_types type() const override { return engine_types::ocl; };
     runtime_types runtime_type() const override { return runtime_types::ocl; };
 

@@ -71,7 +71,7 @@ std::string kernels_cache::get_cache_path() const {
 }
 
 bool kernels_cache::is_cache_enabled() const {
-#if 0
+#if 1
     return _is_cache_enabled;
 #else
     if (const char* env_p = std::getenv("OV_GPU_CACHE_MODEL")) {
@@ -290,8 +290,10 @@ void kernels_cache::build_batch(const engine& build_engine, const batch_program&
                 const auto& k_id = batch.entry_point_to_id.find(entry_point);
                 if (k_id != batch.entry_point_to_id.end()) {
                     cl_kernel kern = k.get();
-                    cl_context context = cl_build_engine.get_cl_context().get();
-                    kernel::ptr kernel = kernels_factory::create(_engine, context, kern, entry_point);
+                    // cl_context context = cl_build_engine.get_cl_context().get();
+                    // kernel::ptr kernel = kernels_factory::create(_engine, context, kern, entry_point);
+                    cl::Kernel k(kern, true);
+                    kernel::ptr kernel =  std::make_shared<ocl::ocl_kernel>(ocl::ocl_kernel_type(k, cl_build_engine.get_usm_helper()), entry_point);
                     const auto& kmap = std::make_pair(k_id->second, kernel);
                     compiled_kernels.insert(kmap);
                     _kernels_counts++;
@@ -602,10 +604,11 @@ std::map<const std::string, kernel::ptr> kernels_cache::compile_threadsafe(std::
         t_kernels_code.emplace(kernel_string, id, dump_custom_program);
     }
 
-    std::unique_ptr<ocl::ocl_engine> _build_engine = nullptr;
-    if (_engine.type() == engine_types::ocl) {
-        _build_engine = std::unique_ptr<ocl::ocl_engine>(new ocl::ocl_engine(_engine.get_device(), runtime_types::ocl));
-    }
+    // std::unique_ptr<ocl::ocl_engine> _build_engine = nullptr;
+    // if (_engine.type() == engine_types::ocl) {
+    //     _build_engine = std::unique_ptr<ocl::ocl_engine>(new ocl::ocl_engine(_engine.get_device(), runtime_types::ocl));
+    // }
+    ocl::ocl_engine& _build_engine = downcast<ocl::ocl_engine>(_engine);
 
     // Create batches
     std::vector<batch_program> batches;
@@ -614,7 +617,7 @@ std::map<const std::string, kernel::ptr> kernels_cache::compile_threadsafe(std::
     std::map<const std::string, kernel::ptr> output_kernels;
     // Build batches
     for (size_t idx = 0; idx < batches.size(); ++idx) {
-        build_batch(*_build_engine, batches[idx], output_kernels);
+        build_batch(_build_engine, batches[idx], output_kernels);
     }
 
     t_kernels_code.clear();
