@@ -150,7 +150,6 @@ program::program(engine& engine)
       is_subgroup_local_block_io_supported(-1) { }
 
 program::~program() {
-    _compilation_context->cancel();
     query_local_block_io_supported();
 }
 
