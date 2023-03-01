@@ -9,16 +9,22 @@
 KERNEL (count_nonzero_ref)(
     OPTIONAL_SHAPE_INFO_ARG
     const __global INPUT0_TYPE* input,
+    volatile __global uint* tmp_buffer,
     volatile __global OUTPUT_TYPE* output)
 {
     const uint gdim0 = (uint)get_global_id(0);
     const uint gdim1 = (uint)get_global_id(1);
     const uint gdim2 = (uint)get_global_id(2);
+    const uint ldim0 = (uint)get_local_id(0);
+    const uint ldim1 = (uint)get_local_id(1);
+    const uint ldim2 = (uint)get_local_id(2);
+    const uint group_id = (uint)get_group_id(2);
 
-    if (gdim0 == 0 && gdim1 == 0 && gdim2 == 0) {
-        output[0] = 0;
+    if (ldim0 == 0 && ldim1 == 0 && ldim2 == 0) {
+        tmp_buffer[group_id] = 0;
     }
-    barrier(CLK_GLOBAL_MEM_FENCE);
+
+    barrier(CLK_GLOBAL_MEM_FENCE | CLK_LOCAL_MEM_FENCE);
 
     #if INPUT0_DIMS == 6
         #define INPUT_ORDER b,f,w,z,y,x
@@ -43,7 +49,22 @@ KERNEL (count_nonzero_ref)(
     count = sub_group_reduce_add(count);
 
     if (get_sub_group_local_id() == 0)
-        atomic_add(&(output[0]), count);
+        atomic_add(&tmp_buffer[group_id], count);
+
+    // printf("nonzero_count - GlobalWG[%3d,%3d,%3d],LocalWG[%3d,%3d,%3d],Subgroup[%3d][D: %3d] -- get_global_size[%3d,%3d,%3d], get_local_size[%3d,%3d,%3d], get_num_groups[%3d,%3d,%3d], get_group_id[%3d,%3d,%3d]\n",
+    //             gdim0, gdim1, gdim2, local0, local1, local2, get_sub_group_local_id(), shape_info[0],
+    //             get_global_size(0),get_global_size(1),get_global_size(2),get_local_size(0),get_local_size(1),get_local_size(2),get_num_groups(0),get_num_groups(1),get_num_groups(2),get_group_id(0),get_group_id(1),get_group_id(2));
+
+
+    barrier(CLK_GLOBAL_MEM_FENCE | CLK_LOCAL_MEM_FENCE);
+    if (gdim0 == 0 && gdim1 == 0 && gdim2 == 0) {
+        output[0] = 0;
+        uint group_size = (uint)get_num_groups(2);
+        for (uint gid = 0; gid < group_size; gid++ ) {
+            output[0] = output[0] + tmp_buffer[gid];
+            printf("nonzero_count - GlobalWG[%3d,%3d,%3d],LocalWG[%3d,%3d,%3d],group_size[%3d],get_global_size(%3d)tem_buffer(%3d),output[%3d]\n",gdim0, gdim1, gdim2, ldim0, ldim1, ldim2, group_size, get_global_size(2), tmp_buffer[gid], output[0]);
+        }
+    }
 }
 
 #undef INPUT0_GET_INDEX1

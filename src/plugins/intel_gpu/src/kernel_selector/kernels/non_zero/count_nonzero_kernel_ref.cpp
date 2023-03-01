@@ -84,13 +84,25 @@ KernelsData CountNonzeroKernelRef::GetKernelsData(const Params& params, const op
     auto jit = CreateJit(kernelName, cldnn_jit, entry_point);
 
     auto& kernel = kd.kernels[0];
+    bool is_dynamic = newParams.inputs[0].is_dynamic();
 
     kd.update_dispatch_data_func = [this](const Params& params, KernelData& kd) {
         const auto& prim_params = static_cast<const count_nonzero_params&>(params);
         auto dispatchData = SetDefault(prim_params);
         OPENVINO_ASSERT(kd.kernels.size() == 1, "[GPU] Invalid kernels size for update dispatch data func");
-        kd.kernels[0].params.workGroups.global = dispatchData.gws;
-        kd.kernels[0].params.workGroups.local = dispatchData.lws;
+        auto& updated_kernel = kd.kernels[0];
+        updated_kernel.params.workGroups.global = dispatchData.gws;
+        updated_kernel.params.workGroups.local = dispatchData.lws;
+
+        auto& gws = updated_kernel.params.workGroups.global;
+        auto& lws = updated_kernel.params.workGroups.local;
+        size_t gws_mul = std::accumulate(gws.begin(), gws.end(), 1, std::multiplies<size_t>());
+        size_t lws_mul = std::accumulate(lws.begin(), lws.end(), 1, std::multiplies<size_t>());
+
+        size_t buffer_size = static_cast<size_t>(std::ceil(static_cast<double>(gws_mul) / lws_mul));
+        kd.internalBufferSizes.clear();
+        kd.internalBufferSizes.push_back(buffer_size);
+        kd.internalBufferDataType = kernel_selector::Datatype::UINT32;
     };
 
     // In case of count-nonzero, the output shape is static unconditionally,
@@ -107,8 +119,27 @@ KernelsData CountNonzeroKernelRef::GetKernelsData(const Params& params, const op
                      1,
                      GetFusedPrimitiveInputsCount(params),
                      1,
-                     newParams.inputs[0].is_dynamic());
+                     is_dynamic);
+    {
+        auto& args = kernel.params.arguments;
+        args.clear();
+        if (is_dynamic) {
+            args.push_back({ArgumentDescriptor::Types::SHAPE_INFO, 0});
+        }
+        args.push_back({ArgumentDescriptor::Types::INPUT, 0});
+        args.push_back({ArgumentDescriptor::Types::INTERNAL_BUFFER, 0});
+        args.push_back({ArgumentDescriptor::Types::OUTPUT, 0});
 
+        auto& gws = kernel.params.workGroups.global;
+        auto& lws = kernel.params.workGroups.local;
+        size_t gws_mul = std::accumulate(gws.begin(), gws.end(), 1, std::multiplies<size_t>());
+        size_t lws_mul = std::accumulate(lws.begin(), lws.end(), 1, std::multiplies<size_t>());
+
+        size_t buffer_size = static_cast<size_t>(std::ceil(static_cast<double>(gws_mul) / lws_mul));
+        kd.internalBufferSizes.clear();
+        kd.internalBufferSizes.push_back(buffer_size);
+        kd.internalBufferDataType = kernel_selector::Datatype::UINT32;
+    }
     return {kd};
 }
 
