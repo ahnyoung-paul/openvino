@@ -66,6 +66,25 @@ struct typed_primitive_impl_ocl : public typed_primitive_impl<PType> {
 
     bool is_cpu() const override { return false; }
 
+    std::string debug() const {
+        auto gws = _kernel_data.kernels[0].params.workGroups.global;
+        auto lws = _kernel_data.kernels[0].params.workGroups.local;
+        std::stringstream ss;
+        {
+            ss << "[gws={";
+            for (auto& l : gws) {
+                ss << l << ",";
+            }
+            ss << "}, ";
+            ss << "lws={";
+            for (auto& l : lws) {
+                ss << l << ",";
+            }
+            ss << "}]";
+        }
+        return ss.str();
+    }
+
     // Cache blob format:
     //     [ kernel_selector::kernel_data ]
     //     [ kernel_id ]

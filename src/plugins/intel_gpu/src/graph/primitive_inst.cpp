@@ -16,6 +16,7 @@
 #include "gemm_inst.h"
 #include "experimental_detectron_roi_feature_extractor_inst.hpp"
 #include "compilation_context.hpp"
+#include "non_zero_inst.h"
 
 #include "intel_gpu/plugin/common_utils.hpp"
 #include "intel_gpu/graph/network.hpp"
@@ -335,8 +336,8 @@ bool primitive_inst::update_impl() {
                 return false;
             }
         }
-        if (!has_cached_impl) {
-            if (_dynamic_impl) {
+        if (_node->is_type<count_nonzero>() || !has_cached_impl) {
+            if (_node->is_type<count_nonzero>() || _dynamic_impl) {
                 auto& compilation_context = get_network().get_compilation_context();
                 compilation_context.push_task(impl_key, [this, updated_params, impl_key](kernels_cache& kc) {
                     auto& cache = get_network().get_implementations_cache();

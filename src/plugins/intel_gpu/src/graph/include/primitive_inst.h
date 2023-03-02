@@ -69,6 +69,7 @@ struct primitive_impl {
     virtual void set_kernel_ids(std::vector<kernel_id> kernel_ids) {}
     virtual void save(cldnn::BinaryOutputBuffer& ob) const {}
     virtual void load(cldnn::BinaryInputBuffer& ib) {}
+    virtual std::string debug() const { return ""; }
 
     // If this flag is set as false, the memory allocated for this primitive is not allowed to be reused
     bool can_reuse_memory = true;
@@ -205,7 +206,9 @@ public:
     const std::unordered_map<size_t, std::tuple<int64_t, size_t>>& get_profiling_data() const { return _profiling_data; }
     const std::unordered_map<size_t, instrumentation::perf_counter_key>& get_profiling_info() const { return _profiling_info; }
 
+    size_t get_input_layout_count() const { return _impl_params->input_layouts.size(); }
     layout get_input_layout(size_t idx = 0) const { return _impl_params->get_input_layout(idx); }
+    size_t get_output_layout_count() const { return _impl_params->output_layouts.size(); }
     layout get_output_layout(size_t idx = 0) const { return _impl_params->get_output_layout(idx); }
     layout get_node_output_layout() const { return _node_output_layout; }
 #ifdef ENABLE_ONEDNN_FOR_GPU

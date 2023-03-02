@@ -183,6 +183,7 @@ public:
     const program::graph_optimizer_info& get_optimizer_passes_info() const;
     std::map<primitive_id, primitive_id> get_ext_id_mapping() const;
     void execute_impl(const std::vector<event::ptr>& events);
+    void debug_prims();
 
     /// @brief Executes network and returns the list of @ref network_output.
     /// @param dependencies List of @ref event objects to be waited before network execution.

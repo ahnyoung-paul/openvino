@@ -32,12 +32,14 @@ ParamsKey CountNonzeroKernelRef::GetSupportedKey() const {
     k.EnableDynamicShapesSupport();
     return k;
 }
-
+#define USE_ORIGINAL
 CommonDispatchData CountNonzeroKernelRef::SetDefault(const count_nonzero_params& params) const {
     CommonDispatchData dispatchData;
     const auto& input = params.inputs[0];
+#ifdef USE_ORIGINAL
     auto in_layout = params.inputs[0].GetLayout();
     auto out_layout = params.outputs[0].GetLayout();
+#endif
     std::vector<std::vector<Tensor::DataChannelName>> dims_by_gws;
 
     int rank = input.Dimentions();
@@ -58,8 +60,30 @@ CommonDispatchData CountNonzeroKernelRef::SetDefault(const count_nonzero_params&
                        {Tensor::DataChannelName::FEATURE, Tensor::DataChannelName::BATCH}};
     }
 
+#ifdef USE_ORIGINAL
     dispatchData.lws =
         GetOptimalLocalWorkGroupSizes(dispatchData.gws, params.engineInfo, in_layout, out_layout, dims_by_gws);
+#else
+    dispatchData.lws = dispatchData.gws;
+#endif
+
+    // size_t sum = 1;
+    // for (auto& v : dispatchData.gws) {
+    //     sum = sum * v;
+    // }
+
+    // if (sum == 56) {
+    //     std::cout << "dispatchData.gws={";
+    //     for (auto& v : dispatchData.gws) {
+    //         std::cout << v << ",";
+    //     }
+    //     std::cout << "}" << std::endl;
+    //     std::cout << "dispatchData.lws={";
+    //     for (auto& v : dispatchData.lws) {
+    //         std::cout << v << ",";
+    //     }
+    //     std::cout << "}" << std::endl;
+    // }
 
     return dispatchData;
 }
@@ -99,7 +123,7 @@ KernelsData CountNonzeroKernelRef::GetKernelsData(const Params& params, const op
         size_t gws_mul = std::accumulate(gws.begin(), gws.end(), 1, std::multiplies<size_t>());
         size_t lws_mul = std::accumulate(lws.begin(), lws.end(), 1, std::multiplies<size_t>());
 
-        size_t buffer_size = static_cast<size_t>(std::ceil(static_cast<double>(gws_mul) / lws_mul));
+        size_t buffer_size = static_cast<size_t>(std::ceil(static_cast<double>(gws_mul) / lws_mul)) * sizeof(size_t) * 2;
         kd.internalBufferSizes.clear();
         kd.internalBufferSizes.push_back(buffer_size);
         kd.internalBufferDataType = kernel_selector::Datatype::UINT32;
@@ -135,7 +159,7 @@ KernelsData CountNonzeroKernelRef::GetKernelsData(const Params& params, const op
         size_t gws_mul = std::accumulate(gws.begin(), gws.end(), 1, std::multiplies<size_t>());
         size_t lws_mul = std::accumulate(lws.begin(), lws.end(), 1, std::multiplies<size_t>());
 
-        size_t buffer_size = static_cast<size_t>(std::ceil(static_cast<double>(gws_mul) / lws_mul));
+        size_t buffer_size = static_cast<size_t>(std::ceil(static_cast<double>(gws_mul) / lws_mul)) * sizeof(size_t) * 2;
         kd.internalBufferSizes.clear();
         kd.internalBufferSizes.push_back(buffer_size);
         kd.internalBufferDataType = kernel_selector::Datatype::UINT32;

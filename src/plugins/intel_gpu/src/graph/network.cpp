@@ -293,6 +293,9 @@ void wait_for_the_turn() {}
 #endif
 }  // namespace
 
+static bool is_checking_data = false;
+static bool is_checking_data2 = true;
+
 static uint32_t get_unique_net_id() {
     static std::atomic<uint32_t> id_gen{0};
     return ++id_gen;
@@ -996,42 +999,66 @@ void network::execute_impl(const std::vector<event::ptr>& events) {
     auto surf_lock = surfaces_lock::create(get_engine().type(), in_out_mem, get_stream());
 
     set_arguments();
-    GPU_DEBUG_GET_INSTANCE(debug_config);
-    for (auto& inst : _exec_order) {
-        GPU_DEBUG_IF(debug_config->dump_layers_path.length() > 0) {
-            const std::string layer_name = inst->id();
-            GPU_DEBUG_IF(debug_config->verbose >= 2) {
-                std::cerr << inst->id() << std::endl;
+    try {
+        std::shared_ptr<cldnn::primitive_inst> debug_ptr;
+        GPU_DEBUG_GET_INSTANCE(debug_config);
+        for (auto& inst : _exec_order) {
+            GPU_DEBUG_IF(debug_config->dump_layers_path.length() > 0) {
+                const std::string layer_name = inst->id();
+                GPU_DEBUG_IF(debug_config->verbose >= 2) {
+                    std::cerr << inst->id() << std::endl;
+                }
+
+                GPU_DEBUG_IF(debug_config->dump_layers_dst_only == 0 && debug_config->is_dumped_layer(layer_name)) {
+                    for (size_t i = 0; i < get_primitive(inst->id())->dependencies().size(); i++) {
+                        log_memory_to_file(get_primitive(inst->id())->dep_memory_ptr(i),
+                                        get_stream(),
+                                        "program" + std::to_string(get_program()->get_id()) +
+                                        "_network" + std::to_string(get_id()) +
+                                        "_" + layer_name + "_src" + std::to_string(i),
+                                        debug_config->dump_layers_raw);
+                    }
+                }
             }
 
-            GPU_DEBUG_IF(debug_config->dump_layers_dst_only == 0 && debug_config->is_dumped_layer(layer_name)) {
-                for (size_t i = 0; i < get_primitive(inst->id())->dependencies().size(); i++) {
-                    log_memory_to_file(get_primitive(inst->id())->dep_memory_ptr(i),
-                                       get_stream(),
-                                       "program" + std::to_string(get_program()->get_id()) +
-                                       "_network" + std::to_string(get_id()) +
-                                       "_" + layer_name + "_src" + std::to_string(i),
-                                       debug_config->dump_layers_raw);
+
+
+            execute_primitive(inst, events);
+            if (!is_checking_data2) {
+                if (inst->id() == "reorder:parameter:input_ids_cldnn_input_preprocess") {
+                    debug_ptr = inst;
+                }
+                if (inst->id() == "broadcast:301") {
+                    auto in_layout_str = debug_ptr->get_input_layout().to_short_string();
+                    if (in_layout_str == "i64:bfyx:1x223:nopad") {
+                        is_checking_data2 = true;
+                        debug_prims();
+                    }
+                }
+            }
+
+            GPU_DEBUG_IF(debug_config->dump_layers_path.length() > 0) {
+                get_stream().finish();
+                const std::string layer_name = inst->id();
+                GPU_DEBUG_IF(debug_config->is_dumped_layer(layer_name, inst->is_output())) {
+                    for (size_t i = 0; i < get_primitive(inst->id())->outputs_memory_count(); i++) {
+                        log_memory_to_file(get_primitive(inst->id())->output_memory_ptr(i),
+                                        get_stream(),
+                                        "program" + std::to_string(get_program()->get_id()) +
+                                        "_network" + std::to_string(get_id()) +
+                                        "_" + layer_name + "_dst" + std::to_string(i),
+                                        debug_config->dump_layers_raw);
+                    }
                 }
             }
         }
-
-        execute_primitive(inst, events);
-
-        GPU_DEBUG_IF(debug_config->dump_layers_path.length() > 0) {
-            get_stream().finish();
-            const std::string layer_name = inst->id();
-            GPU_DEBUG_IF(debug_config->is_dumped_layer(layer_name, inst->is_output())) {
-                for (size_t i = 0; i < get_primitive(inst->id())->outputs_memory_count(); i++) {
-                    log_memory_to_file(get_primitive(inst->id())->output_memory_ptr(i),
-                                       get_stream(),
-                                       "program" + std::to_string(get_program()->get_id()) +
-                                       "_network" + std::to_string(get_id()) +
-                                       "_" + layer_name + "_dst" + std::to_string(i),
-                                       debug_config->dump_layers_raw);
-                }
-            }
+    } catch (std::exception& ex) {
+        if (!is_checking_data) {
+            is_checking_data = true;
+            debug_prims();
         }
+        std::cout << "[DEBUG][Exception] error : " << ex.what() << std::endl;
+        throw ex;
     }
 
     // Store events only in case of OOO queue or enabled Profiling
@@ -1078,6 +1105,91 @@ void network::execute_impl(const std::vector<event::ptr>& events) {
     // provide proper event to execution. Flushing pipeline should prevent this kind of issues.
     // In scenarios with a big number of very small networks it can provide performance drop.
     get_stream().flush();
+}
+
+void network::debug_prims() {
+    const std::vector<primitive_id> tracking_ids{
+        "parameter:input_ids",
+        "reorder:parameter:input_ids_cldnn_input_preprocess",
+        "shapeof:289",
+        "gather:290",
+        "broadcast:292",
+        "nonzero:293_count",
+        "nonzero:293",
+        "broadcast:301"};
+    std::unordered_map<primitive_id, bool> check_map;
+    for (auto tid : tracking_ids) {
+        check_map.emplace(tid, false);
+    }
+
+    auto has_matched_tid = [&tracking_ids, &check_map](const primitive_id id)->bool {
+        for (auto tid : tracking_ids) {
+            if (tid == id && !check_map[tid]) {
+                check_map[tid] = true;
+                return true;
+            }
+        }
+        return false;
+    };
+
+    std::cout << "<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<" << std::endl;
+    for (auto tid : tracking_ids) {
+        for (auto inst : _exec_order) {
+            if (has_matched_tid(inst->id())) {
+                std::string p_str = "{}";
+                {
+                    std::stringstream ss;
+                    ss << "{";
+                    for (auto pid : inst->get_node().get_dependencies_ids()) {
+                        ss << pid << ",";
+                    }
+                    ss << "}";
+                    p_str = ss.str();
+                }
+
+                std::string in_layout_str = "[";
+                {
+                    auto& node = inst->get_node();
+                    if (!node.get_dependencies_ids().empty()) {
+                        for (size_t idx = 0; idx < inst->get_input_layout_count(); idx++) {
+                            auto in_layout = inst->get_input_layout(idx);
+                            in_layout_str += in_layout.to_short_string() + ",";
+                        }
+                    }
+                }
+                in_layout_str += "]";
+
+                std::string out_layout_str = "[";
+                {
+                    for (size_t idx = 0; idx < inst->get_output_layout_count(); idx++) {
+                        auto out_layout = inst->get_output_layout(idx);
+                        out_layout_str += out_layout.to_short_string() + ",";
+                    }
+                }
+                out_layout_str += "]";
+                std::cout << "[DEBUG] " << inst->id() << " :: " << p_str;
+                std::cout << " :: " << in_layout_str << " :: " << out_layout_str  << std::endl;
+
+                if (inst->id() == "nonzero:293_count" || inst->id() == "broadcast:292") {
+                    for (size_t i = 0; i < get_primitive(inst->id())->outputs_memory_count(); i++) {
+                        auto mem_ptr = get_primitive(inst->id())->output_memory_ptr(i);
+                        auto&& size = mem_ptr->get_layout().get_tensor();
+                        mem_lock<int32_t, mem_lock_type::read> lock(mem_ptr, get_stream());
+                        auto mem_data = lock.data();
+                        std::cout << inst->id() << "[" << size.count() << "] {";
+                        for (size_t idx = 0; idx < size.count(); idx++) {
+                            std::cout << std::fixed << mem_data[idx] << ",";
+                        }
+                        std::cout << "}" << std::endl;
+                    }
+                }
+                if (inst->id() == "nonzero:293_count") {
+                    std::cout << inst->id() << inst->get_impl()->debug() << std::endl;
+                }
+            }
+        }
+    }
+    std::cout << "<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<" << std::endl;
 }
 
 std::vector<primitive_id> network::get_input_ids() const {
