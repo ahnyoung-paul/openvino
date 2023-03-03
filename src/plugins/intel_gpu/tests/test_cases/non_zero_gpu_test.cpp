@@ -6,6 +6,9 @@
 
 #include <intel_gpu/primitives/input_layout.hpp>
 #include <intel_gpu/primitives/non_zero.hpp>
+#include <intel_gpu/primitives/gather.hpp>
+#include <intel_gpu/primitives/shape_of.hpp>
+#include <intel_gpu/primitives/broadcast.hpp>
 #include "ngraph/runtime/reference/non_zero.hpp"
 
 #include "non_zero_inst.h"
@@ -16,7 +19,7 @@ using namespace cldnn;
 using namespace ::tests;
 
 template<typename T>
-void test_count_non_zero(layout in_layout, std::vector<T> in_data) {
+inline void test_count_non_zero(layout in_layout, std::vector<T> in_data) {
     auto& engine = get_test_engine();
     auto input_mem = engine.allocate_memory(in_layout);
     auto count_non_zero = ngraph::runtime::reference::non_zero_get_count<T>(in_data.data(), in_layout.get_shape());
@@ -51,6 +54,90 @@ TEST(test_count_non_zero, 5d_fp16_1_3_2_1_2) {
         0.0f, 0.0f, 0.1f, 0.9f, 0.10f, 0.001f
     };
     test_count_non_zero<FLOAT16>(layout{ov::PartialShape{1, 3, 2, 1, 2}, data_types::f16, format::bfzyx}, in_data);
+}
+
+class test_nonzero_count {
+public:
+    void create_network(cldnn::engine& engine, cldnn::topology& topology, ExecutionConfig& config) {
+        _network = std::make_shared<cldnn::network>(engine, topology, config);
+    }
+
+    std::map<primitive_id, network_output> execute(memory::ptr input_mem) {
+        _network->set_input_data("parameter:input_ids", input_mem);
+        return _network->execute();
+    }
+
+private:
+    network::ptr _network;
+};
+
+TEST(test_count_non_zero, debug_issue) {
+    auto& engine = get_test_engine();
+    // auto in_dyn_layout = layout(ov::PartialShape::dynamic(2), data_types::i64, format::bfyx);
+    auto const_mem = engine.allocate_memory({ {1}, data_types::i32, format::bfyx});
+    set_values(const_mem, {1});
+    ov::Shape output_shape = {1};
+    auto const_mem2 = engine.allocate_memory({ {1}, data_types::i32, format::bfyx});
+    set_values(const_mem2, {1});
+
+#if 1
+    topology topology;
+    topology.add(input_layout("parameter:input_ids", layout(ov::PartialShape::dynamic(2), data_types::i64, format::bfyx)));
+    topology.add(reorder("reorder:parameter:input_ids_cldnn_input_preprocess", input_info("parameter:input_ids"), format::bfyx, data_types::i32));
+    topology.add(shape_of("shapeof:289", input_info("reorder:parameter:input_ids_cldnn_input_preprocess"), data_types::i32));
+    topology.add(data("constant:Constant_22367", const_mem));
+    topology.add(gather("gather:290", input_info("shapeof:289"), input_info("constant:Constant_22367"), 0, output_shape));
+    topology.add(data("constant:Constant_298", const_mem2));
+    topology.add(broadcast("broadcast:292", input_info("constant:Constant_298"), input_info("gather:290"), {}, ov::op::BroadcastType::NUMPY ));
+    topology.add(count_nonzero("nonzero:293_count", input_info("broadcast:292")));
+#else
+    topology topology;
+    topology.add(input_layout("parameter:input_ids", layout(ov::PartialShape::dynamic(2), data_types::i64, format::bfyx)));
+    topology.add(reorder("reorder:parameter:input_ids_cldnn_input_preprocess", input_info("parameter:input_ids"), format::bfyx, data_types::i32));
+    topology.add(shape_of("shapeof:289", input_info("reorder:parameter:input_ids_cldnn_input_preprocess"), data_types::i32));
+    topology.add(data("constant:Constant_22367", const_mem));
+    topology.add(gather("gather:290", input_info("shapeof:289"), input_info("constant:Constant_22367"), 0, output_shape));
+    topology.add(data("constant:Constant_298", const_mem2));
+    topology.add(broadcast("broadcast:292", input_info("constant:Constant_298"), input_info("gather:290"), {}, ov::op::BroadcastType::NUMPY ));
+    topology.add(count_nonzero("nonzero:293_count", input_info("broadcast:292")));
+#endif
+    ExecutionConfig config;
+    config.set_property(ov::intel_gpu::allow_new_shape_infer(true));
+
+    std::vector<std::thread> tasks;
+    const size_t num_tasks = 2;
+    const size_t num_iters = 1000;
+    for (size_t idx = 0; idx < num_tasks; idx++) {
+        tasks.push_back(std::move(std::thread([&engine, &topology, &config, &num_iters]() {
+            test_nonzero_count _test;
+            _test.create_network(engine, topology, config);
+            const size_t base_len = 141;
+            std::vector<int32_t> in_data;
+            for (size_t tid = 0; tid < num_iters; tid++) {
+                const size_t test_len = base_len + tid;
+                ov::PartialShape p_shape  = { 1, static_cast<long int>(test_len) };
+                const auto shape_size = ov::shape_size(p_shape.get_shape());
+                in_data.clear();
+                for (size_t did = 0; did < shape_size; did++) {
+                    in_data.push_back(1);
+                }
+                auto in_layout = layout(p_shape, data_types::i64, format::bfyx);
+                auto count_non_zero = ngraph::runtime::reference::non_zero_get_count<int32_t>(in_data.data(), in_layout.get_shape());
+                auto input_mem = engine.allocate_memory(in_layout);
+                set_values(input_mem, in_data);
+                auto outputs = _test.execute(input_mem);
+
+                ASSERT_EQ(outputs.size(), size_t(1));
+                auto output = outputs.at("nonzero:293_count").get_memory();
+                cldnn::mem_lock<int32_t> output_ptr(output, get_test_stream());
+                ASSERT_EQ(count_non_zero, output_ptr[0]);
+            }
+        })));
+    }
+
+    for (size_t idx = 0; idx < num_tasks; idx++) {
+        tasks[idx].join();
+    }
 }
 
 template<typename T>

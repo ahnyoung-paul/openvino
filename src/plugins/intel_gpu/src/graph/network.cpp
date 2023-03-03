@@ -5,6 +5,7 @@
 #include "intel_gpu/primitives/data.hpp"
 #include "intel_gpu/primitives/mutable_data.hpp"
 #include "intel_gpu/primitives/input_layout.hpp"
+#include "intel_gpu/primitives/broadcast.hpp"
 
 #include "intel_gpu/runtime/error_handler.hpp"
 #include "intel_gpu/runtime/memory.hpp"
@@ -32,6 +33,7 @@
 #include "intel_gpu/runtime/itt.hpp"
 #include "kernels_cache.hpp"
 #include "compilation_context.hpp"
+#include "gather_inst.h"
 
 #include <algorithm>
 #include <string>
@@ -294,7 +296,6 @@ void wait_for_the_turn() {}
 }  // namespace
 
 static bool is_checking_data = false;
-static bool is_checking_data2 = true;
 
 static uint32_t get_unique_net_id() {
     static std::atomic<uint32_t> id_gen{0};
@@ -1024,14 +1025,14 @@ void network::execute_impl(const std::vector<event::ptr>& events) {
 
 
             execute_primitive(inst, events);
-            if (!is_checking_data2) {
+            if (is_checking_data2 < 3) {
                 if (inst->id() == "reorder:parameter:input_ids_cldnn_input_preprocess") {
                     debug_ptr = inst;
                 }
                 if (inst->id() == "broadcast:301") {
                     auto in_layout_str = debug_ptr->get_input_layout().to_short_string();
-                    if (in_layout_str == "i64:bfyx:1x223:nopad") {
-                        is_checking_data2 = true;
+                    if (in_layout_str == "i64:bfyx:1x171:nopad" || in_layout_str == "i64:bfyx:1x167:nopad" || in_layout_str == "i64:bfyx:1x140:nopad") {
+                        is_checking_data2++;
                         debug_prims();
                     }
                 }
@@ -1111,6 +1112,7 @@ void network::debug_prims() {
     const std::vector<primitive_id> tracking_ids{
         "parameter:input_ids",
         "reorder:parameter:input_ids_cldnn_input_preprocess",
+        "constant:Constant_22367",
         "shapeof:289",
         "gather:290",
         "broadcast:292",
@@ -1170,21 +1172,92 @@ void network::debug_prims() {
                 std::cout << "[DEBUG] " << inst->id() << " :: " << p_str;
                 std::cout << " :: " << in_layout_str << " :: " << out_layout_str  << std::endl;
 
-                if (inst->id() == "nonzero:293_count" || inst->id() == "broadcast:292") {
+                if (inst->id() == "nonzero:293_count" || inst->id() == "broadcast:292" || inst->id() == "constant:Constant_22367") {
                     for (size_t i = 0; i < get_primitive(inst->id())->outputs_memory_count(); i++) {
                         auto mem_ptr = get_primitive(inst->id())->output_memory_ptr(i);
                         auto&& size = mem_ptr->get_layout().get_tensor();
                         mem_lock<int32_t, mem_lock_type::read> lock(mem_ptr, get_stream());
                         auto mem_data = lock.data();
-                        std::cout << inst->id() << "[" << size.count() << "] {";
+                        std::cout << "** " << inst->id() << "[" << size.count() << "] {";
                         for (size_t idx = 0; idx < size.count(); idx++) {
                             std::cout << std::fixed << mem_data[idx] << ",";
                         }
                         std::cout << "}" << std::endl;
                     }
                 }
+                if (inst->get_node().is_type<broadcast>()) {
+                    auto broadcast_prim = inst->get_node().as<broadcast>().get_primitive();
+                    auto axes_vec = broadcast_prim->axes_mapping.to_vector();
+                    std::string axes_vec_str = axes_vec.empty() ? "" : std::accumulate(axes_vec.begin() + 1,
+                            axes_vec.end(), std::to_string(axes_vec[0]), [](const std::string& a, int64_t b) {
+                                return a + "," + std::to_string(b);
+                            });
+                    std::cout << "** " << inst->id() << " axes {" << axes_vec_str << "}, broadcast_prim {" << broadcast_prim->broadcast_mode.m_axis;
+                    std::cout << ", " << broadcast_prim->broadcast_mode.m_type << "}" << std::endl;
+                }
+                if (inst->id() == "broadcast:292") {
+                    auto prim = get_primitive(inst->id());
+                    for (auto p_prim : prim->dependencies()) {
+                        if (p_prim.first->id() == "constant:Constant_298") {
+                            std::string out_layout_str = "[";
+                            {
+                                for (size_t idx = 0; idx < p_prim.first->get_output_layout_count(); idx++) {
+                                    auto out_layout = p_prim.first->get_output_layout(idx);
+                                    out_layout_str += out_layout.to_short_string() + ",";
+                                }
+                            }
+                            out_layout_str += "]";
+                            std::cout << "** " << p_prim.first->id() << " ; " << p_prim.first->desc()->type_string() << " ; " << out_layout_str << " ; ";
+                            for (size_t i = 0; i < p_prim.first->outputs_memory_count(); i++) {
+                                auto mem_ptr = p_prim.first->output_memory_ptr(i);
+                                auto&& size = mem_ptr->get_layout().get_tensor();
+                                mem_lock<int32_t, mem_lock_type::read> lock(mem_ptr, get_stream());
+                                auto mem_data = lock.data();
+                                std::cout << "[" << size.count() << "] {";
+                                for (size_t idx = 0; idx < size.count(); idx++) {
+                                    std::cout << std::fixed << mem_data[idx] << ",";
+                                }
+                                std::cout << "}" << std::endl;
+                            }
+                        }
+                    }
+                }
                 if (inst->id() == "nonzero:293_count") {
-                    std::cout << inst->id() << inst->get_impl()->debug() << std::endl;
+                    std::cout << "** " << inst->id() << inst->get_impl()->debug() << std::endl;
+                }
+                if (inst->id() == "gather:290") {
+                    auto gather_prim = inst->get_node().as<gather>().get_primitive();
+                    std::cout << "** " << inst->id() << " axis(" << gather_prim->axis << "), batch_dim(" << gather_prim->batch_dim;
+                    std::cout << "), support_neg_ind(" << gather_prim->support_neg_ind << ") output_shape(";
+                    for (auto& v : gather_prim->output_shape) {
+                        std::cout << v << ",";
+                    }
+                    std::cout <<")" << std::endl;
+                    auto prim = get_primitive(inst->id());
+                    for (auto p_prim : prim->dependencies()) {
+                        if (p_prim.first->id() == "constant:Constant_22367") {
+                            std::string out_layout_str = "[";
+                            {
+                                for (size_t idx = 0; idx < p_prim.first->get_output_layout_count(); idx++) {
+                                    auto out_layout = p_prim.first->get_output_layout(idx);
+                                    out_layout_str += out_layout.to_short_string() + ",";
+                                }
+                            }
+                            out_layout_str += "]";
+                            std::cout << "** " << p_prim.first->id() << " ; " << p_prim.first->desc()->type_string() << " ; " << out_layout_str << " ; ";
+                            for (size_t i = 0; i < p_prim.first->outputs_memory_count(); i++) {
+                                auto mem_ptr = p_prim.first->output_memory_ptr(i);
+                                auto&& size = mem_ptr->get_layout().get_tensor();
+                                mem_lock<int32_t, mem_lock_type::read> lock(mem_ptr, get_stream());
+                                auto mem_data = lock.data();
+                                std::cout << "[" << size.count() << "] {";
+                                for (size_t idx = 0; idx < size.count(); idx++) {
+                                    std::cout << std::fixed << mem_data[idx] << ",";
+                                }
+                                std::cout << "}" << std::endl;
+                            }
+                        }
+                    }
                 }
             }
         }

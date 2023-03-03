@@ -59,7 +59,7 @@ KERNEL (count_nonzero_ref)(
     work_group_barrier(CLK_GLOBAL_MEM_FENCE | CLK_LOCAL_MEM_FENCE);
     if (ldim0 == 0 && ldim1 == 0 && ldim2 == 0) {
         tmp_buffer[group_id] = count;
-        // printf("** nonzero_count[Step02][%3d] : tmp_buffer[%3d] = %3d(%3d) - subgroup_size(%3d)\n", get_global_size(2), group_id, tmp_buffer[group_id], local_count, get_sub_group_size());
+        printf("** nonzero_count[Step02][%3d] : tmp_buffer[%3d] = %3d(%3d) - subgroup_size(%3d)\n", get_global_size(2), group_id, tmp_buffer[group_id], local_count, get_sub_group_size());
     }
 
     work_group_barrier(CLK_GLOBAL_MEM_FENCE | CLK_LOCAL_MEM_FENCE);
@@ -68,8 +68,8 @@ KERNEL (count_nonzero_ref)(
         uint group_size = (uint)get_num_groups(2);
         for (uint gid = 0; gid < group_size; gid++ ) {
             output[0] = output[0] + tmp_buffer[gid];
-            // const uint cgid = gid;
-            // printf("nonzero_count - GlobalWG[%3d,%3d,%3d],LocalWG[%3d,%3d,%3d],group_size[%3d],get_global_size(%3d)tem_buffer[%3d](%3d),output[%3d]\n",gdim0, gdim1, gdim2, ldim0, ldim1, ldim2, group_size, get_global_size(2), cgid, tmp_buffer[cgid], output[0]);
+            const uint cgid = gid;
+            printf("nonzero_count - GlobalWG[%3d,%3d,%3d],LocalWG[%3d,%3d,%3d],group_size[%3d],get_global_size(%3d)tem_buffer[%3d](%3d),output[%3d]\n",gdim0, gdim1, gdim2, ldim0, ldim1, ldim2, group_size, get_global_size(2), cgid, tmp_buffer[cgid], output[0]);
         }
     }
 

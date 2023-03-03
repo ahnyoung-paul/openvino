@@ -185,6 +185,8 @@ public:
     void execute_impl(const std::vector<event::ptr>& events);
     void debug_prims();
 
+    size_t is_checking_data2 = 0;
+
     /// @brief Executes network and returns the list of @ref network_output.
     /// @param dependencies List of @ref event objects to be waited before network execution.
     /// @note User should call set_input_data() for every @ref input_layout defined in source @ref topology
