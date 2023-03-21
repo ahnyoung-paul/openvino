@@ -53,6 +53,7 @@ struct kernel_impl_params {
     size_t primary_input_idx = 0;
 
     memory::ptr reordered_weights = nullptr;
+    optional_value<size_t> cached_hash = optional_value<size_t>();
 
     kernel_impl_params() : prog(nullptr), desc(nullptr), unique_id(0) {}
 
