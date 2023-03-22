@@ -8,6 +8,7 @@
 #include "intel_gpu/graph/serialization/binary_buffer.hpp"
 #include "intel_gpu/graph/serialization/cl_kernel_data_serializer.hpp"
 #include "intel_gpu/graph/serialization/helpers.hpp"
+#include "intel_gpu/graph/serialization/pair_serializer.hpp"
 #include "intel_gpu/graph/serialization/set_serializer.hpp"
 #include "intel_gpu/graph/serialization/string_serializer.hpp"
 #include "intel_gpu/graph/serialization/vector_serializer.hpp"
@@ -32,9 +33,10 @@ For example, all gpu convolution implementations should derive from typed_primit
 template <class PType>
 struct typed_primitive_impl_ocl : public typed_primitive_impl<PType> {
     kernel_selector::kernel_data _kernel_data;
+    std::vector<cached_kernel_id_type> _cached_kernel_ids;
     std::vector<kernel::ptr> _kernels;
 
-    typed_primitive_impl_ocl() :  _kernel_data({}), _kernels({}) {
+    typed_primitive_impl_ocl() :  _kernel_data({}), _cached_kernel_ids({}), _kernels({}) {
         _kernel_data.weightsReorderParams.engine = kernel_selector::generic_kernel_params::Engine::NONE;
         _kernel_data.weightsReorderParams.cpuKernel = nullptr;
         _kernel_data.weightsReorderParams.clKernel = nullptr;
@@ -43,6 +45,7 @@ struct typed_primitive_impl_ocl : public typed_primitive_impl<PType> {
     typed_primitive_impl_ocl(const typed_primitive_impl_ocl<PType>& other)
     : typed_primitive_impl<PType>(other._weights_reorder_params, other._kernel_name, other._is_dynamic)
     , _kernel_data(other._kernel_data)
+    , _cached_kernel_ids(other._cached_kernel_ids)
     , _kernels({}) {
         _kernels.reserve(other._kernels.size());
         for (size_t k = 0; k < other._kernels.size(); ++k) {
@@ -66,18 +69,19 @@ struct typed_primitive_impl_ocl : public typed_primitive_impl<PType> {
 
     // Cache blob format:
     //     [ kernel_selector::kernel_data ]
-    //     [ kernel_id ]
-    //     [ kernel_arguments ]
+    //     [ kernel_ids ]
     void save(BinaryOutputBuffer& ob) const override {
         ob << make_data(&_kernel_data.internalBufferDataType, sizeof(kernel_selector::Datatype));
         ob << _kernel_data.internalBufferSizes;
         ob << _kernel_data.kernels;
+        ob << kernels_cache::get_cached_kernel_ids(_kernels);
     }
 
     void load(BinaryInputBuffer& ib) override {
         ib >> make_data(&_kernel_data.internalBufferDataType, sizeof(kernel_selector::Datatype));
         ib >> _kernel_data.internalBufferSizes;
         ib >> _kernel_data.kernels;
+        ib >> _cached_kernel_ids;
     }
 
     template<typename ImplType>
@@ -139,6 +143,18 @@ protected:
         if (!_kernel_data.kernels.empty()) {
             auto compiled_kernels = kernels_cache.get_kernels(params);
             _kernels.insert(_kernels.begin(), compiled_kernels.begin(), compiled_kernels.end());
+        }
+    }
+
+    void init_by_cached_kernels(const kernels_cache& kernels_cache) override {
+        if (is_cpu()) {
+            return;
+        }
+        _kernels.clear();
+
+        _kernels.reserve(_cached_kernel_ids.size());
+        for (size_t k = 0; k < _cached_kernel_ids.size(); ++k) {
+            _kernels.emplace_back(kernels_cache.get_kernel_from_cached_kernels(_cached_kernel_ids[k]));
         }
     }
 
@@ -248,6 +264,10 @@ protected:
 
         bool group_events = (all_events.size() > 1);
         return aggregate_events(all_events, stream, group_events);
+    }
+
+    void set_cached_kernel_ids(std::vector<cached_kernel_id_type> cached_kernel_ids) override {
+        _cached_kernel_ids = cached_kernel_ids;
     }
 
     std::vector<std::shared_ptr<cldnn::kernel_string>> get_kernels_source() override {

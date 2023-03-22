@@ -518,7 +518,7 @@ void network::save(cldnn::BinaryOutputBuffer& ob) {
     kernels_cache kernels_cache(get_engine(), _config, 0);
     for (const auto& p_inst : _exec_order) {
         if (p_inst->get_impl() != nullptr) {
-            kernels_cache.add_kernels(*p_inst->get_kernel_impl_params(), p_inst->get_impl()->get_kernels());
+            kernels_cache.add_to_cached_kernels(p_inst->get_impl()->get_kernels());
         }
     }
     ob << kernels_cache;
@@ -1056,8 +1056,8 @@ void network::execute_impl(const std::vector<event::ptr>& events) {
                 for (size_t i = 0; i < get_primitive(inst->id())->dependencies().size(); i++) {
                     log_memory_to_file(get_primitive(inst->id())->dep_memory_ptr(i),
                                        get_stream(),
-                                       "program" + std::to_string(get_program()->get_id()) +
-                                       "_network" + std::to_string(get_id()) +
+                                    //    "program" + std::to_string(get_program()->get_id()) +
+                                       "program1_network" + std::to_string(get_id()) +
                                        "_" + layer_name + "_src" + std::to_string(i),
                                        debug_config->dump_layers_raw);
                 }
@@ -1073,8 +1073,8 @@ void network::execute_impl(const std::vector<event::ptr>& events) {
                 for (size_t i = 0; i < get_primitive(inst->id())->outputs_memory_count(); i++) {
                     log_memory_to_file(get_primitive(inst->id())->output_memory_ptr(i),
                                        get_stream(),
-                                       "program" + std::to_string(get_program()->get_id()) +
-                                       "_network" + std::to_string(get_id()) +
+                                    //    "program" + std::to_string(get_program()->get_id()) +
+                                       "program1_network" + std::to_string(get_id()) +
                                        "_" + layer_name + "_dst" + std::to_string(i),
                                        debug_config->dump_layers_raw);
                 }
