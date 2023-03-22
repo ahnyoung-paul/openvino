@@ -47,7 +47,7 @@ struct fused_primitive_desc {
         if (dep_start_idx != rhs.dep_start_idx)
             return false;
 
-        return (desc != nullptr && rhs.desc != nullptr) ? (*desc == *rhs.desc) : true;
+        return *desc == *rhs.desc;
     }
 
     bool operator!=(const fused_primitive_desc& rhs) const { return !(*this == rhs); }

@@ -65,7 +65,6 @@ struct primitive_impl {
     virtual std::vector<std::shared_ptr<cldnn::kernel_string>> get_kernels_source() { return {}; }
     virtual void reset_kernels_source() {}
     virtual std::vector<kernel::ptr> get_kernels() const { return {}; }
-    virtual void set_cached_kernel_ids(std::vector<cached_kernel_id_type> cached_kernel_id) {}
     virtual void save(cldnn::BinaryOutputBuffer& ob) const {}
     virtual void load(cldnn::BinaryInputBuffer& ib) {}
 
@@ -139,7 +138,6 @@ public:
 
     // return pointer to const to prevent arbitrary 'execute' call -> use primitive_inst.execute() instead
     const primitive_impl* get_impl() const { return _impl.get(); }
-    const kernel_impl_params* get_kernel_impl_params() const { return _impl_params.get(); }
 
     memory& input_memory(size_t index = 0) const {
         if (index >= inputs_memory_count())

@@ -15,9 +15,6 @@
 namespace cldnn {
 
 size_t kernel_impl_params::hash() const {
-    if (cached_hash.has_value())
-        return cached_hash.value();
-
     size_t seed = 0;
     if (desc != nullptr)
         seed = desc->hash();
@@ -69,7 +66,6 @@ bool kernel_impl_params::operator==(const kernel_impl_params& rhs) const {
 
 void kernel_impl_params::save(BinaryOutputBuffer& ob) const {
     ob << desc;
-    ob << hash();
     ob << has_runtime_layouts;
     ob << unique_id;
     ob << input_layouts;
@@ -115,10 +111,6 @@ void kernel_impl_params::save(BinaryOutputBuffer& ob) const {
     }
 
     ob << fused_desc.size();
-    for (size_t i = 0; i < fused_desc.size(); ++i) {
-        ob << fused_desc[i].total_num_deps;
-        ob << fused_desc[i].dep_start_idx;
-    }
 #ifdef ENABLE_ONEDNN_FOR_GPU
     size_t num_fused_prims = fused_desc_onednn.size();
     ob << num_fused_prims;
@@ -132,9 +124,6 @@ void kernel_impl_params::save(BinaryOutputBuffer& ob) const {
 void kernel_impl_params::load(BinaryInputBuffer& ib) {
     prog = nullptr;
     ib >> desc;
-    size_t _cached_hash;
-    ib >> _cached_hash;
-    cached_hash = _cached_hash;
     ib >> has_runtime_layouts;
     ib >> unique_id;
     ib >> input_layouts;
@@ -186,11 +175,8 @@ void kernel_impl_params::load(BinaryInputBuffer& ib) {
         // Fake fused_desc just for has_fused_primitives()
         size_t num_fused_desc;
         ib >> num_fused_desc;
-        for (size_t i = 0; i < num_fused_desc; ++i) {
-            auto new_fused_desc = fused_primitive_desc(nullptr);
-            ib >> new_fused_desc.total_num_deps;
-            ib >> new_fused_desc.dep_start_idx;
-            fused_desc.emplace_back(new_fused_desc);
+        if (num_fused_desc > 0) {
+            fused_desc.emplace_back(cldnn::fused_primitive_desc(nullptr));
         }
     }
 #ifdef ENABLE_ONEDNN_FOR_GPU

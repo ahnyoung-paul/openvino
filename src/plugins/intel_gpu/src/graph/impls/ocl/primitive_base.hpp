@@ -266,10 +266,6 @@ protected:
         return aggregate_events(all_events, stream, group_events);
     }
 
-    void set_cached_kernel_ids(std::vector<cached_kernel_id_type> cached_kernel_ids) override {
-        _cached_kernel_ids = cached_kernel_ids;
-    }
-
     std::vector<std::shared_ptr<cldnn::kernel_string>> get_kernels_source() override {
         std::vector<std::shared_ptr<cldnn::kernel_string>> kernel_strings;
         for (size_t i = 0; i < _kernel_data.kernels.size(); ++i) {
