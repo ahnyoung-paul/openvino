@@ -33,7 +33,7 @@ For example, all gpu convolution implementations should derive from typed_primit
 template <class PType>
 struct typed_primitive_impl_ocl : public typed_primitive_impl<PType> {
     kernel_selector::kernel_data _kernel_data;
-    std::vector<cached_kernel_id_type> _cached_kernel_ids;
+    std::vector<std::string> _cached_kernel_ids;
     std::vector<kernel::ptr> _kernels;
 
     typed_primitive_impl_ocl() :  _kernel_data({}), _cached_kernel_ids({}), _kernels({}) {
@@ -74,7 +74,8 @@ struct typed_primitive_impl_ocl : public typed_primitive_impl<PType> {
         ob << make_data(&_kernel_data.internalBufferDataType, sizeof(kernel_selector::Datatype));
         ob << _kernel_data.internalBufferSizes;
         ob << _kernel_data.kernels;
-        ob << kernels_cache::get_cached_kernel_ids(_kernels);
+        const kernels_cache* _kernels_cache = reinterpret_cast<kernels_cache*>(ob.getKernelsCache());
+        ob << _kernels_cache->get_cached_kernel_ids(_kernels);
     }
 
     void load(BinaryInputBuffer& ib) override {

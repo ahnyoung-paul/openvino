@@ -15,7 +15,7 @@ struct generic_layer_impl : typed_primitive_impl<generic_layer> {
 
     kernel_selector::cl_kernel_data _cl_kernel_data;
     std::vector<kernel::ptr> _kernels;
-    cached_kernel_id_type _cached_kernel_id;
+    std::string _cached_kernel_id;
 
     DECLARE_OBJECT_TYPE_SERIALIZATION
 
@@ -50,7 +50,8 @@ struct generic_layer_impl : typed_primitive_impl<generic_layer> {
 
     void save(BinaryOutputBuffer& ob) const override {
         ob <<_cl_kernel_data;
-        ob << kernels_cache::get_cached_kernel_id(_kernels[0]);
+        const kernels_cache* _kernels_cache = reinterpret_cast<kernels_cache*>(ob.getKernelsCache());
+        ob << _kernels_cache->get_cached_kernel_id(_kernels[0]);
     }
 
     void load(BinaryInputBuffer& ib) override {

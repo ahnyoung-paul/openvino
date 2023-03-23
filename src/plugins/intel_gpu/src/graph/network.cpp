@@ -522,6 +522,7 @@ void network::save(cldnn::BinaryOutputBuffer& ob) {
         }
     }
     ob << kernels_cache;
+    ob.setKernelsCache(&kernels_cache);
 
     int num_data_nodes = 0;
     for (const auto& p_inst : _primitives) {

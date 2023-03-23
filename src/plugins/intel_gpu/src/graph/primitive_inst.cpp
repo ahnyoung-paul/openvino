@@ -1060,7 +1060,7 @@ static primitive_id find_dep_by_mem(const cldnn::primitive_inst* p_inst, memory&
 //     [ intermediate memory information ]
 void primitive_inst::save(cldnn::BinaryOutputBuffer& ob) const {
     _impl_params->save(ob);
-    ob.setKernlImplParams(_impl_params.get());
+    ob.setKernelImplParams(_impl_params.get());
 
     ob << _node_output_layout;
     ob << has_mutable_input();
@@ -1150,7 +1150,7 @@ int32_t primitive_inst::get_index_in_deps(memory::cptr arg) const {
 
 void primitive_inst::load(cldnn::BinaryInputBuffer& ib) {
     _impl_params->load(ib);
-    ib.setKernlImplParams(_impl_params.get());
+    ib.setKernelImplParams(_impl_params.get());
 
     ib >> _node_output_layout;
     ib >> _has_mutable_input;

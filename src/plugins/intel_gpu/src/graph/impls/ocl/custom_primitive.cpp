@@ -28,7 +28,7 @@ struct custom_gpu_primitive_impl : typed_primitive_impl<custom_gpu_primitive> {
 
     std::shared_ptr<kernel_selector::cl_kernel_data> cl_kernel;
     std::vector<kernel::ptr> _kernels;
-    cached_kernel_id_type _cached_kernel_id;
+    std::string _cached_kernel_id;
 
     std::unique_ptr<primitive_impl> clone() const override {
         return make_unique<custom_gpu_primitive_impl>(*this);
@@ -93,7 +93,8 @@ struct custom_gpu_primitive_impl : typed_primitive_impl<custom_gpu_primitive> {
 
     void save(BinaryOutputBuffer& ob) const override {
         ob << *cl_kernel;
-        ob << kernels_cache::get_cached_kernel_id(_kernels[0]);
+        const kernels_cache* _kernels_cache = reinterpret_cast<kernels_cache*>(ob.getKernelsCache());
+        ob << _kernels_cache->get_cached_kernel_id(_kernels[0]);
     }
 
     void load(BinaryInputBuffer& ib) override {

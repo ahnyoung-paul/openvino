@@ -206,6 +206,7 @@ public:
     void rebuild_exec_deps(
         std::unordered_map<primitive_id, std::shared_ptr<primitive_inst>> const& primitives);
     std::string get_implementation_name() const;
+    void set_cached_kernel_ids(kernels_cache& kernels_cache);
 
     void add_profiling_data(instrumentation::pipeline_stage stage, bool cache_hit, int64_t time);
     const std::unordered_map<size_t, std::tuple<int64_t, size_t>>& get_profiling_data() const { return _profiling_data; }
