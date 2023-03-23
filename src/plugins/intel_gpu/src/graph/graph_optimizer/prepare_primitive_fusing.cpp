@@ -54,6 +54,7 @@
 using namespace cldnn;
 
 void prepare_primitive_fusing::run(program& p) {
+    auto prof = p.get_profile("****prepare_primitive_fusing");
     fuse_reorders(p);
     remove_redundant_reshape(p);
     fuse_sigmoid_mul_to_swish(p);

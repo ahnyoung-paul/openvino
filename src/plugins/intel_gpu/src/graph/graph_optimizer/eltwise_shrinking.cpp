@@ -9,6 +9,7 @@
 using namespace cldnn;
 
 void eltwise_shrinking::run(program& p) {
+    auto prof = p.get_profile("****eltwise_shrinking");
     std::vector<program_node*> convs_to_shrink;
 
     for (auto& node : p.get_processing_order()) {
