@@ -15,19 +15,29 @@ void build_implementations::run(program& p) {
         return;
     }
 
+
     auto& cache = p.get_kernels_cache();
-    for (auto& n : p.get_processing_order()) {
-        if (auto impl = n->get_selected_impl()) {
-            auto params = n->get_kernel_impl_params();
-            cache.add_kernels_source(*params, impl->get_kernels_source());
+    {
+        auto prof = p.get_profile("build_kernels - add_kernels_source");
+        for (auto& n : p.get_processing_order()) {
+            if (auto impl = n->get_selected_impl()) {
+                auto params = n->get_kernel_impl_params();
+                cache.add_kernels_source(*params, impl->get_kernels_source());
+            }
         }
     }
-    cache.build_all();
-    for (auto& n : p.get_processing_order()) {
-        if (auto impl = n->get_selected_impl()) {
-            auto params = n->get_kernel_impl_params();
-            impl->init_kernels(cache, *params);
-            impl->reset_kernels_source();
+    {
+        auto prof = p.get_profile("build_kernels - build_all");
+        cache.build_all();
+    }
+    {
+        auto prof = p.get_profile("build_kernels - init_kernels");
+        for (auto& n : p.get_processing_order()) {
+            if (auto impl = n->get_selected_impl()) {
+                auto params = n->get_kernel_impl_params();
+                impl->init_kernels(cache, *params);
+                impl->reset_kernels_source();
+            }
         }
     }
     cache.reset();

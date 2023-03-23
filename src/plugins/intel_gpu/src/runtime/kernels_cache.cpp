@@ -157,6 +157,7 @@ void kernels_cache::get_program_source(const kernels_code& kernels_source_code, 
             all_batches->push_back(b);
         }
     }
+    num_batches = all_batches->size();
 }
 
 kernels_cache::kernels_cache(engine& engine,
@@ -243,9 +244,16 @@ void kernels_cache::build_batch(const engine& build_engine, const batch_program&
         if (precompiled_kernels.empty()) {
             cl::Program program(cl_build_engine.get_cl_context(), batch.source);
             {
+                auto _start = std::chrono::high_resolution_clock::now();
                 OV_ITT_SCOPED_TASK(ov::intel_gpu::itt::domains::intel_gpu_plugin, "KernelsCache::BuildProgram::RunCompilation");
                 if (program.build({cl_build_engine.get_cl_device()}, batch.options.c_str()) != CL_SUCCESS)
                     throw std::runtime_error("Failed in building program.");
+                auto _finish = std::chrono::high_resolution_clock::now();
+                auto _duration = std::chrono::duration_cast<std::chrono::microseconds>(_finish - _start).count();
+                {
+                    std::lock_guard<std::mutex> lock(_mutex);
+                    _time_compile += _duration;
+                }
             }
 
             if (dump_sources && dump_file.good()) {
@@ -400,31 +408,35 @@ void kernels_cache::build_all() {
         get_program_source(_kernels_code, &batches);
     }
 
-    if (_task_executor) {
-        std::exception_ptr exception;
-        std::vector<InferenceEngine::Task> tasks;
-        for (size_t idx = 0; idx < batches.size(); idx++) {
-            auto& batch = batches[idx];
-            tasks.push_back([this, &_build_engine, &batch, &exception] {
-                try {
-                    build_batch(_build_engine, batch, _kernels);
-                } catch(...) {
-                    exception = std::current_exception();
-                }
-            });
-        }
-        _task_executor->runAndWait(tasks);
-        tasks.clear();
+    {
+        auto _start = std::chrono::high_resolution_clock::now();
+        if (_task_executor) {
+            std::exception_ptr exception;
+            std::vector<InferenceEngine::Task> tasks;
+            for (size_t idx = 0; idx < batches.size(); idx++) {
+                auto& batch = batches[idx];
+                tasks.push_back([this, &_build_engine, &batch, &exception] {
+                    try {
+                        build_batch(_build_engine, batch, _kernels);
+                    } catch(...) {
+                        exception = std::current_exception();
+                    }
+                });
+            }
+            _task_executor->runAndWait(tasks);
+            tasks.clear();
 
-        if (exception) {
-            std::rethrow_exception(exception);
+            if (exception) {
+                std::rethrow_exception(exception);
+            }
+        } else {
+            for (size_t idx = 0; idx < batches.size(); idx++) {
+                build_batch(_build_engine, batches[idx], _kernels);
+            }
         }
-    } else {
-        for (size_t idx = 0; idx < batches.size(); idx++) {
-            build_batch(_build_engine, batches[idx], _kernels);
-        }
+        auto _finish = std::chrono::high_resolution_clock::now();
+        _time_step = std::chrono::duration_cast<std::chrono::microseconds>(_finish - _start).count();
     }
-
     {
         std::lock_guard<std::mutex> lock(_mutex);
         _kernels_code.clear();
@@ -451,7 +463,10 @@ void kernels_cache::add_kernels_source(const kernel_impl_params& params,
                                         bool dump_custom_program) {
     std::lock_guard<std::mutex> lock(_mutex);
 
+    num_all_kernels += kernel_sources.size();
+
     if (!kernel_sources.empty() && (_kernels_code.find(params) == _kernels_code.end())) {
+        num_kernels += kernel_sources.size();
         auto res = _kernels_code.insert({params, {kernel_sources, params, dump_custom_program}});
 
         assert(_kernels.find(params) == _kernels.end());

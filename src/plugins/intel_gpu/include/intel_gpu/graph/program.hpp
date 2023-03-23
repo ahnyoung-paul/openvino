@@ -28,7 +28,8 @@ class base_pass;
 class program_wrapper;
 class kernels_cache;
 class ICompilationContext;
-
+class profile;
+class perf_data;
 
 struct program {
     using ptr = std::shared_ptr<program>;
@@ -250,7 +251,15 @@ public:
     ICompilationContext& get_compilation_context() const { return *_compilation_context; }
     void cancel_compilation_context();
 
+    std::unique_ptr<profile> get_profile(const std::string& logs) const;
+    void store_perf_data(const std::string& logs, const size_t prof_idx, const int64_t duration = 0);
+    void show_perf_result() const;
+
 private:
+    mutable size_t _log_idx = 0;
+    mutable size_t _prof_idx = 0;
+    std::vector<perf_data> _perf_data_list;
+
     uint32_t prog_id = 0;
     engine& _engine;
     stream::ptr _stream;
@@ -346,6 +355,63 @@ private:
     void replace(program_node& old_node, program_node& new_node);
 
     void init_program();
+};
+
+struct perf_data {
+public:
+    perf_data(const perf_data& other):
+        _prog_id(other._prog_id)
+        , _logs(other._logs)
+        , _prof_idx(other._prof_idx)
+        , _log_idx(other._log_idx)
+        , _duration(other._duration) {}
+
+    perf_data(size_t prog_id, std::string logs, size_t prof_idx, size_t log_idx, int64_t duration):
+        _prog_id(prog_id)
+        , _logs(logs)
+        , _prof_idx(prof_idx)
+        , _log_idx(log_idx)
+        , _duration(duration) {}
+
+    size_t _prog_id;
+    std::string _logs;
+    size_t _prof_idx;
+    size_t _log_idx;
+    int64_t _duration;
+
+    std::string str() const {
+        std::stringstream os;
+        os << "prog [" << std::fixed << std::setw(2) << _prog_id << "]";
+        os << ", [" << std::fixed << std::setw(4) << _log_idx << "]";
+        os << ", prof[" << std::fixed << std::setw(4) << _prof_idx << "]";
+        os << ", time[" << std::fixed << std::setw(10) << std::setprecision(2) << (static_cast<double>(_duration) / 1000.0f) << "]";
+        os << ", " << _logs;
+        return os.str();
+    }
+};
+
+class profile {
+public:
+    profile(program& p, const std::string& logs, const size_t idx)
+        : _prog(p)
+        , _logs(logs)
+        , _idx(idx) {
+            _start = std::chrono::high_resolution_clock::now();
+            // _prog.store_perf_data(_logs, _idx);
+    }
+
+    ~profile() {
+        _finish = std::chrono::high_resolution_clock::now();
+        auto total_duration = std::chrono::duration_cast<std::chrono::microseconds>(_finish - _start).count();
+        _prog.store_perf_data(_logs, _idx, total_duration);
+    }
+
+private:
+    std::chrono::high_resolution_clock::time_point _start = {};
+    std::chrono::high_resolution_clock::time_point _finish = {};
+    program& _prog;
+    std::string _logs;
+    size_t _idx;
 };
 
 }  // namespace cldnn
