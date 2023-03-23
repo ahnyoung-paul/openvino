@@ -99,7 +99,21 @@ private:
         return entry_point + "_" + std::to_string((_kernel_idx++));
     }
 
+    mutable size_t num_batches = 0;
+    mutable size_t num_all_kernels = 0;
+    mutable size_t num_kernels = 0;
+
+    int64_t _time_step = 0;
+    int64_t _time_compile = 0;
+
 public:
+    void show_statistics() {
+        std::cout << "[kernels_cache] compile kernels " << num_kernels << " / " << num_all_kernels;
+        std::cout << ", num_batches: " << num_batches;
+        std::cout << " build_all(ms): " << (static_cast<double>(_time_step) / 1000);
+        std::cout << " total compile(ms): " << (static_cast<double>(_time_compile) / 1000) << std::endl;;
+    }
+
     explicit kernels_cache(engine& engine,
                            const ExecutionConfig& config,
                            uint32_t prog_id,

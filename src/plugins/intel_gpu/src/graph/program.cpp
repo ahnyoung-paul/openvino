@@ -101,6 +101,34 @@
 using namespace cldnn;
 using namespace ov::intel_gpu;
 
+#if 1
+#define PROFILE_BUILD_PROG(msg) auto prof = get_profile(msg)
+#else
+#define PROFILE_BUILD_PROG(msg)
+#endif
+
+std::unique_ptr<profile> program::get_profile(const std::string& logs) const {
+    auto& prog = const_cast<program&>(*this);
+    std::unique_ptr<profile> p(new profile(prog, logs, (_prof_idx++)));
+    return p;
+}
+
+void program::store_perf_data(const std::string& logs, const size_t prof_idx, const int64_t duration) {
+    const auto log_id = (_log_idx++);
+    _perf_data_list.emplace_back(get_prog_id(), logs, prof_idx, log_id, duration);
+}
+
+void program::show_perf_result() const {
+    if (!_perf_data_list.empty()) {
+        std::string line = "********************************************************************************";
+        std::cout << line << std::endl;
+        for (auto& d : _perf_data_list) {
+            std::cout << "* " << d.str() << std::endl;
+        }
+        std::cout << line << std::endl;
+    }
+}
+
 program::program(engine& engine_ref,
                  topology const& topology,
                  const ExecutionConfig& config,
@@ -153,6 +181,10 @@ program::program(engine& engine)
 }
 
 program::~program() {
+    show_perf_result();
+    if (_kernels_cache) {
+        _kernels_cache->show_statistics();
+    }
 }
 
 void program::init_program() {
@@ -494,6 +526,7 @@ void program::set_options() {
 }
 
 void program::build_program(bool is_internal) {
+    PROFILE_BUILD_PROG("build_program");
     init_graph();
     { pre_optimize_graph(is_internal); }
     run_graph_compilation();
@@ -506,7 +539,10 @@ void program::build_program(bool is_internal) {
     {
 #endif
         prepare_memory_dependencies();
-        apply_opt_pass<build_implementations>();
+        {
+            PROFILE_BUILD_PROG("build_kernels");
+            apply_opt_pass<build_implementations>();
+        }
     }
 
     if (!is_internal) {
@@ -517,6 +553,7 @@ void program::build_program(bool is_internal) {
 }
 
 void program::init_graph() {
+    PROFILE_BUILD_PROG("init_graph");
     OV_ITT_SCOPED_TASK(ov::intel_gpu::itt::domains::intel_gpu_plugin, "Program::init_graph");
     apply_opt_pass<graph_initializations>();
 
@@ -525,9 +562,10 @@ void program::init_graph() {
     apply_opt_pass<mark_nodes>();
 }
 
-void program::run_graph_compilation() { apply_opt_pass<compile_graph>(); }
+void program::run_graph_compilation() { PROFILE_BUILD_PROG("graph_compilation"); apply_opt_pass<compile_graph>(); }
 
 void program::pre_optimize_graph(bool is_internal) {
+    PROFILE_BUILD_PROG("pre_optimize_graph");
     OV_ITT_SCOPED_TASK(ov::intel_gpu::itt::domains::intel_gpu_plugin, "Program::pre_optimize_graph");
 
     // trim to outputs
@@ -608,6 +646,9 @@ void program::pre_optimize_graph(bool is_internal) {
 }
 
 void program::post_optimize_graph(bool is_internal) {
+    std::string msg = "post_optimzie_graph_is_interal_";
+    msg += (is_internal?"YES":"NO");
+    PROFILE_BUILD_PROG(msg);
     OV_ITT_SCOPED_TASK(ov::intel_gpu::itt::domains::intel_gpu_plugin, "Program::post_optimize_graph");
     // input reorder for fully connected if necessary
     apply_opt_pass<post_input_reorder>();
@@ -735,6 +776,7 @@ program::nodes_ordering& program::get_processing_order() { return processing_ord
 const program::nodes_ordering& program::get_processing_order() const { return processing_order; }
 
 void program::prepare_memory_dependencies() {
+    PROFILE_BUILD_PROG("prepare_memory_dependencies");
     if (!_config.get_property(ov::intel_gpu::enable_memory_pool))
         return;
 
