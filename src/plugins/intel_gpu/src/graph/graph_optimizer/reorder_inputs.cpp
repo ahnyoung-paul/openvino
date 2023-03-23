@@ -667,6 +667,7 @@ void insert_reorders(program& p, const std::map<program_node*, format::type>& fm
 }  // namespace
 
 void reorder_inputs::run(program& p, layout_optimizer& lo, reorder_factory& rf) {
+    auto prof = p.get_profile("****reorder_inputs");
     GPU_DEBUG_GET_INSTANCE(debug_config);
 
     auto fmt_map = get_preferred_formats(p, lo);

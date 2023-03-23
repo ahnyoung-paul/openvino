@@ -17,6 +17,7 @@
 using namespace cldnn;
 
 void pre_replace_deconv::run(program& p) {
+    auto prof = p.get_profile("****pre_replace_deconv");
     bool update_processing_order = false;
 
     auto& stream = p.get_stream();

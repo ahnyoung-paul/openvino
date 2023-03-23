@@ -315,6 +315,7 @@ static bool can_reshape_be_optimized(const reshape_node& node) {
 
 // ToDo remove friendship relation from  program_node
 void prepare_buffer_fusing::run(program& p) {
+    auto prof = p.get_profile("****prepare_buffer_fusing");
     /*
     We need to take care of proper ordering by types.
     1. Concats

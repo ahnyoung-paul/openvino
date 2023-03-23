@@ -22,6 +22,7 @@
 using namespace cldnn;
 
 void select_preferred_formats::run(program& p) {
+    auto prof = p.get_profile("****select_preferred_formats");
     OV_ITT_SCOPED_TASK(ov::intel_gpu::itt::domains::intel_gpu_plugin, "pass::select_preferred_formats");
 
     auto& engine = p.get_engine();
