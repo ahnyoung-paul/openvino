@@ -25,13 +25,10 @@ public:
 
     void setKernelImplParams(void* impl_params) { _impl_params = impl_params; }
     void* getKernelImplParams() const { return _impl_params; }
-    void setKernelsCache(void* kernel_cache) { _kernel_cache = kernel_cache; }
-    void* getKernelsCache() const { return _kernel_cache; }
 
 private:
     std::ostream& stream;
     void* _impl_params;
-    void* _kernel_cache;
 };
 
 class BinaryInputBuffer : public InputBuffer<BinaryInputBuffer> {

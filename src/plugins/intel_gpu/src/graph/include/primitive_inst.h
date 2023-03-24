@@ -61,6 +61,7 @@ struct primitive_impl {
     virtual bool is_cpu() const { return true; }
     virtual void init_kernels(const kernels_cache& kernels_cache, const kernel_impl_params& params) = 0;
     virtual void init_by_cached_kernels(const kernels_cache&) {}
+    virtual void set_cached_kernel_ids(const kernels_cache&) {}
     virtual std::unique_ptr<primitive_impl> clone() const = 0;
     virtual std::vector<std::shared_ptr<cldnn::kernel_string>> get_kernels_source() { return {}; }
     virtual void reset_kernels_source() {}
@@ -206,7 +207,6 @@ public:
     void rebuild_exec_deps(
         std::unordered_map<primitive_id, std::shared_ptr<primitive_inst>> const& primitives);
     std::string get_implementation_name() const;
-    void set_cached_kernel_ids(kernels_cache& kernels_cache);
 
     void add_profiling_data(instrumentation::pipeline_stage stage, bool cache_hit, int64_t time);
     const std::unordered_map<size_t, std::tuple<int64_t, size_t>>& get_profiling_data() const { return _profiling_data; }

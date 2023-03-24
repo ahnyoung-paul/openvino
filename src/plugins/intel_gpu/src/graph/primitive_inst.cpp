@@ -1133,6 +1133,7 @@ void primitive_inst::save(cldnn::BinaryOutputBuffer& ob) const {
 
     if (_impl != nullptr) {
         ob << true;
+        _impl->set_cached_kernel_ids(_network.get_program()->get_kernels_cache());
         ob << _impl;
     } else {
         ob << false;

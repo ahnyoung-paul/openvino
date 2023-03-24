@@ -66,6 +66,10 @@ struct custom_gpu_primitive_impl : typed_primitive_impl<custom_gpu_primitive> {
         _kernels.emplace_back(kernels_cache.get_kernel_from_cached_kernels(_cached_kernel_id));
     }
 
+    void set_cached_kernel_ids(const kernels_cache& kernels_cache) override {
+        _cached_kernel_id = kernels_cache.get_cached_kernel_id(_kernels[0]);
+    }
+
     void set_arguments_impl(custom_gpu_primitive_inst& instance) override {
         auto& stream = instance.get_network().get_stream();
         kernel_arguments_data args;
@@ -93,8 +97,7 @@ struct custom_gpu_primitive_impl : typed_primitive_impl<custom_gpu_primitive> {
 
     void save(BinaryOutputBuffer& ob) const override {
         ob << *cl_kernel;
-        const kernels_cache* _kernels_cache = reinterpret_cast<kernels_cache*>(ob.getKernelsCache());
-        ob << _kernels_cache->get_cached_kernel_id(_kernels[0]);
+        ob << _cached_kernel_id;
     }
 
     void load(BinaryInputBuffer& ib) override {
