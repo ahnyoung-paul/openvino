@@ -80,8 +80,32 @@ void remove_redundant_reorders::run(program& p) {
             auto i8_u8_input = input.get_output_layout().data_type == data_types::i8 ||
                                input.get_output_layout().data_type == data_types::u8;
             auto quantize_user = has_quantize_user(node);
+            auto only_change_dtype = [](program_node& input, reorder_node& node) {
+                auto input_layout = input.get_output_layout();
+                for (auto usr : node.get_users()) {
+                    auto usr_layout = usr->get_output_layout();
+                    if (input_layout.data_type == usr_layout.data_type || input_layout.format != usr_layout.format) {
+                        return false;
+                    }
+                }
+                return true;
+            };
 
-            if (!same_data_type && !(i8_u8_input && quantize_user))
+            auto same_dtype_simple_format = [](program_node& input, reorder_node& node) {
+                auto input_layout = input.get_output_layout();
+                for (auto usr : node.get_users()) {
+                    auto usr_layout = usr->get_output_layout();
+                    if (input_layout.data_type != usr_layout.data_type &&
+                        (!format::is_simple_data_format(input_layout.format) ||
+                         !format::is_simple_data_format(usr_layout.format))) {
+                        return false;
+                    }
+                }
+                return true;
+            };
+
+            if (!same_data_type && !(i8_u8_input && quantize_user) &&
+                !only_change_dtype(input, node) && !same_dtype_simple_format(input, node))
                 continue;
 
             // Avoid optimization of nv12 reorder
@@ -401,7 +425,8 @@ void remove_redundant_reorders::run(program& p) {
 
             bool same_data_type = input.get_output_layout().data_type == output_layout.data_type;
             bool allowed_dt_conversion_fuse = (input.is_type<one_hot>() || input.is_type<permute>() ||
-                                               input.is_type<depth_to_space>() || input.is_type<region_yolo>() || input.is_type<detection_output>());
+                                               input.is_type<depth_to_space>() || input.is_type<region_yolo>() || input.is_type<detection_output>() ||
+                                               input.is_type<eltwise>() || input.is_type<fully_connected>());
             if (!same_data_type && !allowed_dt_conversion_fuse)
                 continue;
 
