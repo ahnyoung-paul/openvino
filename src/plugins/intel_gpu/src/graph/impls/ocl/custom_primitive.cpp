@@ -39,7 +39,8 @@ struct custom_gpu_primitive_impl : typed_primitive_impl<custom_gpu_primitive> {
 
     custom_gpu_primitive_impl(const custom_gpu_primitive_impl& other)
     : cl_kernel(other.cl_kernel)
-    , _kernels({}) {
+    , _kernels({})
+    , _cached_kernel_id(other._cached_kernel_id) {
         for (const auto& kernel : other._kernels) {
             _kernels.emplace_back(kernel->clone());
         }
@@ -48,7 +49,8 @@ struct custom_gpu_primitive_impl : typed_primitive_impl<custom_gpu_primitive> {
     custom_gpu_primitive_impl(const custom_gpu_primitive_node& arg,
                              std::shared_ptr<kernel_selector::cl_kernel_data>& cl_kernel)
         : cl_kernel(cl_kernel)
-        , _kernels() { }
+        , _kernels()
+        , _cached_kernel_id() { }
 
     std::vector<std::shared_ptr<cldnn::kernel_string>> get_kernels_source() override {
         std::vector<std::shared_ptr<cldnn::kernel_string>> kernel_strings;

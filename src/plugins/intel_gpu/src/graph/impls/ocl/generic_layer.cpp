@@ -27,7 +27,8 @@ struct generic_layer_impl : typed_primitive_impl<generic_layer> {
 
     generic_layer_impl(const generic_layer_impl& other)
     : _cl_kernel_data(other._cl_kernel_data)
-    , _kernels({}) {
+    , _kernels({})
+    , _cached_kernel_id(other._cached_kernel_id) {
         if (other._kernels.empty()) {
             throw std::runtime_error("Can't copy generic_layer_impl node: kernels vector is empty");
         }
@@ -36,7 +37,8 @@ struct generic_layer_impl : typed_primitive_impl<generic_layer> {
 
     generic_layer_impl(const generic_layer_node& arg)
         : _cl_kernel_data(*arg.get_primitive()->generic_params.clKernel.get())
-        , _kernels() { }
+        , _kernels()
+        , _cached_kernel_id() { }
 
     std::vector<std::shared_ptr<cldnn::kernel_string>> get_kernels_source() override {
         std::vector<std::shared_ptr<cldnn::kernel_string>> kernel_strings;
