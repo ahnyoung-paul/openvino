@@ -400,7 +400,7 @@ public:
         , _logs(logs)
         , _idx(idx) {
             _start = std::chrono::high_resolution_clock::now();
-            // _prog.store_perf_data(_logs, _idx);
+            _prog.store_perf_data(_logs, _idx);
     }
 
     ~profile() {

@@ -50,6 +50,7 @@ void eltwise_remove_stride::conv_stride_extend(program& p, program_node& node, c
 }
 
 void eltwise_remove_stride::run(program& p) {
+    auto prof = p.get_profile("****eltwise_remove_stride");
     for (auto& node : p.get_processing_order()) {
         if (node->is_type<eltwise>()) {
             // TODO: make fp16 work

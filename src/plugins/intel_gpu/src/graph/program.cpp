@@ -114,8 +114,15 @@ std::unique_ptr<profile> program::get_profile(const std::string& logs) const {
 }
 
 void program::store_perf_data(const std::string& logs, const size_t prof_idx, const int64_t duration) {
-    const auto log_id = (_log_idx++);
-    _perf_data_list.emplace_back(get_prog_id(), logs, prof_idx, log_id, duration);
+    auto iter = std::find_if(_perf_data_list.begin(), _perf_data_list.end(), [&logs, &prof_idx](perf_data& d) {
+        return (d._logs == logs && d._prof_idx == prof_idx);
+    });
+    if (iter == _perf_data_list.end()) {
+        const auto log_id = (_log_idx++);
+        _perf_data_list.emplace_back(get_prog_id(), logs, prof_idx, log_id, duration);
+    } else {
+        iter->_duration = duration;
+    }
 }
 
 void program::show_perf_result() const {
@@ -539,10 +546,7 @@ void program::build_program(bool is_internal) {
     {
 #endif
         prepare_memory_dependencies();
-        {
-            PROFILE_BUILD_PROG("build_kernels");
-            apply_opt_pass<build_implementations>();
-        }
+        apply_opt_pass<build_implementations>();
     }
 
     if (!is_internal) {
@@ -553,7 +557,7 @@ void program::build_program(bool is_internal) {
 }
 
 void program::init_graph() {
-    PROFILE_BUILD_PROG("init_graph");
+    PROFILE_BUILD_PROG("*init_graph");
     OV_ITT_SCOPED_TASK(ov::intel_gpu::itt::domains::intel_gpu_plugin, "Program::init_graph");
     apply_opt_pass<graph_initializations>();
 
@@ -562,10 +566,10 @@ void program::init_graph() {
     apply_opt_pass<mark_nodes>();
 }
 
-void program::run_graph_compilation() { PROFILE_BUILD_PROG("graph_compilation"); apply_opt_pass<compile_graph>(); }
+void program::run_graph_compilation() { PROFILE_BUILD_PROG("*graph_compilation"); apply_opt_pass<compile_graph>(); }
 
 void program::pre_optimize_graph(bool is_internal) {
-    PROFILE_BUILD_PROG("pre_optimize_graph");
+    PROFILE_BUILD_PROG("*pre_optimize_graph");
     OV_ITT_SCOPED_TASK(ov::intel_gpu::itt::domains::intel_gpu_plugin, "Program::pre_optimize_graph");
 
     // trim to outputs
@@ -646,7 +650,7 @@ void program::pre_optimize_graph(bool is_internal) {
 }
 
 void program::post_optimize_graph(bool is_internal) {
-    std::string msg = "post_optimzie_graph_is_interal_";
+    std::string msg = "*post_optimzie_graph_is_interal_";
     msg += (is_internal?"YES":"NO");
     PROFILE_BUILD_PROG(msg);
     OV_ITT_SCOPED_TASK(ov::intel_gpu::itt::domains::intel_gpu_plugin, "Program::post_optimize_graph");
@@ -666,6 +670,7 @@ void program::post_optimize_graph(bool is_internal) {
 #else
     if (!is_internal && !partial_build) {
 #endif
+    if (!is_internal && !partial_build)
         // ToDo remove hidden dependencies from propagate_constants pass
         apply_opt_pass<propagate_constants>();
     }
@@ -776,7 +781,7 @@ program::nodes_ordering& program::get_processing_order() { return processing_ord
 const program::nodes_ordering& program::get_processing_order() const { return processing_order; }
 
 void program::prepare_memory_dependencies() {
-    PROFILE_BUILD_PROG("prepare_memory_dependencies");
+    PROFILE_BUILD_PROG("*prepare_memory_dependencies");
     if (!_config.get_property(ov::intel_gpu::enable_memory_pool))
         return;
 

@@ -49,6 +49,7 @@ template bool pre_optimize_bias::optimize_bias<fully_connected_node>(fully_conne
                                                                      program& p);
 
 void pre_optimize_bias::run(program& p, reorder_factory& rf) {
+    auto prof = p.get_profile("****pre_optimize_bias");
     bool bias_optimized = false;
     for (auto& prim : p.get_processing_order()) {
         if (prim->type() == convolution::type_id()) {
