@@ -29,6 +29,7 @@ remove_redundant_reorders::remove_redundant_reorders(layout_optimizer& lo_ref, b
     remove_output_reorders(remove_output_reorders) {}
 
 void remove_redundant_reorders::run(program& p) {
+    auto prof = p.get_profile("****remove_redundant_reorders");
     auto update_implementation = [&](program_node& node) {
         if (!update_implementations)
             return;

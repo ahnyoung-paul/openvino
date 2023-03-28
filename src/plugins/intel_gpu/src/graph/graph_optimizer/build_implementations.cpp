@@ -10,6 +10,7 @@
 using namespace cldnn;
 
 void build_implementations::run(program& p) {
+    auto prof = p.get_profile("*build_implementations")
     OV_ITT_SCOPED_TASK(ov::intel_gpu::itt::domains::intel_gpu_plugin, "pass::build_implementations");
     if (p.get_config().get_property(ov::intel_gpu::partial_build_program)) {
         return;
@@ -18,7 +19,7 @@ void build_implementations::run(program& p) {
 
     auto& cache = p.get_kernels_cache();
     {
-        auto prof = p.get_profile("build_kernels - add_kernels_source");
+        auto prof = p.get_profile("****add_kernels_source");
         for (auto& n : p.get_processing_order()) {
             if (auto impl = n->get_selected_impl()) {
                 auto params = n->get_kernel_impl_params();
@@ -27,11 +28,11 @@ void build_implementations::run(program& p) {
         }
     }
     {
-        auto prof = p.get_profile("build_kernels - build_all");
+        auto prof = p.get_profile("****build_all");
         cache.build_all();
     }
     {
-        auto prof = p.get_profile("build_kernels - init_kernels");
+        auto prof = p.get_profile("****init_kernels");
         for (auto& n : p.get_processing_order()) {
             if (auto impl = n->get_selected_impl()) {
                 auto params = n->get_kernel_impl_params();

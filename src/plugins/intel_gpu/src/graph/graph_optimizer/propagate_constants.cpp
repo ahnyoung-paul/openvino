@@ -18,6 +18,7 @@ using namespace cldnn;
 
 // ToDo remove friendship relation from  program_node and program
 void propagate_constants::run(program& p) {
+    auto prof = p.get_profile("****propagate_constants");
     OV_ITT_SCOPED_TASK(ov::intel_gpu::itt::domains::intel_gpu_plugin, "pass::PropagateConstants");
     for (auto& node : p.get_processing_order()) {
         if (node->is_constant())
