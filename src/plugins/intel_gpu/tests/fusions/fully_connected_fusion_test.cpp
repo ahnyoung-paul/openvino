@@ -109,8 +109,8 @@ public:
         network_not_fused->set_input_data("input", input_prim);
 
         compare(*network_not_fused, *network_fused, p);
-        if (additional_test) {
-            additional_test(*network_not_fused, *network_fused);
+        if (additional_check) {
+            additional_check(*network_not_fused, *network_fused);
         }
     }
 
@@ -143,7 +143,7 @@ public:
         return layout{ p.out_shape, p.data_type, p.input_format };
     }
 
-    std::function<void(network&, network&)> additional_test;
+    std::function<void(network&, network&)> additional_check;
 };
 #endif  // ENABLE_ONEDNN_FOR_GPU
 
@@ -569,10 +569,10 @@ TEST_P(fc_fp16_convert_eltwise_fp32_fusing, basic) {
         reorder("reorder_bfyx", input_info("eltwise"), p.default_format, data_types::f32)
     );
 
-    tolerance = 1.f;
+    tolerance = default_tolerance(p.default_type);
 
     // Check if the output data type of FC is f32.
-    this->additional_test = [](network& not_fused, network& fused) {
+    this->additional_check = [](network& not_fused, network& fused) {
         for (auto& pi : fused.get_primitives_info()) {
             if (pi.type_id == "fully_connected") {
                 ASSERT_EQ(pi.output_layout.data_type, data_types::f32);

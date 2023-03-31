@@ -81,31 +81,19 @@ void remove_redundant_reorders::run(program& p) {
                                input.get_output_layout().data_type == data_types::u8;
             auto quantize_user = has_quantize_user(node);
             auto only_change_dtype = [](program_node& input, reorder_node& node) {
+                auto& users = node.get_users();
+                if (users.size() != 1)
+                    return false;
                 auto input_layout = input.get_output_layout();
-                for (auto usr : node.get_users()) {
-                    auto usr_layout = usr->get_output_layout();
-                    if (input_layout.data_type == usr_layout.data_type || input_layout.format != usr_layout.format) {
-                        return false;
-                    }
+                auto reorder_layout = node.get_output_layout();
+                if (input_layout.data_type == reorder_layout.data_type ||
+                    input_layout.format != reorder_layout.format) {
+                    return false;
                 }
                 return true;
             };
 
-            auto same_dtype_simple_format = [](program_node& input, reorder_node& node) {
-                auto input_layout = input.get_output_layout();
-                for (auto usr : node.get_users()) {
-                    auto usr_layout = usr->get_output_layout();
-                    if (input_layout.data_type != usr_layout.data_type &&
-                        (!format::is_simple_data_format(input_layout.format) ||
-                         !format::is_simple_data_format(usr_layout.format))) {
-                        return false;
-                    }
-                }
-                return true;
-            };
-
-            if (!same_data_type && !(i8_u8_input && quantize_user) &&
-                !only_change_dtype(input, node) && !same_dtype_simple_format(input, node))
+            if (!same_data_type && !(i8_u8_input && quantize_user) && !only_change_dtype(input, node))
                 continue;
 
             // Avoid optimization of nv12 reorder

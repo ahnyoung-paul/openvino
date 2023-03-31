@@ -74,8 +74,8 @@ public:
         network_fused.set_input_data("input", input_prim);
         network_not_fused.set_input_data("input", input_prim);
         compare(network_not_fused, network_fused, p, true);
-        if (additional_test) {
-            additional_test(network_not_fused, network_fused);
+        if (additional_check) {
+            additional_check(network_not_fused, network_fused);
         }
     }
 
@@ -92,7 +92,7 @@ public:
         return layout{ ov::PartialShape(output_shape), p.permute_type, p.permute_format, padding{} };
     }
 
-    std::function<void(network&, network&)> additional_test;
+    std::function<void(network&, network&)> additional_check;
 
 };
 }  // namespace
@@ -658,9 +658,9 @@ TEST_P(eltwise_reorder_permute_fusing, basic) {
         reorder("reorder_bfyx", input_info("permute"), format::bfyx, data_types::f32)
     );
 
-    tolerance = 1e-5f;
+    tolerance = default_tolerance(p.permute_type);
 
-    this->additional_test = [](network& not_fused, network& fused) {
+    this->additional_check = [](network& not_fused, network& fused) {
         for (auto& pi : fused.get_primitives_info()) {
             if (pi.type_id == "eltwise") {
                 ASSERT_EQ(pi.output_layout.data_type, data_types::f32);
