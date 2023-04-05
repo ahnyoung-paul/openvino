@@ -747,14 +747,31 @@ event::ptr primitive_inst::update_weights() {
             GPU_DEBUG_PROFILED_STAGE_CACHE_HIT(true);
             kernel = cache.get(kernel_key);
         } else {
-            GPU_DEBUG_TRACE_DETAIL << id() << ": reorder weights from " << original_layout.to_short_string()
-                                   << " to " << expected_layout.to_short_string() << std::endl;
-            auto& kernels_cache = get_network().get_program()->get_kernels_cache();
-            auto kernels = kernels_cache.compile(*_impl_params, {weights_params.clKernel->code.kernelString});
-            OPENVINO_ASSERT(kernels.size() == 1, "The output of kernel compile has issue");
-            kernel = (kernels.begin()->second)[0];
-            cache.add(kernel_key, kernel);
-        }
+            GPU_DEBUG_PROFILED_STAGE_CACHE_HIT(false);
+            auto get_kernel_key = [&]() -> size_t {
+                auto seed = _node->get_primitive()->hash();
+                seed = hash_combine(seed, expected_layout.hash());
+                seed = hash_combine(seed, original_layout.hash());
+                return seed;
+            };
+
+            cldnn::kernel::ptr kernel = nullptr;
+            auto kernel_key = get_kernel_key();
+            auto& cache = get_network().get_in_mem_kernels_cache();
+            if (cache.has(kernel_key)) {
+                GPU_DEBUG_TRACE_DETAIL << id() << ": reorder weights (cached) from " << original_layout.to_short_string()
+                                       << " to " << expected_layout.to_short_string() << std::endl;
+                GPU_DEBUG_PROFILED_STAGE_CACHE_HIT(true);
+                kernel = cache.get(kernel_key);
+            } else {
+                GPU_DEBUG_TRACE_DETAIL << id() << ": reorder weights from " << original_layout.to_short_string()
+                                       << " to " << expected_layout.to_short_string() << std::endl;
+                auto& kernels_cache = get_network().get_program()->get_kernels_cache();
+                auto kernels = kernels_cache.compile(*_impl_params, {weights_params.clKernel->code.kernelString});
+                OPENVINO_ASSERT(kernels.size() == 1, "The output of kernel compile has issue");
+                kernel = (kernels.begin()->second)[0];
+                cache.add(kernel_key, kernel);
+            }
 
         auto& stream = get_network().get_stream();
 
