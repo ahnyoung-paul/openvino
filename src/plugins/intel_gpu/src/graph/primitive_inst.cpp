@@ -777,7 +777,7 @@ event::ptr primitive_inst::update_weights() {
                 kernel = kernel_data[0].first;
                 cache.add(kernel_key, kernel);
             }
-
+        }
         auto& stream = get_network().get_stream();
 
         bool can_reuse = false;
@@ -1350,5 +1350,4 @@ void primitive_inst::load(cldnn::BinaryInputBuffer& ib) {
         ib >> _impl;
     }
 }
-
 }  // namespace cldnn

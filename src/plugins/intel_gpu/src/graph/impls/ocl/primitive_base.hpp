@@ -17,6 +17,7 @@
 #include "kernel_selector_helper.h"
 #include "register.hpp"
 #include "implementation_map.hpp"
+#include "concatenation_inst.h"
 
 #include <vector>
 #include <list>
@@ -142,6 +143,13 @@ protected:
         if (!_kernel_data.kernels.empty()) {
             auto compiled_kernels = kernels_cache.get_kernels(params);
             _kernels.insert(_kernels.begin(), compiled_kernels.begin(), compiled_kernels.end());
+
+            if (params.desc && params.desc->type_string() == "concatenation") {
+                std::cout << "---------------------------" << std::endl;
+                for (auto& k : _kernels) {
+                    std::cout << " -- " << k->get_id() << " = " <<  k << std::endl;
+                }
+            }
         }
     }
 
@@ -235,6 +243,12 @@ protected:
                                                                         "[GPU] Compiled kernels count: ", _kernels.size(), "\n",
                                                                         "[GPU] KernelData count: ", _kernel_data.kernels.size(), "\n",
                                                                         "[GPU] Likely some issue with empty tensors hanlding happened");
+        if (instance.node != nullptr) {
+            if (instance.node->get_primitive()->type_string() == "concatenation") {
+                std::cout << "<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<" << std::endl;
+            }
+        }
+
         for (size_t kd_idx = 0; kd_idx < _kernel_data.kernels.size(); ++kd_idx) {
             if (_kernel_data.kernels[kd_idx].skip_execution)
                 continue;
@@ -253,6 +267,11 @@ protected:
 
             for (const auto& m : instance.get_intermediates_memories()) {
                 args.intermediates.push_back(m);
+            }
+            if (instance.node != nullptr) {
+                if (instance.node->get_primitive()->type_string() == "concatenation") {
+                    std::cout << "[" << kd_idx << "] " << _kernels[kd_idx]->get_id() << " = " << _kernels[kd_idx] << std::endl;
+                }
             }
 
             auto ev = stream.enqueue_kernel(*_kernels[kd_idx], _kernel_data.kernels[kd_idx].params, args, tmp_events, is_output_event);

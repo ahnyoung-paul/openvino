@@ -355,6 +355,15 @@ std::vector<kernel::ptr> kernels_cache::get_kernels(kernel_impl_params params) c
         auto kernel_part_idx = k.second;
         kernels[kernel_part_idx] = kernel_ptr->clone();
     }
+
+    if (params.desc && (params.desc->type_string() == "concatenation")) {
+        std::cout << params.desc->type_string() << " - " << params.desc->id << std::endl;
+        for (size_t i = 0; i < kernels.size(); i++) {
+            auto casted = downcast<ocl::ocl_kernel>(kernels[i].get());
+            std::cout << "* " << casted->get_id() << " " << kernels[i] << std::endl;
+        }
+    }
+
     return kernels;
 }
 
@@ -456,6 +465,14 @@ void kernels_cache::add_kernels_source(const kernel_impl_params& params,
     std::lock_guard<std::mutex> lock(_mutex);
 
     if (!kernel_sources.empty() && (_kernels_code.find(params) == _kernels_code.end())) {
+        // if (params.desc) {
+        //     if (params.desc->type_string() == "concatenation") {
+        //         for (auto& ks : kernel_sources) {
+        //             std::cout << "*" << ks->entry_point << " " << ks->jit << " " << ks->str << std::endl;
+        //             std::cout << "***********************************" << std::endl;
+        //         }
+        //     }
+        // }
         auto res = _kernels_code.insert({params, {kernel_sources, params, dump_custom_program}});
 
         assert(_kernels.find(params) == _kernels.end());
