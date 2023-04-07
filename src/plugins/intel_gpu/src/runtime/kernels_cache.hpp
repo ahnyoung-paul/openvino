@@ -91,6 +91,8 @@ private:
     std::string get_cache_path() const;
     bool is_cache_enabled() const;
     size_t get_max_kernels_per_batch() const;
+    mutable bool debug_flag = false;
+    mutable std::vector<std::string> debug_issued_kernels;
 
 public:
     explicit kernels_cache(engine& engine,

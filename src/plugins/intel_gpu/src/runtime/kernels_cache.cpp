@@ -92,6 +92,20 @@ void kernels_cache::get_program_source(const kernels_code& kernels_source_code, 
     for (const auto& k : kernels_source_code) {
         auto& code = k.second;
         bool dump_custom_program = code.dump_custom_program;
+        if (k.first.desc) {
+            if (k.first.desc->id == "transpose:ResizeBilinear") {
+                debug_flag = true;
+                debug_issued_kernels.clear();
+                std::cout << "MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM" << std::endl;
+                for (size_t kernel_part_idx = 0; kernel_part_idx < code.kernel_strings.size(); kernel_part_idx++) {
+                    auto& kernel_string = code.kernel_strings[kernel_part_idx];
+                    std::string entry_point = kernel_string->entry_point;
+                    std::cout << " * " << entry_point << std::endl;
+                    debug_issued_kernels.push_back(entry_point);
+                }
+                std::cout << "MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM" << std::endl;
+            }
+        }
 
         for (size_t kernel_part_idx = 0; kernel_part_idx < code.kernel_strings.size(); kernel_part_idx++) {
             auto& kernel_string = code.kernel_strings[kernel_part_idx];
@@ -200,7 +214,18 @@ void kernels_cache::build_batch(const engine& build_engine, const batch_program&
         dump_sources = true;
         dump_sources_dir = debug_config->dump_sources;
     }
-
+    bool debug_a = false;
+    {
+        std::lock_guard<std::mutex> lock(_mutex);
+        for (auto& d : batch.entry_point_to_id) {
+            for (auto& key : debug_issued_kernels) {
+                if (key == d.first) {
+                    std::cout << "[Before build batch] Found kernel for " << key << std::endl;
+                    debug_a = true;
+                }
+            }
+        }
+    }
     std::string err_log;  // accumulated build log from all program's parts (only contains messages from parts which
 
     std::string current_dump_file_name = "";
@@ -277,8 +302,33 @@ void kernels_cache::build_batch(const engine& build_engine, const batch_program&
 
         {
             std::lock_guard<std::mutex> lock(_mutex);
+            if (debug_a) {
+                std::cout << "# of batch.entry_point_to_id  : " << batch.entry_point_to_id.size() << std::endl;
+                std::cout << "# of kernels                  : " << kernels.size() << std::endl;
+                for (auto& k : kernels) {
+                    const auto& entry_point = k.getInfo<CL_KERNEL_FUNCTION_NAME>();
+                    std::cout << "kernels[] -- " << entry_point << std::endl;
+                }
+                for (auto& i : batch.entry_point_to_id) {
+                    std::cout << "batch.entry_point_to_id[] ++ " << i.first << std::endl;
+                }
+
+                std::cout << "Checking source: " << std::endl;
+                for (auto& ss : batch.source) {
+                    std::cout << "^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^" << std::endl;
+                    std::cout << ss << std::endl;
+                    std::cout << "^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^" << std::endl;
+                }
+            }
             for (auto& k : kernels) {
                 const auto& entry_point = k.getInfo<CL_KERNEL_FUNCTION_NAME>();
+
+                for (auto& key : debug_issued_kernels) {
+                    if (key == entry_point) {
+                        std::cout << "[After compile kernel] Found kernel for " << key << std::endl;
+                    }
+                }
+
                 const auto& iter = batch.entry_point_to_id.find(entry_point);
                 if (iter != batch.entry_point_to_id.end()) {
                     cl_kernel kern = k.get();
@@ -431,6 +481,30 @@ void kernels_cache::build_all() {
 
     {
         std::lock_guard<std::mutex> lock(_mutex);
+        if (debug_flag) {
+            // std::cout << "[START][[[[[[[[[[[[[ CHECK ALL compiled kernels ]]]]]]]]]]]]]: " << _kernels.size() << std::endl;
+            for (auto& d : _kernels) {
+                // if (d.first.desc && d.first.desc->id == "transpose:ResizeBilinear") {
+                //     for (auto& k : d.second) {
+                //         std::cout << "_kernels[transpose:ResizeBilinear] = " << k.first->get_id() << " " << k.second << std::endl;
+                //     }
+                //     break;
+                // }
+                // std::cout << "*****" << std::endl;
+                for (auto& k : d.second) {
+                    for (auto& key : debug_issued_kernels) {
+                        if (key ==  k.first->get_id()) {
+                            std::cout << "[After build_all] Found kernel for " << key << std::endl;
+                            break;
+                        }
+                    }
+                }
+            }
+            // std::cout << "[END__][[[[[[[[[[[[[ CHECK ALL compiled kernels ]]]]]]]]]]]]]" << _kernels.size() << std::endl;
+            debug_flag = false;
+        }
+
+
         _kernels_code.clear();
         _pending_compilation = false;
 #if defined(__unix__) && !defined(__ANDROID__)
