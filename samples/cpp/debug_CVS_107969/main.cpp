@@ -36,8 +36,8 @@ int tmain(int argc, tchar* argv[]) {
         const std::string model_path = TSTRING2STRING(argv[1]);
         const std::string device_name = TSTRING2STRING(argv[2]);
 
-        for (size_t i = 0; i < 40; i++) {
-            std::cout << i << "-th tests ....." << std::endl;
+        // for (size_t i = 0; i < 30; i++) {
+            // std::cout << i << "-th tests ....." << std::endl;
             // -------- Step 1. Initialize OpenVINO Runtime Core --------
             ov::Core core;
 
@@ -85,22 +85,24 @@ int tmain(int argc, tchar* argv[]) {
             infer_request.set_input_tensor(input_tensor);
             infer_request_1.set_input_tensor(input_tensor_1);
             // -------- Step 8. Do inference synchronously --------
-            infer_request_1.infer();
-            infer_request.infer();
-            // -------- Step 9. Process output
+            for (size_t j = 0; j < 20; j++) {
+                infer_request_1.infer();
+                infer_request.infer();
+                // -------- Step 9. Process output
 
-            const ov::Tensor& output_tensor = infer_request.get_output_tensor(0);
-            std::cout << "out type  is " << output_tensor.get_element_type() << std::endl;
-            // Print classification results
-            const float *out_ptr = static_cast<float*>(output_tensor.data());
-            std::cout << "Output data: " << std::endl;
-            std::cout << out_ptr[0] << " ";
-            std::cout << std::endl;
-            if (out_ptr[0] == 0.f) {
-                std::cerr << "output data should not be 0" << std::endl;
-                return EXIT_FAILURE;
+                const ov::Tensor& output_tensor = infer_request.get_output_tensor(0);
+                std::cout << "out type  is " << output_tensor.get_element_type() << std::endl;
+                // Print classification results
+                const float *out_ptr = static_cast<float*>(output_tensor.data());
+                std::cout << "Output data: " << std::endl;
+                std::cout << out_ptr[0] << " ";
+                std::cout << std::endl;
+                if (out_ptr[0] == 0.f) {
+                    std::cerr << "output data should not be 0" << std::endl;
+                    return EXIT_FAILURE;
+                }
             }
-        }
+        // }
     } catch (const std::exception& ex) {
         std::cerr << ex.what() << std::endl;
         return EXIT_FAILURE;
