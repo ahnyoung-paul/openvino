@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 
-set(TARGET_NAME "debug_CVS_107969_build")
+set(TARGET_NAME "debug_CVS_107969")
 
 file (GLOB SRC ${CMAKE_CURRENT_SOURCE_DIR}/*.cpp)
 file (GLOB HDR ${CMAKE_CURRENT_SOURCE_DIR}/*.hpp)
@@ -83,9 +83,9 @@ target_link_libraries(${TARGET_NAME} PRIVATE nlohmann_json::nlohmann_json)
 
 if(DEFINED ENABLE_INTEL_GPU AND NOT ENABLE_INTEL_GPU)
     # Intel GPU plugin is turned off explicitly
-    option(SAMPLES_ENABLE_OPENCL "Use OpenCL in debug_CVS_107969_build" OFF)
+    option(SAMPLES_ENABLE_OPENCL "Use OpenCL in debug_CVS_107969" OFF)
 else()
-    option(SAMPLES_ENABLE_OPENCL "Use OpenCL in debug_CVS_107969_build" ON)
+    option(SAMPLES_ENABLE_OPENCL "Use OpenCL in debug_CVS_107969" ON)
 endif()
 
 if(SAMPLES_ENABLE_OPENCL)

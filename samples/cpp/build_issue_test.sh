@@ -55,7 +55,7 @@ trap 'error ${LINENO}' ERR
 SAMPLES_PATH="$( cd "$( dirname "$(realpath "${BASH_SOURCE[0]}")" )" && pwd )"
 printf "\nSetting environment variables for building samples...\n"
 
-export OpenVINO_DIR=/home/ahnyoung/cldnn.dynamic/openvino/build_Debug
+export OpenVINO_DIR=/home/ahnyoung/cldnn.dynamic/openvino/build
 export OpenCV_DIR=/home/ahnyoung/cldnn.dynamic/openvino/temp/opencv_4.5.2_ubuntu20/opencv/cmake
 export LD_LIBRARY_PATH=$PATH_OPENVINO_BIN:$PATH_OPENVINO_SRC/temp/tbb/lib
 source $PATH_OPENVINO_SRC/temp/opencv_4.5.2_ubuntu20/opencv/setupvars.sh
@@ -85,7 +85,7 @@ fi
 echo "SAMPLES_PATH: $SAMPLES_PATH"
 
 mkdir -p "$build_dir"
-$CMAKE_EXEC -DCMAKE_BUILD_TYPE=Debug -S "/home/ahnyoung/cldnn.dynamic/openvino/samples/cpp/" -B "$build_dir" -DOpenCV_DIR=$PATH_OPENCV/cmake
+$CMAKE_EXEC -DCMAKE_BUILD_TYPE=Release -S "/home/ahnyoung/cldnn.dynamic/openvino/samples/cpp/" -B "$build_dir" -DOpenCV_DIR=$PATH_OPENCV/cmake
 # $CMAKE_EXEC --build "$build_dir" --config Debug --parallel $NUM_THREADS
 pushd $build_dir
 make debug_CVS_107969 -j
