@@ -250,6 +250,7 @@ public:
     ImplementationsCache& get_implementations_cache() const { return *_impls_cache; }
     ICompilationContext& get_compilation_context() const { return *_compilation_context; }
     void cancel_compilation_context();
+    void add_kernel_info(kernel_impl_params& params, std::vector<kernel::ptr> kernels, std::vector<std::shared_ptr<cldnn::kernel_string>> kernel_strings);
 
 private:
     uint32_t prog_id = 0;
@@ -347,6 +348,9 @@ private:
     void replace(program_node& old_node, program_node& new_node);
 
     void init_program();
+
+    std::vector<std::string> kernel_info;
+    void dump_kernel_data();
 };
 
 }  // namespace cldnn

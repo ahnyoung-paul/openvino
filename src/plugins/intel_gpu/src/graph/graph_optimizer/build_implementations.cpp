@@ -27,6 +27,7 @@ void build_implementations::run(program& p) {
         if (auto impl = n->get_selected_impl()) {
             auto params = n->get_kernel_impl_params();
             impl->init_kernels(cache, *params);
+            // p.add_kernel_info(*params, impl->get_kernels(), impl->get_kernels_source());
             impl->reset_kernels_source();
         }
     }

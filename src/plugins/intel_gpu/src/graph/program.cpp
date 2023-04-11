@@ -153,6 +153,35 @@ program::program(engine& engine)
 }
 
 program::~program() {
+    // dump_kernel_data();
+}
+
+void program::add_kernel_info(kernel_impl_params& params, std::vector<kernel::ptr> kernels, std::vector<std::shared_ptr<cldnn::kernel_string>> kernel_strings) {
+    size_t num_kernels = kernels.size();
+    for (size_t i = 0; i < num_kernels; i++) {
+        std::stringstream ss;
+        ss << prog_id << ",";
+        if (params.desc) {
+            ss << params.desc->id << ",";
+        } else {
+            ss << "<unknown>,";
+        }
+        ss << i << "," << kernels[i]->get_id() << "," << kernel_strings[i]->get_hash() << std::endl;
+        kernel_info.push_back(ss.str());
+    }
+}
+
+void program::dump_kernel_data() {
+    std::string dump_path = "/home/ahnyoung/cldnn.dynamic/dump_kernels_data_" + std::to_string(prog_id) + ".csv";
+    std::string descriptions = "program_id,primitive_id,sub_kenrel_idx,kernel_entry,kernel_hash\n";
+    std::ofstream of(dump_path);
+    if (of.is_open()) {
+        of << descriptions;
+        for (auto content : kernel_info) {
+            of << content;
+        }
+    }
+    std::cout << "dump_file : " << dump_path << std::endl;
 }
 
 void program::init_program() {
