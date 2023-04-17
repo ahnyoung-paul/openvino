@@ -277,8 +277,15 @@ void kernels_cache::build_batch(const engine& build_engine, const batch_program&
 
         {
             std::lock_guard<std::mutex> lock(_mutex);
+            {
+                std::cout << "---------------------------------------------------------------" << std::endl;
+                for (auto& epti : batch.entry_point_to_id) {
+                    std::cout << "--[e] " << epti.first << std::endl;
+                }
+            }
             for (auto& k : kernels) {
                 const auto& entry_point = k.getInfo<CL_KERNEL_FUNCTION_NAME>();
+                std::cout << "++ from kernel : " << entry_point << std::endl;
                 const auto& iter = batch.entry_point_to_id.find(entry_point);
                 if (iter != batch.entry_point_to_id.end()) {
                     cl_kernel kern = k.get();
@@ -292,7 +299,7 @@ void kernels_cache::build_batch(const engine& build_engine, const batch_program&
                         compiled_kernels[params] = { std::make_pair(kernel, kernel_part_idx) };
                     }
                 } else {
-                    throw std::runtime_error("Could not find entry point");
+                    throw std::runtime_error("Could not find entry point : " + entry_point);
                 }
             }
         }
