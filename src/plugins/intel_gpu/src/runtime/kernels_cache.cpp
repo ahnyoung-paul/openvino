@@ -280,7 +280,11 @@ void kernels_cache::build_batch(const engine& build_engine, const batch_program&
             {
                 std::cout << "---------------------------------------------------------------" << std::endl;
                 for (auto& epti : batch.entry_point_to_id) {
-                    std::cout << "--[e] " << epti.first << std::endl;
+                    std::string id;
+                    if (epti.second.first.desc) {
+                        id = epti.second.first.desc->id;
+                    }
+                    std::cout << "--[e] " << epti.first << " from " << id << std::endl;
                 }
             }
             for (auto& k : kernels) {
@@ -299,6 +303,7 @@ void kernels_cache::build_batch(const engine& build_engine, const batch_program&
                         compiled_kernels[params] = { std::make_pair(kernel, kernel_part_idx) };
                     }
                 } else {
+                    std::cout << "ERORR: Could not find entry point : " << entry_point << std::endl;
                     throw std::runtime_error("Could not find entry point : " + entry_point);
                 }
             }
