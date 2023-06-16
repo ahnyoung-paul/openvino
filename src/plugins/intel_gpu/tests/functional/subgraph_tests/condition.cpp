@@ -16,7 +16,7 @@
 using namespace InferenceEngine;
 using namespace ov::test;
 
-namespace LayerTestsDefinitions {
+namespace GPULayerTestsDefinitions {
 
 class InnerBodyGenerator {
 public:
@@ -39,7 +39,11 @@ enum InnerBodyType {
      * Inner body with eltwise sum and pooling
      * output shape is different with type02 and type03 for same input shape
     */
-    Type04 = 4
+    Type04 = 4,
+    /**
+     * Inner body with nested condition
+     */
+    Type05 = 5
 };
 
 public:
@@ -64,17 +68,17 @@ protected:
     std::shared_ptr<ngraph::opset1::Result> _result;
 };
 
-
 class InnerBodyType01 : public InnerBodyGenerator {
 protected:
     std::shared_ptr<ngraph::Function> generate(ov::PartialShape& input_shape, ngraph::element::Type prc) override {
-        auto constantA   = ngraph::opset9::Constant::create(prc, ov::Shape{1, 1, 1, 2}, {2.0f});
+        auto constantA   = ngraph::opset9::Constant::create(prc, ov::Shape(input_shape.rank().get_length(), 2), {2.0f});
         constantA->set_friendly_name("body1_constantA");
-        auto constantB   = ngraph::opset9::Constant::create(prc, ov::Shape{1, 1, 1, 2}, {12.0f});
+        auto constantB   = ngraph::opset9::Constant::create(prc, ov::Shape(input_shape.rank().get_length(), 2), {12.0f});
         constantB->set_friendly_name("body1_constantB");
         auto add        = std::make_shared<ngraph::opset9::Add>(constantA, constantB);
         add->set_friendly_name("body1_add");
         auto result     = std::make_shared<ngraph::opset1::Result>(add);
+        auto o_layout = result->get_layout();
         result->set_friendly_name("body1_result");
         auto body       = std::make_shared<ngraph::Function>(
             ngraph::OutputVector {result},
@@ -131,11 +135,7 @@ protected:
         data->set_friendly_name("body4_data");
         auto mul        = std::make_shared<ngraph::opset9::Multiply>(data, scale);
         mul->set_friendly_name("body4_mul");
-        auto pooling    = ngraph::builder::makePooling(mul, {1, 2}, {}, {}, {1, 2},
-                                                    ov::op::RoundingType::FLOOR,
-                                                    ov::op::PadType::AUTO,
-                                                    false,
-                                                    ngraph::helpers::PoolingTypes::AVG);
+        auto pooling    = generate_pooling(mul, input_shape);
         pooling->set_friendly_name("body4_pool");
         auto result     = std::make_shared<ngraph::opset1::Result>(pooling);
         result->set_friendly_name("body4_result");
@@ -143,6 +143,108 @@ protected:
             ngraph::OutputVector {result},
             ngraph::ParameterVector{data},
             "eltwise_mul_pooling");
+        return body;
+    }
+
+
+    struct poolSpecificParams {
+            ngraph::helpers::PoolingTypes   pooling_type;   // Pooling type, max or avg
+            std::vector<size_t>             kernel_size;    // Kernel size
+            std::vector<size_t>             stride;         // Stride
+            std::vector<size_t>             pad_begin;      // Pad begin
+            std::vector<size_t>             pad_end;        // Pad end
+            ngraph::op::RoundingType        rounding_type;  // Rounding type
+            ngraph::op::PadType             pad_type;       // Pad type
+            bool                            exclued_pad;    // Exclude pad
+    };
+
+    std::shared_ptr<ov::Node> generate_pooling(const ngraph::Output<ov::Node> &in, ov::PartialShape& input_shape) {
+        poolSpecificParams params;
+        switch (input_shape.rank().get_length()) {
+            case 5:
+            {
+                params = poolSpecificParams{ ngraph::helpers::PoolingTypes::MAX,
+                                                    {2, 2, 2}, {1, 1, 1}, {0, 0, 0}, {0, 0, 0},
+                                                    ngraph::op::RoundingType::CEIL,
+                                                    ngraph::op::PadType::SAME_LOWER, true };
+                break;
+            }
+            case 4:
+            {
+                params = poolSpecificParams{ ngraph::helpers::PoolingTypes::MAX,
+                                                    {2, 2}, {2, 2}, {0, 0}, {0, 0},
+                                                    ngraph::op::RoundingType::CEIL,
+                                                    ngraph::op::PadType::SAME_LOWER, true };
+                break;
+            }
+            case 3:
+            {
+                params = poolSpecificParams{ ngraph::helpers::PoolingTypes::MAX,
+                                                    {2}, {2}, {0}, {0},
+                                                    ngraph::op::RoundingType::CEIL,
+                                                    ngraph::op::PadType::SAME_LOWER, true };
+                break;
+            }
+            default:
+            {
+                OPENVINO_ASSERT(false, "Not allowed other rank");
+            }
+        }
+        return ngraph::builder::makePooling(in, params.stride, params.pad_begin,
+                                            params.pad_end, params.kernel_size, params.rounding_type,
+                                            params.pad_type, params.exclued_pad, params.pooling_type);
+    }
+};
+
+class InnerBodyType05 : public InnerBodyGenerator {
+protected:
+    std::shared_ptr<ngraph::Function> generate(ov::PartialShape& input_shape, ngraph::element::Type prc) override {
+        auto constant   = std::make_shared<ngraph::opset9::Constant>(prc, ngraph::Shape{}, 2.0f);
+        constant->set_friendly_name("body5_constant");
+        auto data       = std::make_shared<ngraph::opset9::Parameter>(prc, input_shape);
+        data->set_friendly_name("body5_data");
+        auto add        = std::make_shared<ngraph::opset9::Add>(data, constant);
+        add->set_friendly_name("body5_add");
+        std::vector<int> axes;
+        for (int i = 0, r = 0; i < input_shape.rank().get_length(); i++) {
+            axes.push_back(r--);
+        }
+        std::vector<size_t> shapeAxes;
+        shapeAxes.push_back(axes.size());
+
+        auto reductionAxesNode = std::dynamic_pointer_cast<ngraph::Node>(
+                std::make_shared<ngraph::opset3::Constant>(ngraph::element::Type_t::i64, ngraph::Shape(shapeAxes), axes));
+
+        const auto reduce = ngraph::builder::makeReduce(add, reductionAxesNode, false, ngraph::helpers::ReductionType::Min);
+        reduce->set_friendly_name("body5_reduce");
+        auto constant_ref   = std::make_shared<ngraph::opset9::Constant>(prc, ngraph::Shape{}, 10.0f);
+        constant_ref->set_friendly_name("body5_ref_constant");
+
+        auto pred = std::make_shared<ngraph::opset3::GreaterEqual>(reduce, constant_ref);
+        pred->set_friendly_name("nested_pred");
+
+        auto nested_body_then_generator = std::make_shared<InnerBodyType03>();
+        auto nested_body_else_generator = std::make_shared<InnerBodyType04>();
+
+        auto nested_input_shape = add->get_output_partial_shape(0);
+        nested_body_then_generator->create_body(nested_input_shape, prc);
+        nested_body_else_generator->create_body(nested_input_shape, prc);
+        nested_body_then_generator->get_function()->set_friendly_name("nested_then_inner_body");
+        nested_body_else_generator->get_function()->set_friendly_name("nested_else_inner_body");
+
+        auto cond_nested = std::make_shared<ngraph::opset9::If>(pred);
+        cond_nested->set_friendly_name("if_operator_nested");
+        cond_nested->set_else_body(nested_body_else_generator->get_function());
+        cond_nested->set_then_body(nested_body_then_generator->get_function());
+        cond_nested->set_input(add, nested_body_then_generator->get_input(), nested_body_else_generator->get_input());
+        cond_nested->set_output(nested_body_then_generator->get_result(), nested_body_else_generator->get_result());
+
+        auto result     = std::make_shared<ngraph::opset1::Result>(cond_nested);
+        result->set_friendly_name("body5_result");
+        auto body       = std::make_shared<ngraph::Function>(
+            ngraph::OutputVector {result},
+            ngraph::ParameterVector{data},
+            "eltwise_sum");
         return body;
     }
 };
@@ -165,6 +267,10 @@ static std::shared_ptr<InnerBodyGenerator> get_inner_body_generator(InnerBodyGen
         case InnerBodyGenerator::InnerBodyType::Type04:
         {
             return std::make_shared<InnerBodyType04>();
+        }
+        case InnerBodyGenerator::InnerBodyType::Type05:
+        {
+            return std::make_shared<InnerBodyType05>();
         }
         default:
         {
@@ -190,9 +296,9 @@ public:
                         bool cond_execution_value = false) {
                             body_then_generator = get_inner_body_generator(then_body_type);
                             body_else_generator = get_inner_body_generator(else_body_type);
+
                             body_then_generator->create_body(input_shape, prc);
                             body_else_generator->create_body(input_shape, prc);
-
                             body_else_generator->get_function()->set_friendly_name("else_inner_body");
                             body_then_generator->get_function()->set_friendly_name("then_inner_body");
 
@@ -286,6 +392,11 @@ static std::ostream& operator<<(std::ostream& os, const InnerBodyGenerator::Inne
         case InnerBodyGenerator::InnerBodyType::Type04:
         {
             os << "Type04";
+            break;
+        }
+        case InnerBodyGenerator::InnerBodyType::Type05:
+        {
+            os << "Type05";
             break;
         }
         default:
@@ -396,40 +507,31 @@ TEST_P(StaticConditionLayerGPUTest, CompareWithRefs) {
     Run();
 }
 
-// TODO: support fp16 case
-// TODO: support int8 case
-std::vector<InferenceEngine::Precision> netPrecisions = {
+std::vector<InferenceEngine::Precision> netPrecisions_static = {
     InferenceEngine::Precision::FP32,
-    // InferenceEngine::Precision::FP16
+    InferenceEngine::Precision::FP16,
+    InferenceEngine::Precision::I8
 };
 
 std::vector<InferenceEngine::SizeVector> inputs_shape = {
     {3, 6}
 };
 
-std::vector<LayerTestsDefinitions::TestModelGenerator::CondTypes> if_cond_types = {
-    LayerTestsDefinitions::TestModelGenerator::CondTypes::CONSTANT,
-    LayerTestsDefinitions::TestModelGenerator::CondTypes::PARAM
+std::vector<GPULayerTestsDefinitions::TestModelGenerator::CondTypes> if_cond_types = {
+    GPULayerTestsDefinitions::TestModelGenerator::CondTypes::CONSTANT,
+    GPULayerTestsDefinitions::TestModelGenerator::CondTypes::PARAM
 };
 
-INSTANTIATE_TEST_SUITE_P(smoke_ConditionGPUTest, StaticConditionLayerGPUTest,
+INSTANTIATE_TEST_SUITE_P(smoke_ConditionGPUTest_static, StaticConditionLayerGPUTest,
                 testing::Combine(
                     testing::ValuesIn(inputs_shape),
-                    testing::ValuesIn(netPrecisions),
+                    testing::ValuesIn(netPrecisions_static),
                     testing::ValuesIn(if_cond_types),
                     testing::Values<std::string>(CommonTestUtils::DEVICE_GPU)),
                 StaticConditionLayerGPUTest::getTestCaseName);
 
 
 /// Dynamic shape test
-
-}   // namespace LayerTestsDefinitions
-
-
-namespace GPULayerTestsDefinitions {
-
-using namespace LayerTestsDefinitions;
-
 struct CondShapeParams {
     InputShape inputShapes;
     InputShape condShapes;
@@ -449,7 +551,7 @@ using ConditionGPUParams = typename std::tuple<
         LayerTestsUtils::TargetDevice   // Device name
 >;
 
-class ConditionLayerGPUTest : public testing::WithParamInterface<ConditionGPUParams>,
+class DynamicConditionLayerGPUTest : public testing::WithParamInterface<ConditionGPUParams>,
                                 virtual public SubgraphBaseTest {
 public:
     static std::string getTestCaseName(const testing::TestParamInfo<ConditionGPUParams>& obj) {
@@ -478,7 +580,7 @@ public:
         }
         result << ")_";
         result << "innerBody={" << bodyParams.then_body_type << ", " << bodyParams.else_body_type << "}_";
-        result << "netPRC=" << std::to_string(dataPrc) << "_";
+        result << "netPRC=" << dataPrc << "_";
         result << "ifCond=" << condType << "_";
         result << "targetDevice=" << targetDevice << "_";
         result << "condExecutionValue=" << (condExecutionValue?"True":"False") << "_";
@@ -493,8 +595,8 @@ protected:
         InnerBodyTypeParams bodyParams;
         InferenceEngine::Precision dataPrc;
         TestModelGenerator::CondTypes condType;
-        bool condExecutionValue;
-        std::tie(shapes, bodyParams, dataPrc, condType, condExecutionValue, targetDevice) = GetParam();
+        bool condPredicateValue;
+        std::tie(shapes, bodyParams, dataPrc, condType, condPredicateValue, targetDevice) = GetParam();
 
         if (condType == TestModelGenerator::CondTypes::CONSTANT) {
             init_input_shapes({shapes.inputShapes});
@@ -508,28 +610,34 @@ protected:
                                             condType,
                                             prc,
                                             shapes.inputShapes.first,
-                                            condExecutionValue);
+                                            condPredicateValue);
         function = model_generator.get_function();
         function->set_friendly_name("if_operator_outer");
     }
 };
 
-TEST_P(ConditionLayerGPUTest, CompareWithRefs) {
+TEST_P(DynamicConditionLayerGPUTest, CompareWithRefs) {
     SKIP_IF_CURRENT_TEST_IS_DISABLED()
     run();
 }
 
-using namespace LayerTestsDefinitions;
-
 const std::vector<InferenceEngine::Precision> netPrecisions = {
     InferenceEngine::Precision::FP32,
-    // InferenceEngine::Precision::FP16
+    InferenceEngine::Precision::FP16,
 };
 
 const std::vector<CondShapeParams> dynamicInputShapes = {
     {
-        ov::test::InputShape(ov::PartialShape({1, 1, -1, -1}), {{1, 1, 8, 4}, {1, 1, 24, 16}, {1, 1, 64, 32}, {1, 1, 8, 4}, {1, 1, 24, 16}}),
-        ov::test::InputShape(ov::PartialShape({1}), {{1}, {1}, {1}, {1}, {1}})
+        ov::test::InputShape(ov::PartialShape({-1, -1, -1, -1, -1}), {{4, 1, 1, 64, 32}, {6, 1, 1, 8, 4}, {8, 1, 1, 24, 16}}),
+        ov::test::InputShape(ov::PartialShape({1}), {{1}, {1}, {1}})
+    },
+    {
+        ov::test::InputShape(ov::PartialShape({1, 1, -1, -1}), {{1, 1, 64, 32}, {1, 1, 8, 4}, {1, 1, 24, 16}}),
+        ov::test::InputShape(ov::PartialShape({1}), {{1}, {1}, {1}})
+    },
+    {
+        ov::test::InputShape(ov::PartialShape({-1, -1, -1}), {{2, 24, 16}, {2, 64, 32}, {2, 8, 4}}),
+        ov::test::InputShape(ov::PartialShape({1}), {{1}, {1}, {1}})
     }
 };
 
@@ -545,17 +653,10 @@ const std::vector<InnerBodyTypeParams> innerBodyTypes = {
     {
         InnerBodyGenerator::InnerBodyType::Type04,
         InnerBodyGenerator::InnerBodyType::Type03
-    }
-};
-
-const std::vector<InnerBodyTypeParams> innerBodyTypes_for_constant = {
-    {
-        InnerBodyGenerator::InnerBodyType::Type02,
-        InnerBodyGenerator::InnerBodyType::Type03
     },
     {
-        InnerBodyGenerator::InnerBodyType::Type04,
-        InnerBodyGenerator::InnerBodyType::Type03
+        InnerBodyGenerator::InnerBodyType::Type02,
+        InnerBodyGenerator::InnerBodyType::Type05
     }
 };
 
@@ -568,7 +669,7 @@ const std::vector<bool> condExecutionValues = {
     true, false
 };
 
-INSTANTIATE_TEST_SUITE_P(smoke_ConditionGPUTest_dynamic01, ConditionLayerGPUTest,
+INSTANTIATE_TEST_SUITE_P(smoke_ConditionGPUTest_dynamic, DynamicConditionLayerGPUTest,
                 testing::Combine(
                     testing::ValuesIn(dynamicInputShapes),                          // input shapes
                     testing::ValuesIn(innerBodyTypes),                              // inner body type
@@ -576,16 +677,7 @@ INSTANTIATE_TEST_SUITE_P(smoke_ConditionGPUTest_dynamic01, ConditionLayerGPUTest
                     testing::ValuesIn(condTypes),                                   // cond type
                     testing::ValuesIn(condExecutionValues),                         // cond execution value
                     testing::Values<std::string>(CommonTestUtils::DEVICE_GPU)),     // device type
-                ConditionLayerGPUTest::getTestCaseName);
+                DynamicConditionLayerGPUTest::getTestCaseName);
 
-
-INSTANTIATE_TEST_SUITE_P(smoke_ConditionGPUTest_dynamic02, ConditionLayerGPUTest,
-                testing::Combine(
-                    testing::ValuesIn(dynamicInputShapes),                          // input shapes
-                    testing::ValuesIn(innerBodyTypes_for_constant),                 // inner body type
-                    testing::ValuesIn(netPrecisions),                               // network precision
-                    testing::ValuesIn({TestModelGenerator::CondTypes::CONSTANT}),   // cond type
-                    testing::ValuesIn(condExecutionValues),                         // cond execution value
-                    testing::Values<std::string>(CommonTestUtils::DEVICE_GPU)),     // device type
-                ConditionLayerGPUTest::getTestCaseName);
+//
 } // namespace GPULayerTestsDefinitions
