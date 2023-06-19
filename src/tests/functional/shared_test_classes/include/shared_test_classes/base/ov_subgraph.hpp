@@ -63,7 +63,7 @@ protected:
     double abs_threshold = disable_threshold, rel_threshold = disable_threshold;
 
     ov::test::utils::OpSummary& summary = ov::test::utils::OpSummary::getInstance();
-    bool is_report_stages = false;
+    bool is_report_stages = true;
     bool is_reported = false;
     double rel_influence_coef = 1.f;
 

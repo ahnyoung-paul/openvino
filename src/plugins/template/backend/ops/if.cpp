@@ -122,9 +122,19 @@ void if_reference(const std::vector<std::shared_ptr<ngraph::Function>>& bodies,
     NGRAPH_CHECK(args.size() > 0, "If operation must have input condition value");
 
     auto condition_value = args[0]->get_data_ptr<bool>()[0];
-    auto branch_index = (condition_value) ? ngraph::op::v8::If::THEN_BODY_INDEX : ngraph::op::v8::If::ELSE_BODY_INDEX;
+    // auto branch_index = (condition_value) ? ngraph::op::v8::If::THEN_BODY_INDEX : ngraph::op::v8::If::ELSE_BODY_INDEX;
+    auto branch_index = ngraph::op::v8::If::ELSE_BODY_INDEX;
+    std::cout << "[0] if_reference: branch_index: " << static_cast<int>(branch_index) << std::endl;
+    if (condition_value) {
+        branch_index = ngraph::op::v8::If::THEN_BODY_INDEX;
+        std::cout << "[1] if_reference: branch_index: " << static_cast<int>(branch_index) << std::endl;
+    }
+    std::cout << "[2] if_reference: branch_index: " << static_cast<int>(branch_index) << std::endl;
     ngraph::HostTensorVector inputs_to_body;
     ngraph::HostTensorVector outs_from_body;
+    std::cout << "[3] if_reference: branch_index: " << static_cast<int>(branch_index) << std::endl;
+    std::cout << " * ngraph::op::v8::If::THEN_BODY_INDEX: " << static_cast<int>(ngraph::op::v8::If::THEN_BODY_INDEX) << std::endl;
+    std::cout << " * ngraph::op::v8::If::ELSE_BODY_INDEX: " << static_cast<int>(ngraph::op::v8::If::ELSE_BODY_INDEX) << std::endl;
     inputs_to_body.resize(input_descs[branch_index].size());
     auto inputs_size = args.size();
     auto output_size = out.size();
