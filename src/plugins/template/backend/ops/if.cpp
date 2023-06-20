@@ -121,13 +121,19 @@ void if_reference(const std::vector<std::shared_ptr<ngraph::Function>>& bodies,
                   const ngraph::HostTensorVector& args) {
     NGRAPH_CHECK(args.size() > 0, "If operation must have input condition value");
 
-    auto condition_value = args[0]->get_data_ptr<bool>()[0];
+    // auto condition_value = args[0]->get_data_ptr<bool>()[0];
+    auto condition_value = true;
     // auto branch_index = (condition_value) ? ngraph::op::v8::If::THEN_BODY_INDEX : ngraph::op::v8::If::ELSE_BODY_INDEX;
-    auto branch_index = ngraph::op::v8::If::ELSE_BODY_INDEX;
+    auto branch_index = 0;
     std::cout << "[0] if_reference: branch_index: " << static_cast<int>(branch_index) << std::endl;
     if (condition_value) {
-        branch_index = ngraph::op::v8::If::THEN_BODY_INDEX;
+        branch_index = 1;
         std::cout << "[1] if_reference: branch_index: " << static_cast<int>(branch_index) << std::endl;
+    }
+    if (branch_index > 1) {
+        std::cout << "Why branch_index is large .... at [2]" << std::endl;
+        std::cout << "args[0] : " << args[0]->get_element_type() << ", " << args[0]->get_element_count() << ", ";
+        std::cout << args[0]->get_partial_shape() << ", " << args[0]->get_size_in_bytes() << std::endl;
     }
     std::cout << "[2] if_reference: branch_index: " << static_cast<int>(branch_index) << std::endl;
     ngraph::HostTensorVector inputs_to_body;

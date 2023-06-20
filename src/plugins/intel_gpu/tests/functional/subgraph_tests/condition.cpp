@@ -11,6 +11,8 @@
 #include "ngraph_functions/builders.hpp"
 #include "shared_test_classes/base/ov_subgraph.hpp"
 #include "common_test_utils/test_constants.hpp"
+#include "shared_test_classes/base/utils/ranges.hpp"
+#include <common_test_utils/ov_tensor_utils.hpp>
 
 
 using namespace InferenceEngine;
@@ -145,7 +147,6 @@ protected:
             "eltwise_mul_pooling");
         return body;
     }
-
 
     struct poolSpecificParams {
             ngraph::helpers::PoolingTypes   pooling_type;   // Pooling type, max or avg
@@ -282,7 +283,6 @@ static std::shared_ptr<InnerBodyGenerator> get_inner_body_generator(InnerBodyGen
 class TestModelGenerator {
 public:
     enum CondTypes {
-        CONSTANT,
         PARAM,
         NODE
     };
@@ -292,8 +292,7 @@ public:
                         InnerBodyGenerator::InnerBodyType else_body_type,
                         CondTypes cond_type,
                         ngraph::element::Type prc,
-                        ov::PartialShape input_shape,
-                        bool cond_execution_value = false) {
+                        ov::PartialShape input_shape) {
                             body_then_generator = get_inner_body_generator(then_body_type);
                             body_else_generator = get_inner_body_generator(else_body_type);
 
@@ -303,11 +302,11 @@ public:
                             body_then_generator->get_function()->set_friendly_name("then_inner_body");
 
                             ngraph::ParameterVector params{};
-                            auto exec_cond = create_cond_execution(cond_type, params, ngraph::element::boolean, ngraph::Shape{}, cond_execution_value);
-                            exec_cond->set_friendly_name("if_condition");
+                            auto predicate = create_cond_execution(cond_type, params, ngraph::element::boolean, ngraph::Shape{});
+                            predicate->set_friendly_name("if_predicate");
                             auto data = create_condition_input(params, prc, input_shape);
                             data->set_friendly_name("input_data");
-                            auto cond = std::make_shared<ngraph::opset9::If>(exec_cond);
+                            auto cond = std::make_shared<ngraph::opset9::If>(predicate);
                             cond->set_friendly_name("if_operator");
                             cond->set_else_body(body_else_generator->get_function());
                             cond->set_then_body(body_then_generator->get_function());
@@ -334,15 +333,9 @@ private:
     std::shared_ptr<ngraph::Node> create_cond_execution(CondTypes cond_type,
                                                         ngraph::ParameterVector& params,
                                                         const ngraph::element::Type prc = ngraph::element::u8,
-                                                        const ngraph::Shape shape = ngraph::Shape{},
-                                                        bool value = false) {
+                                                        const ngraph::Shape shape = ngraph::Shape{}) {
         std::shared_ptr<ngraph::Node> if_cond;
         switch (cond_type) {
-            case CondTypes::CONSTANT:
-            {
-                if_cond = create_condition_input(params, prc, shape, value, true);
-                break;
-            }
             case CondTypes::PARAM:
             {
                 if_cond = create_condition_input(params, prc, shape);
@@ -410,11 +403,6 @@ static std::ostream& operator<<(std::ostream& os, const InnerBodyGenerator::Inne
 
 static std::ostream& operator<<(std::ostream& os, const TestModelGenerator::CondTypes type) {
     switch (type) {
-        case TestModelGenerator::CondTypes::CONSTANT:
-        {
-            os << "CONSTANT";
-            break;
-        }
         case TestModelGenerator::CondTypes::PARAM:
         {
             os << "PARAM";
@@ -518,7 +506,6 @@ std::vector<InferenceEngine::SizeVector> inputs_shape = {
 };
 
 std::vector<GPULayerTestsDefinitions::TestModelGenerator::CondTypes> if_cond_types = {
-    GPULayerTestsDefinitions::TestModelGenerator::CondTypes::CONSTANT,
     GPULayerTestsDefinitions::TestModelGenerator::CondTypes::PARAM
 };
 
@@ -547,7 +534,6 @@ using ConditionGPUParams = typename std::tuple<
         InnerBodyTypeParams,            // Inner body type
         InferenceEngine::Precision,     // Precision
         TestModelGenerator::CondTypes,  // if condition type
-        bool,                           // cond execution value
         LayerTestsUtils::TargetDevice   // Device name
 >;
 
@@ -559,10 +545,9 @@ public:
         InnerBodyTypeParams bodyParams;
         InferenceEngine::Precision dataPrc;
         TestModelGenerator::CondTypes condType;
-        bool condExecutionValue;
         std::string targetDevice;
 
-        std::tie(shapes, bodyParams, dataPrc, condType, condExecutionValue, targetDevice) = obj.param;
+        std::tie(shapes, bodyParams, dataPrc, condType, targetDevice) = obj.param;
         std::ostringstream result;
         result << "IS=(";
         result << CommonTestUtils::partialShape2str({shapes.inputShapes.first}) << "_";
@@ -583,7 +568,6 @@ public:
         result << "netPRC=" << dataPrc << "_";
         result << "ifCond=" << condType << "_";
         result << "targetDevice=" << targetDevice << "_";
-        result << "condExecutionValue=" << (condExecutionValue?"True":"False") << "_";
         auto res_str = result.str();
         std::replace(res_str.begin(), res_str.end(), '-', '_');
         return res_str;
@@ -595,24 +579,51 @@ protected:
         InnerBodyTypeParams bodyParams;
         InferenceEngine::Precision dataPrc;
         TestModelGenerator::CondTypes condType;
-        bool condPredicateValue;
-        std::tie(shapes, bodyParams, dataPrc, condType, condPredicateValue, targetDevice) = GetParam();
+        std::tie(shapes, bodyParams, dataPrc, condType, targetDevice) = GetParam();
 
-        if (condType == TestModelGenerator::CondTypes::CONSTANT) {
-            init_input_shapes({shapes.inputShapes});
-        } else {
-            init_input_shapes({shapes.condShapes, shapes.inputShapes});
-        }
+        init_input_shapes({shapes.condShapes, shapes.inputShapes});
 
         const auto prc = FuncTestUtils::PrecisionUtils::convertIE2nGraphPrc(dataPrc);
         TestModelGenerator model_generator(bodyParams.then_body_type,
                                             bodyParams.else_body_type,
                                             condType,
                                             prc,
-                                            shapes.inputShapes.first,
-                                            condPredicateValue);
+                                            shapes.inputShapes.first);
         function = model_generator.get_function();
         function->set_friendly_name("if_operator_outer");
+    }
+
+    void generate_inputs(const std::vector<ov::Shape>& targetInputStaticShapes) override {
+        ov::Shape input_shape;
+        for (auto& shape : targetInputStaticShapes) {
+            if (shape.size() > 1) {
+                input_shape = shape;
+                break;
+            }
+        }
+
+        inputs.clear();
+        for (const auto &param : function->get_parameters()) {
+            if (param->get_output_element_type(0) == ov::element::boolean) {
+                ov::test::utils::InputGenerateData inGenData;
+                inGenData.range         = 10;
+                inGenData.start_from    = 0;
+                inGenData.resolution    = 1;
+                inGenData.seed          = 1;
+                auto tensor = ov::test::utils::create_and_fill_tensor(ov::element::boolean, {1}, inGenData.range,
+                                                                        inGenData.start_from, inGenData.resolution, inGenData.seed);
+                inputs.insert({param, tensor});
+            } else {
+                ov::test::utils::InputGenerateData inGenData;
+                inGenData.range         = 10;
+                inGenData.start_from    = 0;
+                inGenData.resolution    = 256;
+                inGenData.seed          = 1;
+                auto tensor = ov::test::utils::create_and_fill_tensor(ov::element::boolean, input_shape, inGenData.range,
+                                                                        inGenData.start_from, inGenData.resolution, inGenData.seed);
+                inputs.insert({param, tensor});
+            }
+        }
     }
 };
 
@@ -665,17 +676,12 @@ const std::vector<TestModelGenerator::CondTypes> condTypes = {
     TestModelGenerator::CondTypes::NODE
 };
 
-const std::vector<bool> condExecutionValues = {
-    true, false
-};
-
 INSTANTIATE_TEST_SUITE_P(smoke_ConditionGPUTest_dynamic, DynamicConditionLayerGPUTest,
                 testing::Combine(
                     testing::ValuesIn(dynamicInputShapes),                          // input shapes
                     testing::ValuesIn(innerBodyTypes),                              // inner body type
                     testing::ValuesIn(netPrecisions),                               // network precision
                     testing::ValuesIn(condTypes),                                   // cond type
-                    testing::ValuesIn(condExecutionValues),                         // cond execution value
                     testing::Values<std::string>(CommonTestUtils::DEVICE_GPU)),     // device type
                 DynamicConditionLayerGPUTest::getTestCaseName);
 
