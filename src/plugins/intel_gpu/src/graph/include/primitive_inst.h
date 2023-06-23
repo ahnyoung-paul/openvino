@@ -231,6 +231,7 @@ public:
     bool needs_completion_event() const { return _needs_completion_event; }
     bool has_unfused_subgraph() const { return (_unfused_subgraph != nullptr); }
     bool has_node() const { return _node != nullptr; }
+    bool has_inner_networks() const;
 
     void allocate_internal_buffers();
     static memory::ptr allocate_output(engine& engine, memory_pool& pool, const program_node& _node,
