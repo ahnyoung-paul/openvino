@@ -237,14 +237,8 @@ public:
                              const ExecutionConfig& config,
                              bool is_internal = false,
                              bool no_optimizations = false,
-                             bool is_body_program = false);
-    static ptr build_program(engine& engine,
-                             const topology& topology,
-                             const ExecutionConfig& config,
-                             InferenceEngine::CPUStreamsExecutor::Ptr task_executor,
-                             bool is_internal = false,
-                             bool no_optimizations = false,
-                             bool is_body_program = false);
+                             bool is_body_program = false,
+                             InferenceEngine::CPUStreamsExecutor::Ptr task_executor = nullptr);
     static ptr build_program(engine& engine,
                              const std::set<std::shared_ptr<program_node>>& nodes,
                              const ExecutionConfig& config,

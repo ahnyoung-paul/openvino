@@ -246,20 +246,11 @@ kernels_cache& program::get_kernels_cache() const {
 program::ptr program::build_program(engine& engine,
                                     const topology& topology,
                                     const ExecutionConfig& config,
-                                    InferenceEngine::CPUStreamsExecutor::Ptr task_executor,
                                     bool is_internal,
                                     bool no_optimizations,
-                                    bool is_body_program) {
+                                    bool is_body_program,
+                                    InferenceEngine::CPUStreamsExecutor::Ptr task_executor) {
     return std::make_shared<program>(engine, topology, config, task_executor, is_internal, no_optimizations, is_body_program);
-}
-
-program::ptr program::build_program(engine& engine,
-                                    const topology& topology,
-                                    const ExecutionConfig& config,
-                                    bool is_internal,
-                                    bool no_optimizations,
-                                    bool is_body_program) {
-    return std::make_shared<program>(engine, topology, config, nullptr, is_internal, no_optimizations, is_body_program);
 }
 
 program::ptr program::build_program(engine& engine,
