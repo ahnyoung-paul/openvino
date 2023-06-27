@@ -83,7 +83,8 @@ class Program {
 public:
     Program(InferenceEngine::CNNNetwork& network, cldnn::engine& engine, const ExecutionConfig& config,
             bool createTopologyOnly = false, bool partialBuild = false,
-            InferenceEngine::InputsDataMap* inputs = nullptr, InferenceEngine::OutputsDataMap* outputs = nullptr);
+            InferenceEngine::InputsDataMap* inputs = nullptr, InferenceEngine::OutputsDataMap* outputs = nullptr,
+            InferenceEngine::CPUStreamsExecutor::Ptr task_executor = nullptr, bool innerProgram = false);
     Program(cldnn::engine& engine, const ExecutionConfig& config,
             InferenceEngine::InputsDataMap* inputs = nullptr, InferenceEngine::OutputsDataMap* outputs = nullptr);
 
@@ -159,8 +160,6 @@ public:
     bool requires_new_shape_infer(const ngraph::Node& op) const;
 
     InferenceEngine::CPUStreamsExecutor::Ptr get_task_executor() { return m_task_executor; }
-
-    cldnn::program::ptr create_inner_program(InferenceEngine::CNNNetwork& network, const ExecutionConfig& config);
 
 private:
     static factories_map_t factories_map;
