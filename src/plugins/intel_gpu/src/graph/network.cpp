@@ -244,7 +244,7 @@ void dump<uint32_t>(memory::ptr mem, stream& stream, std::ofstream& file_stream,
     }
 }
 
-void log_memory_to_file(memory::ptr mem, stream& stream, std::string layerName, bool dump_raw) {
+void log_memory_to_file(memory::ptr mem, stream& stream, std::string layerName, bool dump_raw, std::string tags) {
     std::cout << "Dump " << (dump_raw ? "raw " : "") << layerName << std::endl;
     GPU_DEBUG_GET_INSTANCE(debug_config);
     std::string filename = layerName;
@@ -258,6 +258,7 @@ void log_memory_to_file(memory::ptr mem, stream& stream, std::string layerName, 
         file_stream << "Empty" << std::endl;
         return;
     }
+    file_stream << tags;
 
     auto mem_dt = mem->get_layout().data_type;
     if (mem_dt == cldnn::data_types::f32)
@@ -296,7 +297,7 @@ void wait_for_the_turn() {
 
 #else
 void dump_perf_data_raw(std::string, const std::list<std::shared_ptr<primitive_inst>>&) {}
-void log_memory_to_file(memory::ptr, stream&, std::string, bool dump_raw) {}
+void log_memory_to_file(memory::ptr, stream&, std::string, bool dump_raw, std::string tags) {}
 void wait_for_the_turn() {}
 #endif
 }  // namespace
@@ -1202,7 +1203,13 @@ void network::execute_impl(const std::vector<event::ptr>& events) {
         return std::to_string(iter) + "_";
     };
 
+    size_t order_idx = 0;
     for (auto& inst : _exec_order) {
+        order_idx++;
+        std::stringstream ss;
+        ss << std::setfill('0') << std::setw(4) << order_idx;
+        std::string order_str = ss.str();
+        std::string dep_info;
         GPU_DEBUG_IF(debug_config->dump_layers_path.length() > 0) {
             const std::string layer_name = inst->id();
             GPU_DEBUG_IF(debug_config->verbose >= 2) {
@@ -1212,13 +1219,15 @@ void network::execute_impl(const std::vector<event::ptr>& events) {
             GPU_DEBUG_IF(debug_config->is_target_iteration(curr_iter) &&
                         debug_config->dump_layers_dst_only == 0 && debug_config->is_dumped_layer(layer_name)) {
                 for (size_t i = 0; i < get_primitive(inst->id())->dependencies().size(); i++) {
+                    auto dep_id = inst->get_node().get_dependency(i).id();
+                    dep_info += "#dep: " + dep_id + "\n";
                     log_memory_to_file(get_primitive(inst->id())->dep_memory_ptr(i),
                                     get_stream(),
                                     "program" + std::to_string((get_program() != nullptr) ? get_program()->get_id() : 0) +
                                     "_network" + std::to_string(get_id()) +
-                                    "_" + get_iteration_prefix(curr_iter) +
+                                     "_" + get_iteration_prefix(curr_iter) + "_" + order_str + "_" +
                                     layer_name + "_src" + std::to_string(i),
-                                    debug_config->dump_layers_raw);
+                                    debug_config->dump_layers_raw, "# " + dep_id);
                 }
             }
         }
@@ -1226,6 +1235,16 @@ void network::execute_impl(const std::vector<event::ptr>& events) {
         execute_primitive(inst, events);
 
         GPU_DEBUG_IF(debug_config->dump_layers_path.length() > 0) {
+            if (inst->get_impl()) {
+                if (inst->get_impl()->get_kernels().size() > 0) {
+                    dep_info += "#kernel: " + inst->get_impl()->get_kernels().front()->get_id() + "\n";
+                } else {
+                    dep_info += "#kernel: no found kernel \n";
+                }
+            } else {
+                dep_info += "#kernel: impl is empty \n";
+            }
+
             get_stream().finish();
             const std::string layer_name = inst->id();
             auto prog_id = ((get_program() != nullptr) ? get_program()->get_id() : 0);
@@ -1237,9 +1256,9 @@ void network::execute_impl(const std::vector<event::ptr>& events) {
                                     get_stream(),
                                     "program" + std::to_string(prog_id) +
                                     "_network" + std::to_string(net_id) +
-                                    "_" + get_iteration_prefix(curr_iter) +
+                                    "_" + get_iteration_prefix(curr_iter)  + "_" + order_str + "_" +
                                     layer_name + "_dst" + std::to_string(i),
-                                    debug_config->dump_layers_raw);
+                                    debug_config->dump_layers_raw, dep_info);
                 }
             }
         }
