@@ -27,6 +27,10 @@ static void CreateCommonSplitOp(ProgramBuilder& p, const std::shared_ptr<ov::Nod
             ov::Shape start_offset(input_pshape.size());
             for (size_t i = 0; i < op->get_output_size(); i++) {
                 const auto outPartialShape = op->get_output_partial_shape(i);
+                if (outPartialShape.is_dynamic()) {
+                    offsets.clear();
+                    break;
+                }
                 auto offsetTensor = tensor_from_dims(start_offset, 0);
                 offsets.push_back(offsetTensor);
 
@@ -49,7 +53,7 @@ static void CreateCommonSplitOp(ProgramBuilder& p, const std::shared_ptr<ov::Nod
             auto cropPrim = cldnn::crop(get_layer_name(i),
                                         inputs,
                                         cldnn::tensor(1),
-                                        (op->is_dynamic() ? cldnn::tensor(0) : offsets[i]),
+                                        (offsets.empty() ? cldnn::tensor(0) : offsets[i]),
                                         op_mode,
                                         static_cast<int>(i),
                                         num_splits);

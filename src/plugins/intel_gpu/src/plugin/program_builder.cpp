@@ -17,6 +17,13 @@
 #include "ie_ngraph_utils.hpp"
 #include "ie_common.h"
 #include "transformations/utils/utils.hpp"
+#include "ngraph/pass/manager.hpp"
+#include "openvino/pass/manager.hpp"
+#include "transformations/common_optimizations/fold_subgraph_empty_inputs.hpp"
+#include "transformations/common_optimizations/nop_elimination.hpp"
+#include "transformations/common_optimizations/remove_concat_zero_dim_input.hpp"
+#include "transformations/common_optimizations/remove_multi_subgraph_op_dangling_params.hpp"
+#include "transformations/fix_rt_info.hpp"
 
 #ifdef __linux__
 # include <dlfcn.h>
@@ -304,6 +311,21 @@ ProgramBuilder::ProgramBuilder(const std::shared_ptr<ov::Model>& model, cldnn::e
     if (m_task_executor == nullptr)
         m_task_executor = cldnn::program::make_task_executor(m_config);
 
+    std::shared_ptr<ov::Model> ngraph_function(model);
+    if (!ngraph_function) {
+        OPENVINO_THROW("ov::Model pointer is nullptr");
+    }
+
+    {
+        ov::pass::Manager m;
+        m.register_pass<ov::pass::FixRtInfo>();
+        m.register_pass<ov::pass::EliminateScatterUpdate>();
+        m.register_pass<ov::pass::RemoveConcatZeroDimInput>();
+        m.register_pass<ov::pass::RemoveMultiSubGraphOpDanglingParamsResults>();
+        m.register_pass<ov::pass::FoldSubgraphEmptyInputs>();
+        m.run_passes(ngraph_function);
+    }
+
     InferenceEngine::InputsDataMap networkInputs = {};
     InferenceEngine::OutputsDataMap networkOutputs = {};
 
@@ -326,7 +348,7 @@ ProgramBuilder::ProgramBuilder(const std::shared_ptr<ov::Model>& model, cldnn::e
     };
 
     {
-        for (const auto& result : model->get_results()) {
+        for (const auto& result : ngraph_function->get_results()) {
             auto out_node = result->input_value(0);
             auto outName = ov::op::util::create_ie_output_name(out_node);
             DataPtr data;
@@ -334,7 +356,7 @@ ProgramBuilder::ProgramBuilder(const std::shared_ptr<ov::Model>& model, cldnn::e
             networkOutputs[outName] = data;
         }
 
-        for (const auto& parameter : model->get_parameters()) {
+        for (const auto& parameter : ngraph_function->get_parameters()) {
             const auto& outName = parameter->get_friendly_name();
             DataPtr data;
             create_data_for_result(parameter, outName, data);
@@ -344,13 +366,11 @@ ProgramBuilder::ProgramBuilder(const std::shared_ptr<ov::Model>& model, cldnn::e
         }
     }
 
-    if (!model) {
-        OPENVINO_THROW("ov::Model pointer is nullptr");
-    }
+
 
     LoadCustomLayers();
 
-    auto ops = model->get_ordered_ops();
+    auto ops = ngraph_function->get_ordered_ops();
     m_programs.emplace_back(BuildProgram(ops, networkInputs, networkOutputs, false, false, true));
 }
 
