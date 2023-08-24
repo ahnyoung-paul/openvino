@@ -58,6 +58,15 @@ std::vector<layout> broadcast_inst::calc_output_layouts(broadcast_node const& /*
         pattern_shape
     };
 
+    if (impl_param.desc->id == "broadcast:__module.model/aten::copy_/Broadcast") {
+        std::cout << "****************************************************************" << std::endl;
+        std::cout << "ID : " << impl_param.desc->id << std::endl;
+        for (auto& ishape : input_shapes) {
+            std::cout << " -- " << ishape << std::endl;
+        }
+        std::cout << "****************************************************************" << std::endl;
+    }
+
     auto axes_mapping = desc->axes_mapping.to_vector();
     ShapeType axes_mapping_shape = ov::Shape{axes_mapping.size()};
 
