@@ -12,6 +12,7 @@
 #include "proposal_inst.h"
 #include "quantize_inst.h"
 #include "arg_max_min_inst.h"
+#include "non_max_suppression_inst.h"
 #include "fully_connected_inst.h"
 #include "condition_inst.h"
 #include "program_node.h"

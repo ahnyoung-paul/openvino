@@ -151,6 +151,21 @@ public:
         auto& kernel_selector = kernel_selector::non_max_suppression_kernel_selector::Instance();
         auto best_kernel = kernel_selector.get_best_kernel(params, optional_params);
 
+        // auto vec_to_str = [&](const std::vector<size_t>& ws) -> std::string {
+        //     std::stringstream ss;
+        //     ss << "(" << ws.size() << ")[";
+        //     for (auto& w : ws) {
+        //         ss << w << ",";
+        //     }
+        //     ss << "]";
+
+        //     return ss.str();
+        // };
+        // std::cout << "params[" << primitive->id << "] : " << params.to_cache_string_v2() << ", "
+        //     << "gws: " << vec_to_str(best_kernel.kernels.front().params.workGroups.global) << ","
+        //     << "lws: " << vec_to_str(best_kernel.kernels.front().params.workGroups.local) << ","
+        //     << best_kernel.kernels.front().code.kernelString->entry_point << std::endl;
+
         return make_unique<non_max_suppression_impl>(best_kernel);
     }
 

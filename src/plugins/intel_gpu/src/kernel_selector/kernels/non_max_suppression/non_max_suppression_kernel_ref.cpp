@@ -50,6 +50,17 @@ NonMaxSuppressionKernelRef::DispatchData SetDefault(const non_max_suppression_pa
         dispatchData.gws = {1, 1, 1};
         dispatchData.lws = {1, 1, 1};
     }
+    // auto check_vec = [&](const std::vector<size_t>& ws) -> std::string {
+    //     std::stringstream ss;
+    //     ss << "(" << ws.size() << ")[";
+    //     for (auto& w : ws) {
+    //         ss << w << ",";
+    //     }
+    //     ss << "]";
+
+    //     return ss.str();
+    // };
+    // std::cout << "gws: " << check_vec(dispatchData.gws) << ", lws: " << check_vec(dispatchData.lws) << std::endl;
 
     return dispatchData;
 }

@@ -406,6 +406,9 @@ void remove_redundant_reorders::run(program& p) {
             auto& input = node.input();
             auto output_layout = node.get_output_layout();
 
+            if (input.is_type<permute>() && input.get_input_layout() != output_layout)
+                continue;
+
             if (node.has_mean() || !node.get_primitive()->subtract_per_feature.empty())
                 continue;
 

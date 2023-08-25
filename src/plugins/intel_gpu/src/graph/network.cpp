@@ -36,6 +36,7 @@
 #include "to_string_utils.h"
 #include "kernels_cache.hpp"
 #include "compilation_context.hpp"
+#include "non_max_suppression_inst.h"
 
 // TODO: Remove once we have an abstraction for kernels_cache
 #include "kernel_base.h"
@@ -1356,11 +1357,32 @@ void network::execute_impl(const std::vector<event::ptr>& events) {
             }
         }
 
+        // {
+        //     if (inst->get_node().is_type<non_max_suppression>()
+        //         && inst->get_input_layout(0).is_static()
+        //         && inst->get_input_layout(0).count() == 0) {
+        //         std::cout << inst->get_node().id() << " has empty input" << std::endl;
+        //     }
+        // }
+
         execute_primitive(inst, events);
         executed_prims++;
 
         if (needs_flushing && executed_prims % flush_frequency == 0)
             get_stream().flush();
+
+        {
+            if (inst->get_node().is_type<non_max_suppression>()) {
+                const std::string layer_name = inst->id();
+                for (size_t i = 0; i < get_primitive(layer_name)->outputs_memory_count(); i++) {
+                    auto output_layout = inst->get_output_layout(i);
+                    if (output_layout.count() == 0) {
+                        auto output_mem = get_primitive(layer_name)->output_memory_ptr(i);
+                        output_mem->fill(get_stream());
+                    }
+                }
+            }
+        }
 
         // Dump output buffers of 'inst'
         GPU_DEBUG_IF(debug_config->dump_layers_path.length() > 0) {
