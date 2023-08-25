@@ -312,10 +312,12 @@ ProgramBuilder::ProgramBuilder(const std::shared_ptr<ov::Model>& model, cldnn::e
         m_task_executor = cldnn::program::make_task_executor(m_config);
 
     std::shared_ptr<ov::Model> ngraph_function(model);
+    // Check ngraph function pointer
     if (!ngraph_function) {
         OPENVINO_THROW("ov::Model pointer is nullptr");
     }
 
+    // Run ngraph transformations
     {
         ov::pass::Manager m;
         m.register_pass<ov::pass::FixRtInfo>();
@@ -326,6 +328,7 @@ ProgramBuilder::ProgramBuilder(const std::shared_ptr<ov::Model>& model, cldnn::e
         m.run_passes(ngraph_function);
     }
 
+    // Set input / output for Parameter and Result in cldnn
     InferenceEngine::InputsDataMap networkInputs = {};
     InferenceEngine::OutputsDataMap networkOutputs = {};
 
@@ -348,6 +351,7 @@ ProgramBuilder::ProgramBuilder(const std::shared_ptr<ov::Model>& model, cldnn::e
     };
 
     {
+        // Set networkOutputs
         for (const auto& result : ngraph_function->get_results()) {
             auto out_node = result->input_value(0);
             auto outName = ov::op::util::create_ie_output_name(out_node);
@@ -356,6 +360,7 @@ ProgramBuilder::ProgramBuilder(const std::shared_ptr<ov::Model>& model, cldnn::e
             networkOutputs[outName] = data;
         }
 
+        // Set networkInputs
         for (const auto& parameter : ngraph_function->get_parameters()) {
             const auto& outName = parameter->get_friendly_name();
             DataPtr data;
@@ -366,10 +371,10 @@ ProgramBuilder::ProgramBuilder(const std::shared_ptr<ov::Model>& model, cldnn::e
         }
     }
 
-
-
+    // Load customLayers
     LoadCustomLayers();
 
+    // Build program
     auto ops = ngraph_function->get_ordered_ops();
     m_programs.emplace_back(BuildProgram(ops, networkInputs, networkOutputs, false, false, true));
 }
