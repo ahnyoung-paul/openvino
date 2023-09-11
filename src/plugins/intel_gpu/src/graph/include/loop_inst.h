@@ -21,34 +21,24 @@ template<>
 struct typed_program_node<loop> : public typed_program_node_base<loop> {
 private:
     using parent = typed_program_node_base<loop>;
-    mutable topology body;
 
     std::vector<loop::io_primitive_map> input_primitive_maps;
     std::vector<loop::io_primitive_map> output_primitive_maps;
     mutable std::vector<loop::backedge_mapping> back_edges;
-    bool use_current_iteration;
-    bool use_execution_condition;
-    mutable program::ptr body_program;
+
 
 public:
     typed_program_node(std::shared_ptr<primitive> prim, program& prog) :
         parent(prim, prog),
-        body(this->get_primitive()->body),
         input_primitive_maps(this->get_primitive()->input_primitive_maps),
         output_primitive_maps(this->get_primitive()->output_primitive_maps),
         back_edges(this->get_primitive()->back_edges),
-        use_current_iteration(!this->get_primitive()->current_iteration_id.empty()),
-        use_execution_condition(!this->get_primitive()->condition_id.empty()),
-        iteration_axis(0),
-        max_iteration(this->get_primitive()->max_iteration < 0 ? DEFAULT_MAX_NUM_ITERATION : this->get_primitive()->max_iteration) {}
+        iteration_axis(0) {}
 
     mutable size_t iteration_axis;
-    int64_t max_iteration;
 
-    int64_t get_max_iteration() const { return max_iteration; }
-    program::ptr get_body_program() const { return body_program; }
-    bool is_current_iteration_used() const { return use_current_iteration; }
-    bool is_execution_condition_used() const { return use_execution_condition; }
+    int64_t get_max_iteration() const { return get_primitive()->get_max_num_iteration(); }
+    program::ptr get_body_program() const { return get_primitive()->body_program; }
 
     static size_t convert_to_raw_axis(size_t axis, size_t ndim) {
         // convert between bfyx, bfzyx, bfzyxw and tensor.size.raw
@@ -205,118 +195,11 @@ public:
         }
     }
 
-    void process_current_iteration() const {
-        const primitive_id& current_iteration_id = get_current_iteration_id();
-        if (current_iteration_id.empty()) {
-            return;
-        }
-
-        const topology_map& body_topology_map = body.get_primitives();
-        const layout body_input_layout(data_types::i64, format::bfyx, {1, 1, 1, 1});
-
-        // add current_iteration primitive if current_iteration primitive is not exist in body
-        if (body_topology_map.find(current_iteration_id) == body_topology_map.end()) {
-            body.add_primitive(std::make_shared<input_layout>(current_iteration_id, body_input_layout));
-        } else {
-            const auto& body_input_prim = body.at(current_iteration_id);
-            const auto input_layout_prim = std::dynamic_pointer_cast<input_layout>(body_input_prim);
-            OPENVINO_ASSERT(input_layout_prim, "[GPU] current_iteration primitive should be cldnn::input_layout in node", this->id());
-            input_layout_prim->change_layout(body_input_layout);
-        }
-
-        // add incremental data: 1
-        // it is used to update current_iteration in body network
-        const primitive_id increment_value_id = current_iteration_id + "_inc";
-        auto mem = get_program().get_engine().allocate_memory(body_input_layout);
-        auto& stream = get_program().get_stream();
-        write_scalar_value(mem, stream, 1);
-        body.add_primitive(std::make_shared<data>(increment_value_id, mem));
-
-        // add eltwise sum updating current_iteration with incremental data
-        const primitive_id updated_currnet_iteration_id = current_iteration_id + "_update";
-        body.add_primitive(std::make_shared<eltwise>(updated_currnet_iteration_id,
-            current_iteration_id, increment_value_id, eltwise_mode::sum));
-
-        // set backedge
-        back_edges.emplace_back(updated_currnet_iteration_id, current_iteration_id);
-    }
-
-    void process_single_int_output(const primitive_id& id) const {
-        // add mutable if not exist
-        const topology_map& body_topology_map = body.get_primitives();
-        layout body_output_layout(data_types::i64, format::bfyx, {1, 1, 1, 1});
-        if (!id.empty()) {
-            auto body_output = body_topology_map.find(id);
-            if (body_output == body_topology_map.end()) {
-                auto mem = get_program().get_engine().allocate_memory(body_output_layout);
-                auto md = std::make_shared<data>(id, mem);
-                body.add_primitive(md);
-            } else {
-                auto body_output_prim = body.at(body_output->first);
-                auto mem = get_program().get_engine().allocate_memory(body_output_layout);
-                body_output_prim.reset(new mutable_data(body_output->first, std::move(mem)));
-            }
-        }
-    }
-
-    void build_body_program() const {
-        for (const auto& pm : input_primitive_maps) {
-            layout calculated_layout = calc_body_input_layout(pm);
-            const primitive_id& internal_input_id = pm.internal_id;
-
-            // add inputs for body network if not exist
-            if (body.get_primitives().count(internal_input_id) == 0) {
-                body.add_primitive(std::make_shared<input_layout>(internal_input_id, calculated_layout));
-            } else {
-                body.change_input_layout(internal_input_id, calculated_layout);
-            }
-        }
-
-        // setup internal output
-        OPENVINO_ASSERT(!output_primitive_maps.empty(), "[GPU] Output primitive map should have at least 1 mapping in primitive ", this->id());
-        std::set<primitive_id> output_names;
-        output_names.insert(output_primitive_maps.front().internal_id);
-
-        // add current_iteration_id in body network, condition_id if exist
-        process_current_iteration();
-        process_single_int_output(get_condition_id());
-
-        // setup outputs for backedges
-        for (auto& back_edge : back_edges) {
-            // check whether the back_edge.to has its corresponding io_primitive_map
-            const auto& input_map = std::find_if(input_primitive_maps.begin(), input_primitive_maps.end(),
-                [&](const loop::io_primitive_map& pm) {
-                    return pm.internal_id == back_edge.to;
-                });
-
-            // backedge which is current_iteration does not have
-            // input primitive map because its initial value is always
-            // zero and the value will be set in execute_impl()
-            if (back_edge.to != get_current_iteration_id() && input_map == input_primitive_maps.end()) {
-                std::string msg = "[GPU] No primitive mapping for backedge (internal_id: " + back_edge.to + ") for primitive " + this->id();
-                OPENVINO_ASSERT(false, msg.c_str());
-            }
-
-            output_names.insert(back_edge.from);
-        }
-
-        // if execution_condition_id is specified, we need to add the id in build_option::outputs
-        if (!get_condition_id().empty()) {
-            output_names.insert(get_condition_id());
-        }
-
-        std::vector<primitive_id> output_names_vec(output_names.begin(), output_names.end());
-        auto config = get_program().get_config();
-        config.set_property(ov::intel_gpu::custom_outputs(output_names_vec));
-        body_program = program::build_program(get_program().get_engine(), body, config, get_program().get_task_executor(), false, false, true);
-    }
-
     const primitive_id& get_trip_count_id() const { return get_primitive()->trip_count_id; }
-    const primitive_id& get_initial_execution_id() const { return get_primitive()->initial_execution_id; }
-    const primitive_id& get_current_iteration_id() const { return get_primitive()->current_iteration_id; }
-    const primitive_id& get_condition_id() const { return get_primitive()->condition_id; }
+    const primitive_id& get_initial_execution_id() const { return get_primitive()->first_execution_condition_id; }
+    const primitive_id& get_current_iteration_id() const { return get_primitive()->body_current_iteration_id; }
+    const primitive_id& get_execution_condition_id() const { return get_primitive()->body_execution_condition_id; }
     const primitive_id& get_num_iteration_id() const { return get_primitive()->num_iteration_id; }
-    const topology& get_body_topology() const { return get_primitive()->body; }
 };
 
 using loop_node = typed_program_node<loop>;
@@ -519,7 +402,6 @@ private:
     std::vector<concatenated_memory_mapping> concatenated_output_mem_mappings;
 
     static std::string to_string(const loop_node& node);
-    size_t current_iteratoin_backedge_mapping_idx = 0;
 
 public:
     typed_primitive_inst(network& network, const loop_node& node);
@@ -529,10 +411,7 @@ public:
     void preprocess_backedge_memory();
     void update_mapped_memory();
     event::ptr set_output_memory(memory::ptr mem, bool check = true, size_t idx = 0) override;
-    const backedge_memory_mapping& get_current_iteration_backedge_mapping() const {
-        OPENVINO_ASSERT(node->is_current_iteration_used(), "[GPU] No backedge mapping for current_iteration for primitive ", node->id());
-        return backedge_memory_mappings.at(current_iteratoin_backedge_mapping_idx);
-    }
+
     void save(BinaryOutputBuffer& ob) const override;
     void load(BinaryInputBuffer& ib) override;
 

@@ -74,13 +74,6 @@ static void validate_backedges(loop_node const & node) {
 }
 
 layout loop_inst::calc_output_layout(loop_node const & node, kernel_impl_params const& impl_param) {
-    // body program should be built here to calculate body input layout
-    // from outputs of loop's dependency and calculate loop output layout
-    // from the outputs of body program
-    if (!node.get_body_program()) {
-        const_cast<loop_node&>(node).build_body_program();
-    }
-
     // type checks
     const primitive_id& num_iteration_id = node.get_num_iteration_id();
     if (!node.get_program().get_node(num_iteration_id).is_type<mutable_data>()) {
@@ -90,7 +83,7 @@ layout loop_inst::calc_output_layout(loop_node const & node, kernel_impl_params 
     if (!check_if_axis_is_set_properly(node)) {
         CLDNN_ERROR_MESSAGE(node.id(), "axis is not set properly");
     }
-
+    auto prim = impl_param.typed_desc<loop>();
 
     // finds internal output
     const auto& output_primitive_maps = node.get_output_primitive_maps();
@@ -110,7 +103,7 @@ layout loop_inst::calc_output_layout(loop_node const & node, kernel_impl_params 
         if (axis_to_iterate_throgh != -1) {
             const size_t ndim = loop_output_layout.get_rank();
             auto shape = loop_output_layout.get_dims();
-            shape[axis_to_iterate_throgh] = static_cast<int32_t>(node.get_max_iteration());
+            shape[axis_to_iterate_throgh] = static_cast<int32_t>(prim->get_max_num_iteration());
             loop_output_layout.set_tensor(tensor(format::get_default_format(ndim), shape));
         }
     }
@@ -121,12 +114,19 @@ std::string loop_inst::to_string(const loop_node & node) {
     auto desc = node.get_primitive();
     auto node_info = node.desc_to_json();
 
+    std::vector<primitive_id> body_inputs;
+    {
+        for (auto& input : desc->body_program->get_inputs()) {
+            body_inputs.push_back(input->id());
+        }
+    }
+
     json_composite loop_info;
-    loop_info.add("body input id", desc->body.get_primitives_ids());
+    loop_info.add("body input id", body_inputs);
     loop_info.add("trip_count_id", desc->trip_count_id);
-    loop_info.add("initial_execution_id", desc->initial_execution_id);
-    loop_info.add("current_iteration_id", desc->current_iteration_id);
-    loop_info.add("condition_id", desc->condition_id);
+    loop_info.add("first_execution_condition_id", desc->first_execution_condition_id);
+    loop_info.add("body_current_iteration_id", desc->body_current_iteration_id);
+    loop_info.add("body_execution_condition_id", desc->body_execution_condition_id);
 
     std::stringstream primitive_description;
     node_info->add("loop info", loop_info);
@@ -337,10 +337,10 @@ void loop_inst::preprocess_output_memory() {
             auto output_prim = body_network->get_primitive(internal_id);
             layout sliced_layout = output_prim->output_memory().get_layout();
 
-            const int64_t max_iteration = _max_iteration;
+            const int64_t max_num_iteration = _max_iteration;
             std::vector<memory::ptr> sliced_mems;
-            sliced_mems.reserve(max_iteration);
-            for (int32_t j = 0; j < max_iteration; ++j) {
+            sliced_mems.reserve(max_num_iteration);
+            for (int32_t j = 0; j < max_num_iteration; ++j) {
                 memory::ptr sliced_mem = engine.allocate_memory(sliced_layout, 0);
                 sliced_mems.push_back(sliced_mem);
             }
@@ -417,18 +417,8 @@ void loop_inst::preprocess_backedge_memory() {
         const auto backedge_from_prim = body_network->get_primitive(back_edge.from);
 
         memory::ptr initial_mem;
-        if (back_edge.to == _current_iteration_id) {
-            const layout current_iteration_layout = backedge_to_prim->output_memory().get_layout();
-            initial_mem = get_network().get_engine().allocate_memory(current_iteration_layout);
-            auto& stream = get_network().get_stream();
-            loop_node::write_scalar_value(initial_mem, stream, 0);
-            current_iteratoin_backedge_mapping_idx = backedge_memory_mappings.size();
-        } else {
-            if (input_map_ptrs.empty()) {
-                CLDNN_ERROR_MESSAGE(id(), "no input_mapping for backedged input");
-            }
-            initial_mem = get_external_memory(input_map_ptrs.front()->external_id);
-        }
+        OPENVINO_ASSERT(!input_map_ptrs.empty(), "no input_mapping for backedged input");
+        initial_mem = get_external_memory(input_map_ptrs.front()->external_id);
 
         auto backedged_sliced_output_mems = get_sliced_mem(back_edge.from);
         if (backedged_sliced_output_mems.empty()) {
@@ -500,7 +490,7 @@ loop_inst::typed_primitive_inst(network & network, loop_node const & node)
     _trip_count_id = node.get_trip_count_id();
     _initial_execution_id = node.get_initial_execution_id();
     _current_iteration_id = node.get_current_iteration_id();
-    _condition_id = node.get_condition_id();
+    _condition_id = node.get_execution_condition_id();
     _num_iteration_id = node.get_num_iteration_id();
     _max_iteration = node.get_max_iteration();
 }
