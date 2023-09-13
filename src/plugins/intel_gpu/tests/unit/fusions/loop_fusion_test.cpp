@@ -31,11 +31,12 @@ struct loop_params {
     size_t expected_not_fused_primitives;
 };
 
-static program::ptr build_inner_program(engine& engine,
-                                            topology& body_topology,
-                                            primitive_id initial_condition_id,
-                                            std::vector<loop::io_primitive_map> output_primitive_maps,
-                                            std::vector<loop::backedge_mapping> back_edges) {
+
+program::ptr build_program(engine& engine,
+                            topology& body_topology,
+                            primitive_id initial_condition_id,
+                            std::vector<loop::io_primitive_map> output_primitive_maps,
+                            std::vector<loop::backedge_mapping> back_edges) {
     std::vector<primitive_id> output_names_vec;
     for (auto out_map : output_primitive_maps) {
         output_names_vec.push_back(out_map.internal_id);
@@ -99,7 +100,7 @@ TEST_P(permute_eltwise_loop, basic) {
     std::vector<loop::io_primitive_map> output_primitive_maps {loop::io_primitive_map("loop", "body_eltwise", 2)};
     std::vector<loop::backedge_mapping> back_edges {loop::backedge_mapping("body_eltwise", "body_eltwise_operand")};
 
-    auto body_program = build_inner_program(engine, body, "initial_condition", output_primitive_maps, back_edges);
+    auto body_program = build_program(engine, body, "", output_primitive_maps, back_edges);
 
     create_topologies(
         input_layout("input", get_input_layout(p)),
