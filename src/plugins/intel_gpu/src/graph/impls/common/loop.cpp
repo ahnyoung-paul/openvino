@@ -193,38 +193,6 @@ struct loop_impl : typed_primitive_impl<loop> {
             loop_node::write_scalar_value(num_actual_iterations_mem, stream, current_iteration_idx);
         }
 
-#ifdef DEBUG
-        {
-            for (size_t i = 0; i < instance.inputs_memory_count(); i++) {
-                auto in_mem = instance.dep_memory_ptr(i);
-                auto dep_id = instance.dependencies()[i].first->id();
-                if (in_mem->get_layout().data_type == data_types::f32) {
-                    mem_lock<float> lock_prim_output{in_mem, stream};
-                    float* values = lock_prim_output.data();
-                    std::cout << "[loop_inst][input_" << i << "][" << current_iteration_idx << "] " << dep_id << " = "
-                                << in_mem->get_layout().to_short_string() << " {";
-                    for (size_t idx = 0; idx < in_mem->get_layout().count(); idx++) {
-                        std::cout << values[idx] << ",";
-                    }
-                    std::cout << "}" << std::endl;
-                } else {
-                    auto value = loop_node::read_scalar_value(in_mem, stream);
-                    std::cout << "[loop_inst][input_" << i << "][" << current_iteration_idx << "] " << dep_id << " = "
-                                << in_mem->get_layout().to_short_string() << " {" << value << "}" << std::endl;
-                }
-            }
-
-            auto out_mem = instance.output_memory_ptr();
-            mem_lock<float> lock_prim_output{out_mem, stream};
-            float* values = lock_prim_output.data();
-            std::cout << "[loop_inst][output][" << current_iteration_idx << "] " << instance.id() << " = "
-                        << out_mem->get_layout().to_short_string() << " {";
-            for (size_t idx = 0; idx < out_mem->get_layout().count(); idx++) {
-                std::cout << values[idx] << ",";
-            }
-            std::cout << "}" << std::endl;
-        }
-#endif
         ev->set();
         return ev;
     }
@@ -244,7 +212,6 @@ struct loop_impl : typed_primitive_impl<loop> {
     }
 
 private:
-    int64_t _max_iteration = 0;
     std::vector<cldnn::loop::backedge_mapping> _back_edges;
 };
 
