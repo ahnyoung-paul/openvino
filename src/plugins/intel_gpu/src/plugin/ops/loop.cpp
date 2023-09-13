@@ -126,8 +126,8 @@ static void SetLoopInputOutputMap(ProgramBuilder& p,
 
 static std::vector<cldnn::primitive_id> GetOutputNames(const cldnn::primitive_id id,
                                                         const cldnn::primitive_id body_execution_condition_id,
-                                                        std::vector<cldnn::loop::io_primitive_map>& output_primitive_maps,
-                                                        std::vector<cldnn::loop::backedge_mapping>& back_edges) {
+                                                        const std::vector<cldnn::loop::io_primitive_map>& output_primitive_maps,
+                                                        const std::vector<cldnn::loop::backedge_mapping>& back_edges) {
     std::vector<cldnn::primitive_id> output_names;
     OPENVINO_ASSERT(!output_primitive_maps.empty(), "[GPU] Output primitive map should have at least 1 mapping in primitive ", id);
     for (auto out_map : output_primitive_maps) {
