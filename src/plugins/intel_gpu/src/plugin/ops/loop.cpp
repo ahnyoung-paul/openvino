@@ -92,6 +92,7 @@ static void SetLoopInputOutputMap(ProgramBuilder& p,
     // set output mapping
     for (const auto& loop_output_desc : loop_output_descs) {
         const uint64_t output_idx = loop_output_desc->m_output_index;
+        const auto body_idx = loop_output_desc->m_body_value_index;
 
         // Add additional mutable_data for multiple outputs
         // primitive ID should be <TI primitive ID>.<output_idx> if output_idx > 0
@@ -109,6 +110,10 @@ static void SetLoopInputOutputMap(ProgramBuilder& p,
         }
         const auto& body_output = body_outputs.at(loop_output_desc->m_body_value_index);
         cldnn::primitive_id internal_id = layer_type_name_ID(body_output);
+
+        std::cout << "loop_output_descs = [output_idx:" << output_idx << "=> output idx of "
+                    << layerName << ", body_idx:" << body_idx
+                    << "=> internal_id: " << internal_id << "]" << std::endl;
 
         // update primitive_map
         if (const auto& concatOutput =

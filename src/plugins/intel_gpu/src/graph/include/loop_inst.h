@@ -79,6 +79,13 @@ public:
             }
         }
     }
+
+    using parent::get_kernel_impl_params;
+    std::unique_ptr<kernel_impl_params> get_kernel_impl_params(const std::vector<layout>& in_layouts, const std::vector<layout>& out_layouts) const override {
+        auto params = parent::get_kernel_impl_params(in_layouts, out_layouts);
+        params->inner_progs = { get_primitive()->body_program };
+        return params;
+    }
 };
 
 using loop_node = typed_program_node<loop>;
@@ -274,6 +281,8 @@ private:
         const int64_t bytes_iteration_initial_offset;
     };
 
+    template<typename ShapeType>
+    static std::vector<layout> calc_output_layouts(loop_node const& node, kernel_impl_params const& impl_param);
     static layout calc_output_layout(const loop_node& node, kernel_impl_params const& impl_param);
     bool preproc_memories_done = false;
     std::vector<backedge_memory_mapping> backedge_memory_mappings;

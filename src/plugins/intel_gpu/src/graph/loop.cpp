@@ -122,6 +122,15 @@ layout loop_inst::calc_output_layout(loop_node const & node, kernel_impl_params 
     return loop_output_layout;
 }
 
+
+template<typename ShapeType>
+std::vector<layout> loop_inst::calc_output_layouts(loop_node const& node, kernel_impl_params const& impl_param) {
+    return {calc_output_layout(node, impl_param)};
+}
+
+template std::vector<layout> loop_inst::calc_output_layouts<ov::PartialShape>(loop_node const& node, const kernel_impl_params& impl_param);
+
+
 std::string loop_inst::to_string(const loop_node & node) {
     auto desc = node.get_primitive();
     auto node_info = node.desc_to_json();
