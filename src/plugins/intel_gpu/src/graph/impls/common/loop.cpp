@@ -12,6 +12,78 @@
 
 namespace cldnn {
 namespace common {
+
+// read scala value from data primitive
+static int64_t read_scalar_value(memory::ptr mem, stream& stream) {
+    int64_t trip_count = 0;
+    const layout& prim_layout = mem->get_layout();
+
+    switch (prim_layout.data_type) {
+    case data_types::u8: {
+        mem_lock<uint8_t> lock_prim_output{mem, stream};
+        trip_count = *lock_prim_output.data();
+        break;
+    }
+    case data_types::i8: {
+        mem_lock<int8_t> lock_prim_output{mem, stream};
+        trip_count = *lock_prim_output.data();
+        break;
+    }
+    case data_types::i32: {
+        mem_lock<int32_t> lock_prim_output{mem, stream};
+        trip_count = *lock_prim_output.data();
+        break;
+    }
+    case data_types::i64: {
+        mem_lock<int64_t> lock_prim_output{mem, stream};
+        trip_count = *lock_prim_output.data();
+        break;
+    }
+    default:
+        throw std::runtime_error("Invalid data type : " + data_type_traits::name(prim_layout.data_type));
+    }
+    return trip_count;
+}
+
+template<typename T>
+static inline void validate_input_value(int64_t input) {
+    if (input < std::numeric_limits<T>::min() || input > std::numeric_limits<T>::max()) {
+        throw std::runtime_error("Invalid data value : " + std::to_string(input));
+    }
+}
+
+static void write_scalar_value(memory::ptr mem, stream& stream, int64_t input) {
+    const layout& prim_layout = mem->get_layout();
+
+    switch (prim_layout.data_type) {
+    case data_types::u8: {
+        validate_input_value<uint8_t>(input);
+        mem_lock<uint8_t> lock_prim_output{mem, stream};
+        lock_prim_output[0] = static_cast<uint8_t>(input);
+        break;
+    }
+    case data_types::i8: {
+        validate_input_value<int8_t>(input);
+        mem_lock<int8_t> lock_prim_output{mem, stream};
+        lock_prim_output[0] = static_cast<int8_t>(input);
+        break;
+    }
+    case data_types::i32: {
+        validate_input_value<int32_t>(input);
+        mem_lock<int32_t> lock_prim_output{mem, stream};
+        lock_prim_output[0] = static_cast<int32_t>(input);
+        break;
+    }
+    case data_types::i64: {
+        mem_lock<int64_t> lock_prim_output{mem, stream};
+        lock_prim_output[0] = input;
+        break;
+    }
+    default:
+        throw std::runtime_error("Invalid data type : " + data_type_traits::name(prim_layout.data_type));
+    }
+}
+
 struct loop_impl : typed_primitive_impl<loop> {
     using parent = typed_primitive_impl<loop>;
     using parent::parent;
@@ -64,7 +136,7 @@ struct loop_impl : typed_primitive_impl<loop> {
         int64_t trip_count = -1;
         if (!primitive->trip_count_id.empty()) {
             memory::ptr trip_count_mem = outer_network.get_primitive(primitive->trip_count_id)->output_memory_ptr();
-            trip_count = loop_node::read_scalar_value(std::move(trip_count_mem), stream);
+            trip_count = read_scalar_value(std::move(trip_count_mem), stream);
         }
         trip_count = (trip_count > 0)? trip_count : max_num_iteration;
 
@@ -72,7 +144,7 @@ struct loop_impl : typed_primitive_impl<loop> {
         int64_t execution_condition = 1;
         if (!primitive->first_execution_condition_id.empty()) {
             memory::ptr first_execution_condition_mem = outer_network.get_primitive(primitive->first_execution_condition_id)->output_memory_ptr();
-            execution_condition = loop_node::read_scalar_value(first_execution_condition_mem, stream);
+            execution_condition = read_scalar_value(first_execution_condition_mem, stream);
         }
 
         //////////////////////////////////////////
@@ -114,10 +186,10 @@ struct loop_impl : typed_primitive_impl<loop> {
 
         std::vector<event::ptr> all_events;
         std::vector<event::ptr> loop_carried_dep(events.begin(), events.end());
-        int64_t current_iteration_idx = (execution_condition != 0)? 0 : 1;
+        int64_t current_iteration_idx = 0;
         while (current_iteration_idx < trip_count && execution_condition) {
             if (body_current_iteration_mem != nullptr) {
-                loop_node::write_scalar_value(body_current_iteration_mem, stream, current_iteration_idx);
+                write_scalar_value(body_current_iteration_mem, stream, current_iteration_idx);
                 body_network->set_input_data(primitive->body_current_iteration_id, body_current_iteration_mem);
             }
 
@@ -167,7 +239,7 @@ struct loop_impl : typed_primitive_impl<loop> {
             // However they are not being used yet and only TensorIterator which
             // has fixed sequence length is being validated.
             if (body_execution_condition_mem != nullptr) {
-                execution_condition = loop_node::read_scalar_value(body_execution_condition_mem, body_network->get_stream());
+                execution_condition = read_scalar_value(body_execution_condition_mem, body_network->get_stream());
             }
 
             // update index & execution condition for the next iteration
@@ -190,8 +262,10 @@ struct loop_impl : typed_primitive_impl<loop> {
         if (!primitive->num_iteration_id.empty()) {
             // update num_iterations (actual number of iterations)
             memory::ptr num_actual_iterations_mem = outer_network.get_primitive(primitive->num_iteration_id)->output_memory_ptr();
-            loop_node::write_scalar_value(num_actual_iterations_mem, stream, current_iteration_idx);
+            write_scalar_value(num_actual_iterations_mem, stream, current_iteration_idx);
         }
+
+        instance.update_output_layout();
 
         ev->set();
         return ev;

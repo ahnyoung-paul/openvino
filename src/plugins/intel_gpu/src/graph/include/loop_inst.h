@@ -22,130 +22,29 @@ struct typed_program_node<loop> : public typed_program_node_base<loop> {
 private:
     using parent = typed_program_node_base<loop>;
 
-    std::vector<loop::io_primitive_map> input_primitive_maps;
-    std::vector<loop::io_primitive_map> output_primitive_maps;
-    mutable std::vector<loop::backedge_mapping> back_edges;
-
+    std::vector<loop::io_primitive_map>& input_primitive_maps;
+    std::vector<loop::io_primitive_map>& output_primitive_maps;
+    std::vector<loop::backedge_mapping>& back_edges;
 
 public:
-    typed_program_node(std::shared_ptr<primitive> prim, program& prog) :
+    typed_program_node(std::shared_ptr<loop> prim, program& prog) :
         parent(prim, prog),
-        input_primitive_maps(this->get_primitive()->input_primitive_maps),
-        output_primitive_maps(this->get_primitive()->output_primitive_maps),
-        back_edges(this->get_primitive()->back_edges),
-        iteration_axis(0) {}
-
-    mutable size_t iteration_axis;
+        input_primitive_maps(prim->input_primitive_maps),
+        output_primitive_maps(prim->output_primitive_maps),
+        back_edges(prim->back_edges) {}
 
     int64_t get_max_iteration() const { return get_primitive()->get_max_num_iteration(); }
     program::ptr get_body_program() const { return get_primitive()->body_program; }
 
-    static size_t convert_to_raw_axis(size_t axis, size_t ndim) {
-        // convert between bfyx, bfzyx, bfzyxw and tensor.size.raw
-        if (axis >= ndim) {
-            throw std::runtime_error("axis should be less than ndim");
-        }
-
-        if (axis < 2) {
-            return axis;
-        }
-        return (ndim - 1) - (axis - 2);
-    }
-
-    // read scala value from data primitive
-    static int64_t read_scalar_value(memory::ptr mem, stream& stream) {
-        int64_t trip_count = 0;
-        const layout& prim_layout = mem->get_layout();
-
-        switch (prim_layout.data_type) {
-        case data_types::u8: {
-            mem_lock<uint8_t> lock_prim_output{mem, stream};
-            trip_count = *lock_prim_output.data();
-            break;
-        }
-        case data_types::i8: {
-            mem_lock<int8_t> lock_prim_output{mem, stream};
-            trip_count = *lock_prim_output.data();
-            break;
-        }
-        case data_types::i32: {
-            mem_lock<int32_t> lock_prim_output{mem, stream};
-            trip_count = *lock_prim_output.data();
-            break;
-        }
-        case data_types::i64: {
-            mem_lock<int64_t> lock_prim_output{mem, stream};
-            trip_count = *lock_prim_output.data();
-            break;
-        }
-        default:
-            throw std::runtime_error("Invalid data type : " + data_type_traits::name(prim_layout.data_type));
-        }
-        return trip_count;
-    }
-
-    template<typename T>
-    static inline void validate_input_value(int64_t input) {
-        if (input < std::numeric_limits<T>::min() || input > std::numeric_limits<T>::max()) {
-            throw std::runtime_error("Invalid data value : " + std::to_string(input));
-        }
-    }
-
-    static void write_scalar_value(memory::ptr mem, stream& stream, int64_t input) {
-        const layout& prim_layout = mem->get_layout();
-
-        switch (prim_layout.data_type) {
-        case data_types::u8: {
-            validate_input_value<uint8_t>(input);
-            mem_lock<uint8_t> lock_prim_output{mem, stream};
-            lock_prim_output[0] = static_cast<uint8_t>(input);
-            break;
-        }
-        case data_types::i8: {
-            validate_input_value<int8_t>(input);
-            mem_lock<int8_t> lock_prim_output{mem, stream};
-            lock_prim_output[0] = static_cast<int8_t>(input);
-            break;
-        }
-        case data_types::i32: {
-            validate_input_value<int32_t>(input);
-            mem_lock<int32_t> lock_prim_output{mem, stream};
-            lock_prim_output[0] = static_cast<int32_t>(input);
-            break;
-        }
-        case data_types::i64: {
-            mem_lock<int64_t> lock_prim_output{mem, stream};
-            lock_prim_output[0] = input;
-            break;
-        }
-        default:
-            throw std::runtime_error("Invalid data type : " + data_type_traits::name(prim_layout.data_type));
-        }
-    }
-
-    layout calc_body_input_layout(const loop::io_primitive_map& inputDesc) const {
-        const auto& dependency_list = this->get_dependencies();
-        auto input = std::find_if(dependency_list.begin(), dependency_list.end(), [&inputDesc](const std::pair<program_node*, int32_t>& dep){
-            return dep.first->id() == inputDesc.external_id;
-        });
-        if (input == dependency_list.end()) {
-            throw std::runtime_error("Can't find input from dependency_list");
-        }
-        layout calculated_layout = (*input).first->get_output_layout();
-        auto shape = calculated_layout.get_tensor().sizes(calculated_layout.format);
-
-        if (inputDesc.axis >= 0) {
-            iteration_axis = convert_to_raw_axis(static_cast<size_t>(inputDesc.axis), shape.size());
-            auto calculated_size = calculated_layout.get_tensor();
-            calculated_size.raw[iteration_axis] = 1; // cropped inputs shape
-            calculated_layout.set_tensor(calculated_size);
-        }
-
-        return calculated_layout;
-    }
+    const primitive_id& get_trip_count_id() const { return get_primitive()->trip_count_id; }
+    const primitive_id& get_initial_execution_id() const { return get_primitive()->first_execution_condition_id; }
+    const primitive_id& get_current_iteration_id() const { return get_primitive()->body_current_iteration_id; }
+    const primitive_id& get_execution_condition_id() const { return get_primitive()->body_execution_condition_id; }
+    const primitive_id& get_num_iteration_id() const { return get_primitive()->num_iteration_id; }
 
     const std::vector<loop::io_primitive_map>& get_input_primitive_maps() const { return input_primitive_maps; }
     const std::vector<loop::io_primitive_map>& get_output_primitive_maps() const { return output_primitive_maps; }
+    const std::vector<loop::backedge_mapping>& get_back_edges() const { return back_edges;}
 
     void update_primitive_map(const primitive_id& prevID, const primitive_id& newID, bool external_id = true) {
         if (external_id) {
@@ -180,26 +79,6 @@ public:
             }
         }
     }
-
-    const std::vector<cldnn::loop::backedge_mapping>& get_back_edges() const { return back_edges;}
-
-    static bool is_integer(const data_types& data_type) {
-        switch (data_type) {
-            case data_types::u8:
-            case data_types::i8:
-            case data_types::i32:
-            case data_types::i64:
-                return true;
-            default:
-                return false;
-        }
-    }
-
-    const primitive_id& get_trip_count_id() const { return get_primitive()->trip_count_id; }
-    const primitive_id& get_initial_execution_id() const { return get_primitive()->first_execution_condition_id; }
-    const primitive_id& get_current_iteration_id() const { return get_primitive()->body_current_iteration_id; }
-    const primitive_id& get_execution_condition_id() const { return get_primitive()->body_execution_condition_id; }
-    const primitive_id& get_num_iteration_id() const { return get_primitive()->num_iteration_id; }
 };
 
 using loop_node = typed_program_node<loop>;

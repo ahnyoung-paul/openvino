@@ -15,6 +15,18 @@
 namespace cldnn {
 GPU_DEFINE_PRIMITIVE_TYPE_ID(loop)
 
+static size_t convert_to_raw_axis(size_t axis, size_t ndim) {
+    // convert between bfyx, bfzyx, bfzyxw and tensor.size.raw
+    if (axis >= ndim) {
+        throw std::runtime_error("axis should be less than ndim");
+    }
+
+    if (axis < 2) {
+        return axis;
+    }
+    return (ndim - 1) - (axis - 2);
+}
+
 static bool check_if_axis_is_set_properly(loop_node const & node) {
     const auto& input_primitive_maps = node.get_input_primitive_maps();
 
@@ -34,7 +46,7 @@ static bool check_if_axis_is_set_properly(loop_node const & node) {
         assert(found != dependencies.end());
         const layout input_layout = (*found).first->get_output_layout();
         const auto shape = input_layout.get_tensor().sizes(input_layout.format);
-        const size_t iteration_axis = node.convert_to_raw_axis(pm.get().axis, static_cast<int32_t>(shape.size()));
+        const size_t iteration_axis = convert_to_raw_axis(pm.get().axis, static_cast<int32_t>(shape.size()));
         if (iteration_size < 0) {
             iteration_size = shape[iteration_axis];
         } else {

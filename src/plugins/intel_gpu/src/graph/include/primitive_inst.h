@@ -269,6 +269,8 @@ public:
 
     virtual void update_output_memory() {}
 
+    virtual void update_output_layout();
+
 protected:
     primitive_inst(network& network, program_node const& node, bool allocate_memory);
 

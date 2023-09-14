@@ -1783,4 +1783,30 @@ void primitive_inst::load(cldnn::BinaryInputBuffer& ib) {
     }
 }
 
+void primitive_inst::update_output_layout() {
+    auto memory_deps = _node->get_const_memory_deps();
+    for (auto& i : _node->get_shape_infer_dependencies()) {
+        if (memory_deps.count(i) > 0 || i >= _node->get_dependencies().size()) {
+            continue;
+        }
+        auto dep_id = _node->get_dependency(i).id();
+
+        auto dep_mem = _network.get_output_memory(dep_id);
+        memory_deps.insert({i, dep_mem});
+    }
+    _impl_params->memory_deps = memory_deps;
+
+    auto new_layouts = _node->type()->calc_output_layouts(*_node, *_impl_params);
+    if (new_layouts.empty()) {
+        auto new_layout = _node->type()->calc_output_layout(*_node, *_impl_params);
+        new_layout.data_padding = padding::max(_node->get_primitive()->output_paddings[0], new_layout.data_padding);
+        _impl_params->output_layouts[0] = new_layout;
+    } else {
+        for (size_t i = 0; i != new_layouts.size(); ++i) {
+            auto new_layout = new_layouts[i];
+            new_layout.data_padding = padding::max(_node->get_primitive()->output_paddings[i], new_layout.data_padding);
+            _impl_params->output_layouts[i] = new_layout;
+        }
+    }
+}
 }  // namespace cldnn

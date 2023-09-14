@@ -78,8 +78,6 @@ public:
     condition::branch get_branch_true() const { return node->get_branch_true(); }
     condition::branch get_branch_false() const { return node->get_branch_false(); }
 
-    void update_output_layout();
-
 private:
     network::ptr _net_true;
     network::ptr _net_false;
