@@ -247,16 +247,13 @@ void loop_inst::update_mapped_memory() {
     for (size_t i = 0; i < _output_primitive_maps.size(); ++i) {
         const auto& output_mapping = _output_primitive_maps.at(i);
         const primitive_id& external_id = output_mapping.external_id.pid;
-        // const size_t external_mem_idx = output_mapping.external_id.idx;
+        const size_t external_mem_idx = output_mapping.external_id.idx;
         const primitive_id& internal_id = output_mapping.internal_id.pid;
-        // const size_t internal_mem_idx = output_mapping.internal_id.idx;
-        // TODO : enable multiple outputs
-        memory::ptr to_mem = get_external_memory(external_id);
-        // memory::ptr to_mem = get_external_memory(external_id, external_mem_idx);
+        const size_t internal_mem_idx = output_mapping.internal_id.idx;
+
+        memory::ptr to_mem = get_external_memory(external_id, external_mem_idx);
         if (output_mapping.axis < 0) {
-            // TODO : enable multiple outputs
-            // body_network->get_primitive(internal_id)->set_output_memory(to_mem, true, internal_mem_idx);
-            body_network->get_primitive(internal_id)->set_output_memory(to_mem);
+            body_network->get_primitive(internal_id)->set_output_memory(to_mem, true, internal_mem_idx);
         } else {
             for (auto& mem_mapping : concatenated_output_mem_mappings) {
                 if (mem_mapping.sliced_data_prim->id() == internal_id) {
@@ -305,9 +302,8 @@ void loop_inst::update_mapped_memory() {
         auto backedged_sliced_output_mems = get_sliced_mem(back_edge.from);
         const auto backedge_to_prim = body_network->get_primitive(back_edge.to);
         const auto backedge_from_prim = body_network->get_primitive(back_edge.from);
-        // TODO enable multiple outputs
-        // memory::ptr initial_mem = get_external_memory(input_map->external_id.pid, input_map->external_id.idx);
-        memory::ptr initial_mem = get_external_memory(input_map->external_id.pid);
+
+        memory::ptr initial_mem = get_external_memory(input_map->external_id.pid, input_map->external_id.idx);
 
         for (auto& backedge_mapping : backedge_memory_mappings) {
             if (backedge_mapping.from_primitive->id() == backedge_from_prim->id() &&
@@ -330,9 +326,7 @@ void loop_inst::update_mapped_memory() {
                         }
                     } else {
                         auto external_id = output_mapping.front()->external_id;
-                        // TODO enable multiple output
-                        // backedge_mem = get_external_memory(external_id.pid, external_id.idx);
-                        backedge_mem = get_external_memory(external_id.pid);
+                        backedge_mem = get_external_memory(external_id.pid, external_id.idx);
                     }
                     body_network->set_input_data(back_edge.to, backedge_mem);
                     body_network->set_output_memory(back_edge.from, backedge_mem);
@@ -362,20 +356,12 @@ void loop_inst::preprocess_output_memory() {
         const auto& external_id = output_mapping.external_id;
         const auto& internal_id = output_mapping.internal_id;
         if (output_mapping.axis < 0) {
-            memory::ptr memory = get_external_memory(external_id.pid);
-            // TODO enable multi output (2nd)
-            // memory::ptr memory = get_external_memory(external_id.pid, external_id.idx);
-            body_network->get_primitive(internal_id.pid)->set_output_memory(memory);
-            // TODO : enable multiple outputs
-            // body_network->get_primitive(internal_id.pid)->set_output_memory(memory, true, internal_id.idx);
+            memory::ptr memory = get_external_memory(external_id.pid, external_id.idx);
+            body_network->get_primitive(internal_id.pid)->set_output_memory(memory, true, internal_id.idx);
         } else {
-            // TODO enable multi output (2nd)
-            memory::ptr to_mem = get_external_memory(external_id.pid);
-            // memory::ptr to_mem = get_external_memory(external_id.pid, external_id.idx);
+            memory::ptr to_mem = get_external_memory(external_id.pid, external_id.idx);
             auto output_prim = body_network->get_primitive(internal_id.pid);
-            // TODO enable multiple outputs
-            // layout sliced_layout = output_prim->output_memory(internal_id.idx).get_layout();
-            layout sliced_layout = output_prim->output_memory().get_layout();
+            layout sliced_layout = output_prim->output_memory(internal_id.idx).get_layout();
 
             const int64_t max_num_iteration = _max_iteration;
             std::vector<memory::ptr> sliced_mems;
@@ -421,11 +407,8 @@ void loop_inst::preprocess_input_memory() {
             auto& internal_id = input_map->internal_id;
             bool is_concatenated_input = (input_map->axis >= 0);
             if (is_concatenated_input) {
-                // TODO: enable multiple outputs
-                // layout sliced_layout
-                //     = body_network->get_primitive(internal_id.pid)->output_memory(internal_id.idx).get_layout();
                 layout sliced_layout
-                    = body_network->get_primitive(internal_id.pid)->output_memory().get_layout();
+                    = body_network->get_primitive(internal_id.pid)->output_memory(internal_id.idx).get_layout();
                 const int64_t max_iteration = _max_iteration;
                 std::vector<memory::ptr> sliced_mems;
                 sliced_mems.reserve(max_iteration);
@@ -443,9 +426,7 @@ void loop_inst::preprocess_input_memory() {
                 concatenated_input_mem_mapping_info.sliced_data_prim = body_network->get_primitive(internal_id.pid);
                 iteration_mem.push_back(concatenated_input_mem_mapping_info);
             } else {
-                // TODO: enable multiple outputs
-                // if (memory->get_layout().data_type != body_network->get_primitive(internal_id.pid)->output_memory(internal_id.idx).get_layout().data_type) {
-                if (memory->get_layout().data_type != body_network->get_primitive(internal_id.pid)->output_memory().get_layout().data_type) {
+                if (memory->get_layout().data_type != body_network->get_primitive(internal_id.pid)->output_memory(internal_id.idx).get_layout().data_type) {
                     CLDNN_ERROR_MESSAGE(id(), "incompatible datatypes");
                 }
                 body_network->set_input_data(internal_id.pid, memory);
@@ -466,9 +447,7 @@ void loop_inst::preprocess_backedge_memory() {
         memory::ptr initial_mem;
         OPENVINO_ASSERT(!input_map_ptrs.empty(), "no input_mapping for backedged input");
         auto& external_id = input_map_ptrs.front()->external_id;
-        initial_mem = get_external_memory(external_id.pid);
-        // TODO: enable multiple outputs (2nd)
-        // initial_mem = get_external_memory(external_id.pid, external_id.idx);
+        initial_mem = get_external_memory(external_id.pid, external_id.idx);
 
 
         auto backedged_sliced_output_mems = get_sliced_mem(back_edge.from);
@@ -490,9 +469,7 @@ void loop_inst::preprocess_backedge_memory() {
                 }
             } else {
                 auto& external_id = output_mapping.front()->external_id;
-                // TODO: enable multiple outputs (2nd)
-                backedge_mem = get_external_memory(external_id.pid);
-                // backedge_mem = get_external_memory(external_id.pid, external_id.idx);
+                backedge_mem = get_external_memory(external_id.pid, external_id.idx);
             }
             body_network->set_input_data(back_edge.to, backedge_mem);
             body_network->set_output_memory(back_edge.from, backedge_mem);
@@ -522,9 +499,7 @@ std::vector<memory::ptr> loop_inst::get_sliced_mem(const primitive_id& internal_
 
 memory::ptr loop_inst::get_external_memory(const primitive_id& external_id, size_t mem_idx) const {
     const auto outputPrim = _network.get_primitive(external_id);
-    return outputPrim->output_memory_ptr();
-    // Enable multiple outputs
-    // return outputPrim->output_memory_ptr(mem_idx);
+    return outputPrim->output_memory_ptr(mem_idx);
 }
 
 loop_inst::typed_primitive_inst(network & network, loop_node const & node)
