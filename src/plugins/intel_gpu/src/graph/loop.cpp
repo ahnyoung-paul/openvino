@@ -42,7 +42,7 @@ static bool check_if_axis_is_set_properly(loop_node const & node) {
     int32_t iteration_size = -1;
     for (const auto& pm : input_with_axis_iteration) {
         auto found = std::find_if(dependencies.begin(), dependencies.end(),
-            [&pm](const std::pair<program_node*, int32_t>& dep){ return dep.first->id() == pm.get().external_id; });
+            [&pm](const std::pair<program_node*, int32_t>& dep){ return dep.first->id() == pm.get().external_id.pid; });
         assert(found != dependencies.end());
         const layout input_layout = (*found).first->get_output_layout();
         const auto shape = input_layout.get_tensor().sizes(input_layout.format);
@@ -60,7 +60,7 @@ static bool check_if_axis_is_set_properly(loop_node const & node) {
     for (const auto& input_ref : input_with_axis_iteration) {
         const loop::io_primitive_map& input = input_ref.get();
         auto dep = std::find_if(dependencies.begin(), dependencies.end(),
-            [&input](const std::pair<program_node*, int>& dep) { return input.external_id == dep.first->id(); });
+            [&input](const std::pair<program_node*, int>& dep) { return input.external_id.pid == dep.first->id(); });
 
         // if corresponding external id is not found
         if (dep == dependencies.end()) {
@@ -77,7 +77,7 @@ static void validate_backedges(loop_node const & node) {
     // check input with iteration axis has backedge
     for (const auto& back_edge : back_edges) {
         for (const auto& mapping : input_primitive_maps) {
-            if (mapping.internal_id == back_edge.to && mapping.axis >= 0) {
+            if (mapping.internal_id.pid == back_edge.to && mapping.axis >= 0) {
                 CLDNN_ERROR_MESSAGE(node.id(),
                     "input with iteration axis should not have backedges");
             }
@@ -101,7 +101,7 @@ layout loop_inst::calc_output_layout(loop_node const & node, kernel_impl_params 
     const auto& output_primitive_maps = node.get_output_primitive_maps();
     const auto& output_mapping = output_primitive_maps.front();
     const auto& body_outputs = node.get_body_program()->get_outputs();
-    const primitive_id& output_internal_id = output_mapping.internal_id;
+    const primitive_id& output_internal_id = output_mapping.internal_id.pid;
     auto target = std::find_if(body_outputs.begin(), body_outputs.end(), [&](const cldnn::program_node * output) {
         return output->id() == output_internal_id;
     });
@@ -163,23 +163,23 @@ static std::vector<const loop::io_primitive_map*> find_io_primitive_maps(
     std::vector<const loop::io_primitive_map*> ret;
     if (is_external) {
         for (const auto& it : input_primitive_maps) {
-            if (it.external_id == prim_id) {
+            if (it.external_id.pid == prim_id) {
                 ret.push_back(&it);
             }
         }
         for (const auto& it : output_primitive_maps) {
-            if (it.external_id == prim_id) {
+            if (it.external_id.pid == prim_id) {
                 ret.push_back(&it);
             }
         }
     } else {
         for (const auto& it : input_primitive_maps) {
-            if (it.internal_id == prim_id) {
+            if (it.internal_id.pid == prim_id) {
                 ret.push_back(&it);
             }
         }
         for (const auto& it : output_primitive_maps) {
-            if (it.internal_id == prim_id) {
+            if (it.internal_id.pid == prim_id) {
                 ret.push_back(&it);
             }
         }
@@ -209,9 +209,9 @@ static void validate_mappings(loop_node const & node) {
 
     // check all io_primitive_maps have their corresponding external id
     for (const auto& pm : input_primitive_maps) {
-        auto found = std::find(outer_inputs.begin(), outer_inputs.end(), pm.external_id);
+        auto found = std::find(outer_inputs.begin(), outer_inputs.end(), pm.external_id.pid);
         if (found == outer_inputs.end()) {
-            std::string msg = "external id '" + pm.external_id + "' in primitive map cannot be found loop inputs";
+            std::string msg = "external id '" + pm.external_id.pid + "' in primitive map cannot be found loop inputs";
             CLDNN_ERROR_MESSAGE(node.id(), msg.c_str());
         }
     }
@@ -221,19 +221,19 @@ static void validate_mappings(loop_node const & node) {
     // check all io_primitive_maps have their corresponding interal id
     for (const auto& pm : input_primitive_maps) {
         auto found = std::find_if(nodes.begin(), nodes.end(), [&pm](const program_node* body_input) {
-            return body_input->id() == pm.internal_id;
+            return body_input->id() == pm.internal_id.pid;
         });
         if (found == nodes.end()) {
-            std::string msg = "internal id '" + pm.internal_id + "' in primitive map cannot be found loop body";
+            std::string msg = "internal id '" + pm.internal_id.pid + "' in primitive map cannot be found loop body";
             CLDNN_ERROR_MESSAGE(node.id(), msg.c_str());
         }
     }
     for (const auto& pm : output_primitive_maps) {
         auto found = std::find_if(nodes.begin(), nodes.end(), [&pm](const program_node* body_output) {
-            return body_output->id() == pm.internal_id;
+            return body_output->id() == pm.internal_id.pid;
         });
         if (found == nodes.end()) {
-            std::string msg = "internal id '" + pm.internal_id + "' in primitive map cannot be found body body";
+            std::string msg = "internal id '" + pm.internal_id.pid + "' in primitive map cannot be found body body";
             CLDNN_ERROR_MESSAGE(node.id(), msg.c_str());
         }
     }
@@ -246,10 +246,16 @@ void loop_inst::update_mapped_memory() {
     // update output memory
     for (size_t i = 0; i < _output_primitive_maps.size(); ++i) {
         const auto& output_mapping = _output_primitive_maps.at(i);
-        const primitive_id& external_id = output_mapping.external_id;
-        const primitive_id& internal_id = output_mapping.internal_id;
+        const primitive_id& external_id = output_mapping.external_id.pid;
+        // const size_t external_mem_idx = output_mapping.external_id.idx;
+        const primitive_id& internal_id = output_mapping.internal_id.pid;
+        // const size_t internal_mem_idx = output_mapping.internal_id.idx;
+        // TODO : enable multiple outputs
         memory::ptr to_mem = get_external_memory(external_id);
+        // memory::ptr to_mem = get_external_memory(external_id, external_mem_idx);
         if (output_mapping.axis < 0) {
+            // TODO : enable multiple outputs
+            // body_network->get_primitive(internal_id)->set_output_memory(to_mem, true, internal_mem_idx);
             body_network->get_primitive(internal_id)->set_output_memory(to_mem);
         } else {
             for (auto& mem_mapping : concatenated_output_mem_mappings) {
@@ -278,13 +284,13 @@ void loop_inst::update_mapped_memory() {
             bool is_concatenated_input = (input_map->axis >= 0);
             if (is_concatenated_input) {
                 for (auto& mem_mapping : concatenated_input_mem_mappings) {
-                    if (mem_mapping.sliced_data_prim->id() == input_map->internal_id) {
+                    if (mem_mapping.sliced_data_prim->id() == input_map->internal_id.pid) {
                         mem_mapping.concatenated_mem = memory;
                         break;
                     }
                 }
             } else {
-                body_network->set_input_data(input_map->internal_id, memory);
+                body_network->set_input_data(input_map->internal_id.pid, memory);
             }
         }
     }
@@ -299,7 +305,9 @@ void loop_inst::update_mapped_memory() {
         auto backedged_sliced_output_mems = get_sliced_mem(back_edge.from);
         const auto backedge_to_prim = body_network->get_primitive(back_edge.to);
         const auto backedge_from_prim = body_network->get_primitive(back_edge.from);
-        memory::ptr initial_mem = get_external_memory(input_map->external_id);
+        // TODO enable multiple outputs
+        // memory::ptr initial_mem = get_external_memory(input_map->external_id.pid, input_map->external_id.idx);
+        memory::ptr initial_mem = get_external_memory(input_map->external_id.pid);
 
         for (auto& backedge_mapping : backedge_memory_mappings) {
             if (backedge_mapping.from_primitive->id() == backedge_from_prim->id() &&
@@ -321,7 +329,10 @@ void loop_inst::update_mapped_memory() {
                             backedge_mem = body_network->get_engine().allocate_memory(output_layout, 0);
                         }
                     } else {
-                        backedge_mem = get_external_memory(output_mapping.front()->external_id);
+                        auto external_id = output_mapping.front()->external_id;
+                        // TODO enable multiple output
+                        // backedge_mem = get_external_memory(external_id.pid, external_id.idx);
+                        backedge_mem = get_external_memory(external_id.pid);
                     }
                     body_network->set_input_data(back_edge.to, backedge_mem);
                     body_network->set_output_memory(back_edge.from, backedge_mem);
@@ -348,14 +359,22 @@ void loop_inst::preprocess_output_memory() {
     concatenated_output_mem_mappings.reserve(_output_primitive_maps.size());
     for (size_t i = 0; i < _output_primitive_maps.size(); ++i) {
         const auto& output_mapping = _output_primitive_maps.at(i);
-        const primitive_id& external_id = output_mapping.external_id;
-        const primitive_id& internal_id = output_mapping.internal_id;
+        const auto& external_id = output_mapping.external_id;
+        const auto& internal_id = output_mapping.internal_id;
         if (output_mapping.axis < 0) {
-            memory::ptr memory = get_external_memory(external_id);
-            body_network->get_primitive(internal_id)->set_output_memory(memory);
+            memory::ptr memory = get_external_memory(external_id.pid);
+            // TODO enable multi output (2nd)
+            // memory::ptr memory = get_external_memory(external_id.pid, external_id.idx);
+            body_network->get_primitive(internal_id.pid)->set_output_memory(memory);
+            // TODO : enable multiple outputs
+            // body_network->get_primitive(internal_id.pid)->set_output_memory(memory, true, internal_id.idx);
         } else {
-            memory::ptr to_mem = get_external_memory(external_id);
-            auto output_prim = body_network->get_primitive(internal_id);
+            // TODO enable multi output (2nd)
+            memory::ptr to_mem = get_external_memory(external_id.pid);
+            // memory::ptr to_mem = get_external_memory(external_id.pid, external_id.idx);
+            auto output_prim = body_network->get_primitive(internal_id.pid);
+            // TODO enable multiple outputs
+            // layout sliced_layout = output_prim->output_memory(internal_id.idx).get_layout();
             layout sliced_layout = output_prim->output_memory().get_layout();
 
             const int64_t max_num_iteration = _max_iteration;
@@ -373,8 +392,9 @@ void loop_inst::preprocess_output_memory() {
             concatenated_memory_mapping memory_mapping_info(
                 output_mapping.axis, std::move(to_mem), sliced_mems, _network.get_stream(),
                 num_elements_iteration, output_mapping.stride, start);
-            memory_mapping_info.sliced_data_prim = body_network->get_primitive(internal_id);
-            memory_mapping_info.concat_data_prim = get_network().get_primitive(external_id);
+            // TODO how to set index of output memory
+            memory_mapping_info.sliced_data_prim = body_network->get_primitive(internal_id.pid);
+            memory_mapping_info.concat_data_prim = get_network().get_primitive(external_id.pid);
             concatenated_output_mem_mappings.push_back(memory_mapping_info);
         }
     }
@@ -398,10 +418,14 @@ void loop_inst::preprocess_input_memory() {
         auto memory = input_memory_ptr(memory_num);
         for (size_t i = 0; i < input_map_ptrs.size(); ++i) {
             const auto input_map = input_map_ptrs.at(i);
+            auto& internal_id = input_map->internal_id;
             bool is_concatenated_input = (input_map->axis >= 0);
             if (is_concatenated_input) {
+                // TODO: enable multiple outputs
+                // layout sliced_layout
+                //     = body_network->get_primitive(internal_id.pid)->output_memory(internal_id.idx).get_layout();
                 layout sliced_layout
-                    = body_network->get_primitive(input_map->internal_id)->output_memory().get_layout();
+                    = body_network->get_primitive(internal_id.pid)->output_memory().get_layout();
                 const int64_t max_iteration = _max_iteration;
                 std::vector<memory::ptr> sliced_mems;
                 sliced_mems.reserve(max_iteration);
@@ -416,13 +440,15 @@ void loop_inst::preprocess_input_memory() {
                 concatenated_memory_mapping concatenated_input_mem_mapping_info(
                     input_map->axis, memory, sliced_mems, _network.get_stream(),
                     num_elements_iteration, input_map->stride, start);
-                concatenated_input_mem_mapping_info.sliced_data_prim = body_network->get_primitive(input_map->internal_id);
+                concatenated_input_mem_mapping_info.sliced_data_prim = body_network->get_primitive(internal_id.pid);
                 iteration_mem.push_back(concatenated_input_mem_mapping_info);
             } else {
-                if (memory->get_layout().data_type != body_network->get_primitive(input_map->internal_id)->output_memory().get_layout().data_type) {
+                // TODO: enable multiple outputs
+                // if (memory->get_layout().data_type != body_network->get_primitive(internal_id.pid)->output_memory(internal_id.idx).get_layout().data_type) {
+                if (memory->get_layout().data_type != body_network->get_primitive(internal_id.pid)->output_memory().get_layout().data_type) {
                     CLDNN_ERROR_MESSAGE(id(), "incompatible datatypes");
                 }
-                body_network->set_input_data(input_map->internal_id, memory);
+                body_network->set_input_data(internal_id.pid, memory);
             }
         }
     }
@@ -439,7 +465,11 @@ void loop_inst::preprocess_backedge_memory() {
 
         memory::ptr initial_mem;
         OPENVINO_ASSERT(!input_map_ptrs.empty(), "no input_mapping for backedged input");
-        initial_mem = get_external_memory(input_map_ptrs.front()->external_id);
+        auto& external_id = input_map_ptrs.front()->external_id;
+        initial_mem = get_external_memory(external_id.pid);
+        // TODO: enable multiple outputs (2nd)
+        // initial_mem = get_external_memory(external_id.pid, external_id.idx);
+
 
         auto backedged_sliced_output_mems = get_sliced_mem(back_edge.from);
         if (backedged_sliced_output_mems.empty()) {
@@ -459,7 +489,10 @@ void loop_inst::preprocess_backedge_memory() {
                     backedge_mem = body_network->get_engine().allocate_memory(output_layout, 0);
                 }
             } else {
-                backedge_mem = get_external_memory(output_mapping.front()->external_id);
+                auto& external_id = output_mapping.front()->external_id;
+                // TODO: enable multiple outputs (2nd)
+                backedge_mem = get_external_memory(external_id.pid);
+                // backedge_mem = get_external_memory(external_id.pid, external_id.idx);
             }
             body_network->set_input_data(back_edge.to, backedge_mem);
             body_network->set_output_memory(back_edge.from, backedge_mem);
@@ -487,9 +520,11 @@ std::vector<memory::ptr> loop_inst::get_sliced_mem(const primitive_id& internal_
     return {}; // not found
 }
 
-memory::ptr loop_inst::get_external_memory(const primitive_id& external_id) const {
+memory::ptr loop_inst::get_external_memory(const primitive_id& external_id, size_t mem_idx) const {
     const auto outputPrim = _network.get_primitive(external_id);
     return outputPrim->output_memory_ptr();
+    // Enable multiple outputs
+    // return outputPrim->output_memory_ptr(mem_idx);
 }
 
 loop_inst::typed_primitive_inst(network & network, loop_node const & node)
@@ -502,6 +537,7 @@ loop_inst::typed_primitive_inst(network & network, loop_node const & node)
     if (!check_if_axis_is_set_properly(node))
         CLDNN_ERROR_MESSAGE(node.id(), "axis is not set properly");
 
+    set_inner_networks({body_network});
     validate_backedges(node);
     validate_mappings(node);
 

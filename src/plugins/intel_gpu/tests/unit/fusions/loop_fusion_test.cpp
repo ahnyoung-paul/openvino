@@ -39,7 +39,7 @@ program::ptr build_program(engine& engine,
                             std::vector<loop::backedge_mapping> back_edges) {
     std::vector<primitive_id> output_names_vec;
     for (auto out_map : output_primitive_maps) {
-        output_names_vec.push_back(out_map.internal_id);
+        output_names_vec.push_back(out_map.internal_id.pid);
     }
 
     // setup outputs for backedges

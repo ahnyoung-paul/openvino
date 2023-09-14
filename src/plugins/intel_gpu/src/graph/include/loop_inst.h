@@ -49,24 +49,24 @@ public:
     void update_primitive_map(const primitive_id& prevID, const primitive_id& newID, bool external_id = true) {
         if (external_id) {
             for (auto& pm : input_primitive_maps) {
-                if (pm.external_id == prevID) {
-                    pm.external_id = newID;
+                if (pm.external_id.pid == prevID) {
+                    pm.external_id.pid = newID;
                 }
             }
             for (auto& pm : output_primitive_maps) {
-                if (pm.external_id == prevID) {
-                    pm.external_id = newID;
+                if (pm.external_id.pid == prevID) {
+                    pm.external_id.pid = newID;
                 }
             }
         } else {
             for (auto& pm : input_primitive_maps) {
-                if (pm.internal_id == prevID) {
-                    pm.internal_id = newID;
+                if (pm.internal_id.pid == prevID) {
+                    pm.internal_id.pid = newID;
                 }
             }
             for (auto& pm : output_primitive_maps) {
-                if (pm.internal_id == prevID) {
-                    pm.internal_id = newID;
+                if (pm.internal_id.pid == prevID) {
+                    pm.internal_id.pid = newID;
                 }
             }
             for (auto& back_edge : back_edges) {
@@ -305,7 +305,7 @@ public:
 
 private:
     network::ptr body_network;
-    memory::ptr get_external_memory(const primitive_id& external_id) const;
+    memory::ptr get_external_memory(const primitive_id& external_id, size_t mem_idx = 0) const;
     std::vector<memory::ptr> get_sliced_mem(const primitive_id& internal_id) const;
     std::vector<loop::io_primitive_map> _input_primitive_maps;
     std::vector<loop::io_primitive_map> _output_primitive_maps;

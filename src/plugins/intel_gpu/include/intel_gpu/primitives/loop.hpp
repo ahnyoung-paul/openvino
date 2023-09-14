@@ -65,7 +65,24 @@ struct loop : public primitive_base<loop> {
         /// @param start Index where the iteration starts from. Applies only when axis >=0.
         /// @param end Index where iteration ends. Negative value means counting indexes from the end. Applies only when axis >=0.
         /// @param stride Step of iteration. Negative value means backward iteration. Applies only when axis >=0.
-        io_primitive_map(primitive_id external_id = "", primitive_id internal_id = "",
+        io_primitive_map(primitive_id external_id, primitive_id internal_id,
+            int64_t axis = -1, int64_t start = 0, int64_t end = -1, int64_t stride = 1) :
+            external_id(external_id, 0),
+            internal_id(internal_id, 0),
+            axis(axis),
+            start(start),
+            end(end),
+            stride(stride) {}
+
+        /// @brief Constructs a mapping from external input/output primitive to input/output primitive in body topology
+        ///
+        /// @param external_id Primitive id of input of loop or output of body network.
+        /// @param internal_id Primitive id of input of body network.
+        /// @param axis Axis to iterate through. Negative value means the axis will not iterate through and start, end, stride arguments will be ignored.
+        /// @param start Index where the iteration starts from. Applies only when axis >=0.
+        /// @param end Index where iteration ends. Negative value means counting indexes from the end. Applies only when axis >=0.
+        /// @param stride Step of iteration. Negative value means backward iteration. Applies only when axis >=0.
+        io_primitive_map(input_info external_id = input_info(), input_info internal_id = input_info(),
             int64_t axis = -1, int64_t start = 0, int64_t end = -1, int64_t stride = 1) :
             external_id(std::move(external_id)),
             internal_id(std::move(internal_id)),
@@ -74,8 +91,8 @@ struct loop : public primitive_base<loop> {
             end(end),
             stride(stride) {}
 
-        primitive_id external_id;
-        primitive_id internal_id;
+        input_info external_id;
+        input_info internal_id;
         int64_t axis;
         int64_t start;
         int64_t end;
@@ -244,9 +261,9 @@ protected:
         for (const auto& mapping : input_primitive_maps) {
             auto target = std::find_if(input.begin(), input.end(),
                                     [&](const input_info& info) {
-                                        return info.pid == mapping.external_id;});
+                                        return info.pid == mapping.external_id.pid;});
             if (target == input.end()) {
-                ret.push_back(std::ref(mapping.external_id));
+                ret.push_back(std::ref(mapping.external_id.pid));
             }
         }
         return ret;

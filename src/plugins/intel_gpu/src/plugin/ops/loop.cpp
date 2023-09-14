@@ -58,9 +58,12 @@ static void SetLoopInputOutputMap(ProgramBuilder& p,
     const auto& body_inputs = op->get_function()->get_parameters();
     const auto& body_outputs = op->get_function()->get_results();
 
+    auto config = p.get_config();
+    bool use_new_shape_infer = config.get_property(ov::intel_gpu::allow_new_shape_infer);
+
     // set input mapping & back edges
     for (const auto& loop_input_desc : loop_input_descs) {
-        const cldnn::primitive_id& external_id = inputs.at(loop_input_desc->m_input_index).pid;
+        auto external_id = inputs.at(loop_input_desc->m_input_index);
         auto& body_input = body_inputs.at(loop_input_desc->m_body_parameter_index);
         cldnn::primitive_id internal_id = layer_type_name_ID(body_input);
 
@@ -89,42 +92,53 @@ static void SetLoopInputOutputMap(ProgramBuilder& p,
         }
     }
 
-    // set output mapping
-    for (const auto& loop_output_desc : loop_output_descs) {
-        const uint64_t output_idx = loop_output_desc->m_output_index;
-        const auto body_idx = loop_output_desc->m_body_value_index;
+    use_new_shape_infer = false;
+    if (use_new_shape_infer) {
+        std::cout << "use_new_shape_infer is true" << std::endl;
+    } else {
+        // set output mapping
+        for (const auto& loop_output_desc : loop_output_descs) {
+            const uint64_t output_idx = loop_output_desc->m_output_index;
+            const auto body_idx = loop_output_desc->m_body_value_index;
 
-        // Add additional mutable_data for multiple outputs
-        // primitive ID should be <TI primitive ID>.<output_idx> if output_idx > 0
-        // otherwise primitive ID should be equals to TI primitive ID
-        const std::string layerNameWithIndex = layerName + ".out" + std::to_string(output_idx);
-        std::string external_id;
-        if (output_idx > 0) {
-            cldnn::mutable_data output_data = CreateAdditionalOutputData(p, op, layerNameWithIndex, layerName, output_idx);
-            p.add_primitive(*op, std::move(output_data));
-            external_id = layerNameWithIndex;
-        } else {
-            p.primitive_ids[layerNameWithIndex] = layerName;
-            p.primitive_ids[layerName] = layerName;
-            external_id = layerName;
-        }
-        const auto& body_output = body_outputs.at(loop_output_desc->m_body_value_index);
-        cldnn::primitive_id internal_id = layer_type_name_ID(body_output);
+            // Add additional mutable_data for multiple outputs
+            // primitive ID should be <TI primitive ID>.<output_idx> if output_idx > 0
+            // otherwise primitive ID should be equals to TI primitive ID
+            const std::string layerNameWithIndex = layerName + ".out" + std::to_string(output_idx);
+            std::string external_id;
+            if (output_idx > 0) {
+                cldnn::mutable_data output_data = CreateAdditionalOutputData(p, op, layerNameWithIndex, layerName, output_idx);
+                p.add_primitive(*op, std::move(output_data));
+                external_id = layerNameWithIndex;
+                // TODO: Why this makes issue ?
+                // Error has occured for: reshape:TensorIterator_293.2
+                // Output layout count(=2) is not equal to: input layout count(=4)
+                // Output layout of reshape primitive changes size of input buffer
+                // p.primitive_ids[layerNameWithIndex] = layerName;
+                // p.primitive_ids[layerName] = layerName;
+            } else {
+                p.primitive_ids[layerNameWithIndex] = layerName;
+                p.primitive_ids[layerName] = layerName;
+                external_id = layerName;
+            }
+            const auto& body_output = body_outputs.at(loop_output_desc->m_body_value_index);
+            cldnn::primitive_id internal_id = layer_type_name_ID(body_output);
 
-        std::cout << "loop_output_descs = [output_idx:" << output_idx << "=> output idx of "
-                    << layerName << ", body_idx:" << body_idx
-                    << "=> internal_id: " << internal_id << "]" << std::endl;
+            std::cout << "loop_output_descs = [output_idx:" << output_idx << "=> output idx of "
+                        << layerName << ", body_idx:" << body_idx
+                        << "=> internal_id: " << internal_id << "]" << std::endl;
 
-        // update primitive_map
-        if (const auto& concatOutput =
-            std::dynamic_pointer_cast<ov::op::util::MultiSubGraphOp::ConcatOutputDescription>(loop_output_desc)) {
-            // output which requires concatenation
-            output_primitive_maps.emplace_back(external_id, internal_id, concatOutput->m_axis,
-                concatOutput->m_start, concatOutput->m_end, concatOutput->m_stride);
-        }
-        if (std::dynamic_pointer_cast<ov::op::util::MultiSubGraphOp::BodyOutputDescription>(loop_output_desc)) {
-            // output which requires no concatenation
-            output_primitive_maps.emplace_back(external_id, internal_id);
+            // update primitive_map
+            if (const auto& concatOutput =
+                std::dynamic_pointer_cast<ov::op::util::MultiSubGraphOp::ConcatOutputDescription>(loop_output_desc)) {
+                // output which requires concatenation
+                output_primitive_maps.emplace_back(external_id, internal_id, concatOutput->m_axis,
+                    concatOutput->m_start, concatOutput->m_end, concatOutput->m_stride);
+            }
+            if (std::dynamic_pointer_cast<ov::op::util::MultiSubGraphOp::BodyOutputDescription>(loop_output_desc)) {
+                // output which requires no concatenation
+                output_primitive_maps.emplace_back(external_id, internal_id);
+            }
         }
     }
 }
@@ -136,7 +150,7 @@ static std::vector<cldnn::primitive_id> GetOutputNames(const cldnn::primitive_id
     std::vector<cldnn::primitive_id> output_names;
     OPENVINO_ASSERT(!output_primitive_maps.empty(), "[GPU] Output primitive map should have at least 1 mapping in primitive ", id);
     for (auto out_map : output_primitive_maps) {
-        output_names.push_back(out_map.internal_id);
+        output_names.push_back(out_map.internal_id.pid);
     }
 
     // setup outputs for backedges
