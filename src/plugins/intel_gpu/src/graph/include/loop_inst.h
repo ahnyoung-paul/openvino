@@ -227,6 +227,7 @@ private:
             mem_lock<uint8_t> concat_mem_lock{ concatenated_mem, stream };
             int64_t iteration_offset = bytes_iteration_initial_offset;
             for (const auto& sliced_mem : sliced_mems) {
+                // To support multi-batch, just repeat memcpy for each batch
                 for (int64_t batch = 0; batch < batch_size; ++batch) {
                     const int64_t src_offset = batch * bytes_iteration;
                     const int64_t dst_offset = batch * bytes_batch_stride + iteration_offset;
@@ -249,6 +250,7 @@ private:
             int64_t batch_offset = 0;
             const int64_t iteration_offset = bytes_iteration_initial_offset +
                 bytes_iteration_stride * iteration;
+            // To support multi-batch, just repeat memcpy for each batch
             for (int64_t batch = 0; batch < batch_size; ++batch) {
                 const int64_t src_offset = batch_offset + iteration_offset;
                 const int64_t dst_offset = batch * bytes_iteration;
@@ -259,6 +261,29 @@ private:
                 batch_offset += bytes_batch_stride;
             }
             return sliced_mems.at(iteration);
+        }
+
+        std::string to_string() const {
+            std::stringstream ss;
+            ss << "concatenated_memory_mapping [" << std::endl;
+            ss << "* axis                           : " << axis << std::endl;
+            ss << "* bytes_per_element              : " << bytes_per_element << std::endl;
+            ss << "* batch_size                     : " << batch_size << std::endl;
+            ss << "* bytes_batch_stride             : " << bytes_batch_stride << " = (static_cast<int64_t>("
+                << concatenated_mem->get_layout().count() << ") / batch_size:" << batch_size << ") * bytes_per_element:" << bytes_per_element << std::endl;
+            ss << "* bytes_iteration                : " << bytes_iteration << " = (iteration_elements:"
+                << iteration_elements << " * bytes_per_element:" << bytes_per_element << ")" << std::endl;
+            ss << "* bytes_iteration_stride         : " << bytes_iteration_stride << std::endl;
+            ss << "* bytes_iteration_initial_offset : " << bytes_iteration_initial_offset << std::endl;
+            ss << "* concat_data_prim               : " << concat_data_prim->id() << std::endl;
+            ss << "* sliced_data_prim               : " << sliced_data_prim->id() << std::endl;
+            ss << "* concatenated_mem               : " << concatenated_mem->get_layout().to_short_string() << std::endl;
+            ss << "* sliced_mems                    :{ ";
+            for (auto mem : sliced_mems) {
+                ss << mem->get_layout().to_short_string() << ",";
+            }
+            ss << "}]" << std::endl;
+            return ss.str();
         }
 
         const int64_t axis;
@@ -279,11 +304,12 @@ private:
         const int64_t bytes_iteration_stride;
         // byte offset of 1st iteration in a batch in a sliced memory
         const int64_t bytes_iteration_initial_offset;
+        const int64_t iteration_elements = 0;
     };
 
     template<typename ShapeType>
-    static std::vector<layout> calc_output_layouts(loop_node const& node, kernel_impl_params const& impl_param);
-    static layout calc_output_layout(const loop_node& node, kernel_impl_params const& impl_param);
+    static std::vector<layout> calc_output_layouts(loop_node const& /*node*/, kernel_impl_params const& impl_param);
+    static layout calc_output_layout(const loop_node& /*node*/, kernel_impl_params const& impl_param);
     bool preproc_memories_done = false;
     std::vector<backedge_memory_mapping> backedge_memory_mappings;
     std::vector<concatenated_memory_mapping> concatenated_input_mem_mappings;
@@ -302,6 +328,7 @@ public:
 
     void save(BinaryOutputBuffer& ob) const override;
     void load(BinaryInputBuffer& ib) override;
+    void validate_backedges(loop_node const & node) const;
 
 private:
     network::ptr body_network;
@@ -319,4 +346,11 @@ private:
 };
 
 using loop_inst = typed_primitive_inst<loop>;
+
+static inline std::ostream& operator<< (std::ostream& os, loop_inst::concatenated_memory_mapping& map) {
+    os << map.to_string();
+    return os;
+}
+
+
 }  // namespace cldnn

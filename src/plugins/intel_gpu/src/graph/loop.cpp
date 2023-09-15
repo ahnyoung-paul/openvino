@@ -70,62 +70,64 @@ static bool check_if_axis_is_set_properly(loop_node const & node) {
     return true;
 }
 
-static void validate_backedges(loop_node const & node) {
-    const auto& back_edges = node.get_back_edges();
-    const auto& input_primitive_maps = node.get_input_primitive_maps();
-
-    // check input with iteration axis has backedge
-    for (const auto& back_edge : back_edges) {
-        for (const auto& mapping : input_primitive_maps) {
-            if (mapping.internal_id.pid == back_edge.to && mapping.axis >= 0) {
-                CLDNN_ERROR_MESSAGE(node.id(),
-                    "input with iteration axis should not have backedges");
-            }
-        }
-    }
-}
-
-layout loop_inst::calc_output_layout(loop_node const & node, kernel_impl_params const& impl_param) {
-    // type checks
-    const primitive_id& num_iteration_id = node.get_num_iteration_id();
-    if (!node.get_program().get_node(num_iteration_id).is_type<mutable_data>()) {
-        CLDNN_ERROR_MESSAGE(node.id(), "num_iteration is not mutable_data");
-    }
-
-    if (!check_if_axis_is_set_properly(node)) {
-        CLDNN_ERROR_MESSAGE(node.id(), "axis is not set properly");
-    }
+layout loop_inst::calc_output_layout(loop_node const& /*node*/, kernel_impl_params const& impl_param) {
     auto prim = impl_param.typed_desc<loop>();
 
     // finds internal output
-    const auto& output_primitive_maps = node.get_output_primitive_maps();
+    const auto& output_primitive_maps = prim->output_primitive_maps;
     const auto& output_mapping = output_primitive_maps.front();
-    const auto& body_outputs = node.get_body_program()->get_outputs();
+
+    const auto& body_program = impl_param.inner_progs.front();
+    const auto& body_outputs = body_program->get_outputs();
+
     const primitive_id& output_internal_id = output_mapping.internal_id.pid;
     auto target = std::find_if(body_outputs.begin(), body_outputs.end(), [&](const cldnn::program_node * output) {
         return output->id() == output_internal_id;
     });
-    layout loop_output_layout;
-    if (target == body_outputs.end()) {
-        CLDNN_ERROR_MESSAGE(impl_param.desc->id, "output not found");
-    } else {
-        // set body output layout
-        loop_output_layout = (*target)->get_output_layout();
-        const int64_t axis_to_iterate_throgh = output_mapping.axis;
-        if (axis_to_iterate_throgh != -1) {
-            const size_t ndim = loop_output_layout.get_rank();
-            auto shape = loop_output_layout.get_dims();
-            shape[axis_to_iterate_throgh] = static_cast<int32_t>(prim->get_max_num_iteration());
-            loop_output_layout.set_tensor(tensor(format::get_default_format(ndim), shape));
-        }
+    OPENVINO_ASSERT(target != body_outputs.end(), impl_param.desc->id, "output not found");
+
+    // set body output layout
+    layout loop_output_layout = (*target)->get_output_layout();
+    const int64_t axis_to_iterate_through = output_mapping.axis;
+    if (axis_to_iterate_through != -1) {
+        const size_t ndim = loop_output_layout.get_rank();
+        auto shape = loop_output_layout.get_dims();
+        shape[axis_to_iterate_through] = static_cast<int32_t>(prim->get_max_num_iteration());
+        loop_output_layout.set_tensor(tensor(format::get_default_format(ndim), shape));
     }
+
     return loop_output_layout;
 }
 
 
 template<typename ShapeType>
-std::vector<layout> loop_inst::calc_output_layouts(loop_node const& node, kernel_impl_params const& impl_param) {
-    return {calc_output_layout(node, impl_param)};
+std::vector<layout> loop_inst::calc_output_layouts(loop_node const& /*node*/, kernel_impl_params const& impl_param) {
+    auto prim = impl_param.typed_desc<loop>();
+
+    const auto& output_primitive_maps = prim->output_primitive_maps;
+
+    const auto& body_program = impl_param.inner_progs.front();
+    const auto& body_outputs = body_program->get_outputs();
+
+    std::vector<layout> output_layouts;
+    for (auto& output_mapping : output_primitive_maps) {
+        const primitive_id& output_internal_id = output_mapping.internal_id.pid;
+        auto target = std::find_if(body_outputs.begin(), body_outputs.end(), [&](const cldnn::program_node * output) {
+            return output->id() == output_internal_id;
+        });
+        OPENVINO_ASSERT(target != body_outputs.end(), impl_param.desc->id, "output not found");
+
+        // set body output layout
+        layout loop_output_layout = (*target)->get_output_layout();
+        const int64_t axis_to_iterate_through = output_mapping.axis;
+        if (axis_to_iterate_through != -1) {
+            auto shape = loop_output_layout.get_partial_shape();
+            shape[axis_to_iterate_through] = static_cast<int32_t>(prim->get_max_num_iteration());
+            loop_output_layout.set_partial_shape(shape);
+        }
+        output_layouts.push_back(loop_output_layout);
+    }
+    return output_layouts;
 }
 
 template std::vector<layout> loop_inst::calc_output_layouts<ov::PartialShape>(loop_node const& node, const kernel_impl_params& impl_param);
@@ -497,6 +499,21 @@ std::vector<memory::ptr> loop_inst::get_sliced_mem(const primitive_id& internal_
     return {}; // not found
 }
 
+void loop_inst::validate_backedges(loop_node const & node) const {
+    const auto& back_edges = node.get_back_edges();
+    const auto& input_primitive_maps = node.get_input_primitive_maps();
+
+    // check input with iteration axis has backedge
+    for (const auto& back_edge : back_edges) {
+        for (const auto& mapping : input_primitive_maps) {
+            if (mapping.internal_id.pid == back_edge.to && mapping.axis >= 0) {
+                CLDNN_ERROR_MESSAGE(node.id(),
+                    "input with iteration axis should not have backedges");
+            }
+        }
+    }
+}
+
 memory::ptr loop_inst::get_external_memory(const primitive_id& external_id, size_t mem_idx) const {
     const auto outputPrim = _network.get_primitive(external_id);
     return outputPrim->output_memory_ptr(mem_idx);
@@ -509,8 +526,14 @@ loop_inst::typed_primitive_inst(network & network, loop_node const & node)
                                                   node.get_body_program(),
                                                   false,
                                                   network.is_primary_stream())) {
-    if (!check_if_axis_is_set_properly(node))
+    const primitive_id& num_iteration_id = node.get_num_iteration_id();
+    if (!node.get_program().get_node(num_iteration_id).is_type<mutable_data>()) {
+        CLDNN_ERROR_MESSAGE(node.id(), "num_iteration is not mutable_data");
+    }
+
+    if (!check_if_axis_is_set_properly(node)) {
         CLDNN_ERROR_MESSAGE(node.id(), "axis is not set properly");
+    }
 
     set_inner_networks({body_network});
     validate_backedges(node);

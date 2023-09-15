@@ -67,6 +67,10 @@ static void SetLoopInputOutputMap(ProgramBuilder& p,
         auto& body_input = body_inputs.at(loop_input_desc->m_body_parameter_index);
         cldnn::primitive_id internal_id = layer_type_name_ID(body_input);
 
+        std::cout << "loop_input_descs = [m_input_index:" << loop_input_desc->m_input_index << "=> external_input "
+                    << external_id << ", m_body_parameter_index:" << loop_input_desc->m_body_parameter_index
+                    << "=> internal_id: " << internal_id << "]" << std::endl;
+
         // set input mapping
         if (const auto& sliceInfo =
             std::dynamic_pointer_cast<ov::op::util::MultiSubGraphOp::SliceInputDescription>(loop_input_desc)) {
@@ -93,10 +97,34 @@ static void SetLoopInputOutputMap(ProgramBuilder& p,
     }
 
     use_new_shape_infer = false;
+    // set output mapping
     if (use_new_shape_infer) {
         std::cout << "use_new_shape_infer is true" << std::endl;
+        for (const auto& loop_output_desc : loop_output_descs) {
+            cldnn::input_info external_input_info(layerName, loop_output_desc->m_output_index);
+
+            const auto& body_output = body_outputs.at(loop_output_desc->m_body_value_index);
+            cldnn::primitive_id internal_id = layer_type_name_ID(body_output);
+
+            // update primitive_map
+            if (const auto& concatOutput =
+                std::dynamic_pointer_cast<ov::op::util::MultiSubGraphOp::ConcatOutputDescription>(loop_output_desc)) {
+                // output which requires concatenation
+                output_primitive_maps.emplace_back(external_input_info, internal_id, concatOutput->m_axis,
+                    concatOutput->m_start, concatOutput->m_end, concatOutput->m_stride);
+                std::cout << "[output_primitive_maps][ConcatOutputDescription] external:" << external_input_info << ", internal:"
+                        << internal_id << "(axis, start, end, stride)={"
+                        << concatOutput->m_axis << "," << concatOutput->m_start << ","
+                        << concatOutput->m_end << "," << concatOutput->m_stride << "}" << std::endl;
+            }
+            if (std::dynamic_pointer_cast<ov::op::util::MultiSubGraphOp::BodyOutputDescription>(loop_output_desc)) {
+                // output which requires no concatenation
+                output_primitive_maps.emplace_back(external_input_info, internal_id);
+                std::cout << "[output_primitive_maps][BodyOutputDescription] external:" << external_input_info << ", internal:"
+                        << internal_id << std::endl;
+            }
+        }
     } else {
-        // set output mapping
         for (const auto& loop_output_desc : loop_output_descs) {
             const uint64_t output_idx = loop_output_desc->m_output_index;
             const auto body_idx = loop_output_desc->m_body_value_index;
@@ -110,12 +138,6 @@ static void SetLoopInputOutputMap(ProgramBuilder& p,
                 cldnn::mutable_data output_data = CreateAdditionalOutputData(p, op, layerNameWithIndex, layerName, output_idx);
                 p.add_primitive(*op, std::move(output_data));
                 external_id = layerNameWithIndex;
-                // TODO: Why this makes issue ?
-                // Error has occured for: reshape:TensorIterator_293.2
-                // Output layout count(=2) is not equal to: input layout count(=4)
-                // Output layout of reshape primitive changes size of input buffer
-                // p.primitive_ids[layerNameWithIndex] = layerName;
-                // p.primitive_ids[layerName] = layerName;
             } else {
                 p.primitive_ids[layerNameWithIndex] = layerName;
                 p.primitive_ids[layerName] = layerName;
@@ -125,8 +147,8 @@ static void SetLoopInputOutputMap(ProgramBuilder& p,
             cldnn::primitive_id internal_id = layer_type_name_ID(body_output);
 
             std::cout << "loop_output_descs = [output_idx:" << output_idx << "=> output idx of "
-                        << layerName << ", body_idx:" << body_idx
-                        << "=> internal_id: " << internal_id << "]" << std::endl;
+                        << layerName << "-" << op->get_output_partial_shape(output_idx) << ", body_idx:" << body_idx
+                        << "=> internal_id: " << internal_id << "] - " << body_output->get_output_partial_shape(0) << std::endl;
 
             // update primitive_map
             if (const auto& concatOutput =
@@ -134,10 +156,16 @@ static void SetLoopInputOutputMap(ProgramBuilder& p,
                 // output which requires concatenation
                 output_primitive_maps.emplace_back(external_id, internal_id, concatOutput->m_axis,
                     concatOutput->m_start, concatOutput->m_end, concatOutput->m_stride);
+                std::cout << "[output_primitive_maps][ConcatOutputDescription] external:" << external_id << ", internal:"
+                        << internal_id << "(axis, start, end, stride)={"
+                        << concatOutput->m_axis << "," << concatOutput->m_start << ","
+                        << concatOutput->m_end << "," << concatOutput->m_stride << "}" << std::endl;
             }
             if (std::dynamic_pointer_cast<ov::op::util::MultiSubGraphOp::BodyOutputDescription>(loop_output_desc)) {
                 // output which requires no concatenation
                 output_primitive_maps.emplace_back(external_id, internal_id);
+                std::cout << "[output_primitive_maps][BodyOutputDescription] external:" << external_id << ", internal:"
+                        << internal_id << std::endl;
             }
         }
     }

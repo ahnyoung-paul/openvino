@@ -72,6 +72,11 @@ struct input_info {
     }
 };
 
+static inline std::ostream& operator<< (std::ostream& os, input_info& info) {
+    os << "input_info(pid:" << info.pid << ",idx:" << info.idx << ")";
+    return os;
+}
+
 struct prim_map_storage {
     static prim_map_storage& instance() {
         static prim_map_storage instance;

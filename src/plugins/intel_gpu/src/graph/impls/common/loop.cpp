@@ -234,10 +234,7 @@ struct loop_impl : typed_primitive_impl<loop> {
                 }
             }
 
-            //TODO: execution_condition is prepared as they are presented in the
-            //      ngraph opset document for loop operation.
-            // However they are not being used yet and only TensorIterator which
-            // has fixed sequence length is being validated.
+            // execution condition is the result of body network execution
             if (body_execution_condition_mem != nullptr) {
                 execution_condition = read_scalar_value(body_execution_condition_mem, body_network->get_stream());
             }
