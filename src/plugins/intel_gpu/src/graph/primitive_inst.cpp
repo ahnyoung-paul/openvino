@@ -1805,7 +1805,10 @@ void primitive_inst::update_output_layout() {
         new_layout.data_padding = padding::max(_node->get_primitive()->output_paddings[0], new_layout.data_padding);
         _impl_params->output_layouts[0] = new_layout;
     } else {
-        for (size_t i = 0; i != new_layouts.size(); ++i) {
+        if (_impl_params->output_layouts.size() < new_layouts.size()) {
+            _impl_params->output_layouts.resize(new_layouts.size());
+        }
+        for (size_t i = 0; i < new_layouts.size(); ++i) {
             auto new_layout = new_layouts[i];
             new_layout.data_padding = padding::max(_node->get_primitive()->output_paddings[i], new_layout.data_padding);
             _impl_params->output_layouts[i] = new_layout;
