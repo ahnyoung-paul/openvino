@@ -99,20 +99,14 @@ layout loop_inst::calc_output_layout(loop_node const& /*node*/, kernel_impl_para
     return loop_output_layout;
 }
 
-
-template<typename ShapeType>
-std::vector<layout> loop_inst::calc_output_layouts(loop_node const& /*node*/, kernel_impl_params const& impl_param) {
-    auto prim = impl_param.typed_desc<loop>();
-
-    const auto& output_primitive_maps = prim->output_primitive_maps;
-
-    const auto& body_program = impl_param.inner_progs.front();
-    const auto& body_outputs = body_program->get_outputs();
-
+template<typename T>
+static std::vector<layout> get_output_layouts(kernel_impl_params const& impl_param, std::vector<T> body_outputs) {
     std::vector<layout> output_layouts;
+    auto prim = impl_param.typed_desc<loop>();
+    const auto& output_primitive_maps = prim->output_primitive_maps;
     for (auto& output_mapping : output_primitive_maps) {
         const primitive_id& output_internal_id = output_mapping.internal_id.pid;
-        auto target = std::find_if(body_outputs.begin(), body_outputs.end(), [&](const cldnn::program_node * output) {
+        auto target = std::find_if(body_outputs.begin(), body_outputs.end(), [&](const T output) {
             return output->id() == output_internal_id;
         });
         OPENVINO_ASSERT(target != body_outputs.end(), impl_param.desc->id, "output not found");
@@ -126,6 +120,22 @@ std::vector<layout> loop_inst::calc_output_layouts(loop_node const& /*node*/, ke
             loop_output_layout.set_partial_shape(shape);
         }
         output_layouts.push_back(loop_output_layout);
+    }
+    return output_layouts;
+}
+
+template<typename ShapeType>
+std::vector<layout> loop_inst::calc_output_layouts(loop_node const& /*node*/, kernel_impl_params const& impl_param) {
+    std::vector<layout> output_layouts;
+    auto prim = impl_param.typed_desc<loop>();
+    if (impl_param.inner_nets.empty()) {
+        OPENVINO_ASSERT(impl_param.inner_progs.size() == 1, "Loop(", prim->id, ") should have only one inner network");
+        const auto& body_outputs = impl_param.inner_progs.front()->get_outputs();
+        output_layouts = get_output_layouts<program_node*>(impl_param, body_outputs);
+    } else {
+        OPENVINO_ASSERT(impl_param.inner_nets.size() == 1, "Loop(", prim->id, ") should have only one inner program");
+        const auto& body_outputs = impl_param.inner_nets.front()->get_outputs();
+        output_layouts = get_output_layouts<std::shared_ptr<primitive_inst>>(impl_param, body_outputs);
     }
     return output_layouts;
 }
@@ -203,19 +213,14 @@ static void validate_mappings(loop_node const & node) {
         }
         const auto results = find_io_primitive_maps(node.get_input_primitive_maps(),
                                                     node.get_output_primitive_maps(), id, true);
-        if (results.size() == 0) {
-            std::string msg = "outer input '" + id + "' does not have primitive map";
-            CLDNN_ERROR_MESSAGE(node.id(), msg.c_str());
-        }
+        OPENVINO_ASSERT(results.size() > 0, node.id(), " : outer input '", id, "' does not have primitive map");
     }
 
     // check all io_primitive_maps have their corresponding external id
     for (const auto& pm : input_primitive_maps) {
         auto found = std::find(outer_inputs.begin(), outer_inputs.end(), pm.external_id.pid);
-        if (found == outer_inputs.end()) {
-            std::string msg = "external id '" + pm.external_id.pid + "' in primitive map cannot be found loop inputs";
-            CLDNN_ERROR_MESSAGE(node.id(), msg.c_str());
-        }
+        OPENVINO_ASSERT(found != outer_inputs.end(), node.id(),
+                        " : external id '", pm.external_id.pid, "' in primitive map cannot be found loop inputs");
     }
 
     const auto& nodes = node.get_body_program()->get_processing_order();
@@ -225,19 +230,15 @@ static void validate_mappings(loop_node const & node) {
         auto found = std::find_if(nodes.begin(), nodes.end(), [&pm](const program_node* body_input) {
             return body_input->id() == pm.internal_id.pid;
         });
-        if (found == nodes.end()) {
-            std::string msg = "internal id '" + pm.internal_id.pid + "' in primitive map cannot be found loop body";
-            CLDNN_ERROR_MESSAGE(node.id(), msg.c_str());
-        }
+        OPENVINO_ASSERT(found != nodes.end(), node.id(),
+                    " : internal id '", pm.internal_id.pid, "' in primitive map cannot be found loop body");
     }
     for (const auto& pm : output_primitive_maps) {
         auto found = std::find_if(nodes.begin(), nodes.end(), [&pm](const program_node* body_output) {
             return body_output->id() == pm.internal_id.pid;
         });
-        if (found == nodes.end()) {
-            std::string msg = "internal id '" + pm.internal_id.pid + "' in primitive map cannot be found body body";
-            CLDNN_ERROR_MESSAGE(node.id(), msg.c_str());
-        }
+        OPENVINO_ASSERT(found != nodes.end(), node.id(),
+                    " : internal id '", pm.internal_id.pid, "' in primitive map cannot be found body body");
     }
 }
 
@@ -396,11 +397,9 @@ void loop_inst::preprocess_input_memory() {
         auto input_map_ptrs = find_io_primitive_maps(_input_primitive_maps,
                                                      _output_primitive_maps, input_external_id, true);
         if (input_map_ptrs.size() == 0) {
-            if (input_external_id == _trip_count_id ||
-                input_external_id == _initial_execution_id) {
-                continue;
-            }
-            CLDNN_ERROR_MESSAGE(id(), "loop primitive_map is incomplete");
+            OPENVINO_ASSERT((input_external_id != _trip_count_id && input_external_id != _initial_execution_id),
+                                id(), "loop primitive_map is incomplete");
+            continue;
         }
 
         auto memory = input_memory_ptr(memory_num);
@@ -428,9 +427,8 @@ void loop_inst::preprocess_input_memory() {
                 concatenated_input_mem_mapping_info.sliced_data_prim = body_network->get_primitive(internal_id.pid);
                 iteration_mem.push_back(concatenated_input_mem_mapping_info);
             } else {
-                if (memory->get_layout().data_type != body_network->get_primitive(internal_id.pid)->output_memory(internal_id.idx).get_layout().data_type) {
-                    CLDNN_ERROR_MESSAGE(id(), "incompatible datatypes");
-                }
+                auto internal_data_type = body_network->get_primitive(internal_id.pid)->output_memory(internal_id.idx).get_layout().data_type;
+                OPENVINO_ASSERT(memory->get_layout().data_type == internal_data_type, id(), " has incompatible datatypes");
                 body_network->set_input_data(internal_id.pid, memory);
             }
         }
@@ -447,7 +445,7 @@ void loop_inst::preprocess_backedge_memory() {
         const auto backedge_from_prim = body_network->get_primitive(back_edge.from);
 
         memory::ptr initial_mem;
-        OPENVINO_ASSERT(!input_map_ptrs.empty(), "no input_mapping for backedged input");
+        OPENVINO_ASSERT(!input_map_ptrs.empty(), id(), " has no input_mapping for backedged input");
         auto& external_id = input_map_ptrs.front()->external_id;
         initial_mem = get_external_memory(external_id.pid, external_id.idx);
 
@@ -506,10 +504,8 @@ void loop_inst::validate_backedges(loop_node const & node) const {
     // check input with iteration axis has backedge
     for (const auto& back_edge : back_edges) {
         for (const auto& mapping : input_primitive_maps) {
-            if (mapping.internal_id.pid == back_edge.to && mapping.axis >= 0) {
-                CLDNN_ERROR_MESSAGE(node.id(),
-                    "input with iteration axis should not have backedges");
-            }
+            OPENVINO_ASSERT(!(mapping.internal_id.pid == back_edge.to && mapping.axis >= 0),
+                node.id(), ": input with iteration axis should not have backedges");
         }
     }
 }
@@ -527,13 +523,9 @@ loop_inst::typed_primitive_inst(network & network, loop_node const & node)
                                                   false,
                                                   network.is_primary_stream())) {
     const primitive_id& num_iteration_id = node.get_num_iteration_id();
-    if (!node.get_program().get_node(num_iteration_id).is_type<mutable_data>()) {
-        CLDNN_ERROR_MESSAGE(node.id(), "num_iteration is not mutable_data");
-    }
-
-    if (!check_if_axis_is_set_properly(node)) {
-        CLDNN_ERROR_MESSAGE(node.id(), "axis is not set properly");
-    }
+    OPENVINO_ASSERT(node.get_program().get_node(num_iteration_id).is_type<mutable_data>(),
+                        node.id(), ": num_iteration is not mutable_data");
+    OPENVINO_ASSERT(check_if_axis_is_set_properly(node), node.id(), ": axis is not set properly");
 
     set_inner_networks({body_network});
     validate_backedges(node);

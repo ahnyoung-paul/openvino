@@ -67,9 +67,9 @@ static void SetLoopInputOutputMap(ProgramBuilder& p,
         auto& body_input = body_inputs.at(loop_input_desc->m_body_parameter_index);
         cldnn::primitive_id internal_id = layer_type_name_ID(body_input);
 
-        std::cout << "loop_input_descs = [m_input_index:" << loop_input_desc->m_input_index << "=> external_input "
-                    << external_id << ", m_body_parameter_index:" << loop_input_desc->m_body_parameter_index
-                    << "=> internal_id: " << internal_id << "]" << std::endl;
+        GPU_DEBUG_LOG << "loop_input_descs[" << layerName << "] = {m_input_index:" << loop_input_desc->m_input_index << "(external_id: "
+                    << external_id << "), m_body_parameter_index:" << loop_input_desc->m_body_parameter_index
+                    << "(internal_id: " << internal_id << ")}" << std::endl;
 
         // set input mapping
         if (const auto& sliceInfo =
@@ -99,7 +99,6 @@ static void SetLoopInputOutputMap(ProgramBuilder& p,
     use_new_shape_infer = false;
     // set output mapping
     if (use_new_shape_infer) {
-        std::cout << "use_new_shape_infer is true" << std::endl;
         for (const auto& loop_output_desc : loop_output_descs) {
             cldnn::input_info external_input_info(layerName, loop_output_desc->m_output_index);
 
@@ -112,7 +111,8 @@ static void SetLoopInputOutputMap(ProgramBuilder& p,
                 // output which requires concatenation
                 output_primitive_maps.emplace_back(external_input_info, internal_id, concatOutput->m_axis,
                     concatOutput->m_start, concatOutput->m_end, concatOutput->m_stride);
-                std::cout << "[output_primitive_maps][ConcatOutputDescription] external:" << external_input_info << ", internal:"
+                GPU_DEBUG_LOG << "loop_output_descs[" << layerName << "][ConcatOutputDescription] external:"
+                        << external_input_info << ", internal:"
                         << internal_id << "(axis, start, end, stride)={"
                         << concatOutput->m_axis << "," << concatOutput->m_start << ","
                         << concatOutput->m_end << "," << concatOutput->m_stride << "}" << std::endl;
@@ -120,14 +120,13 @@ static void SetLoopInputOutputMap(ProgramBuilder& p,
             if (std::dynamic_pointer_cast<ov::op::util::MultiSubGraphOp::BodyOutputDescription>(loop_output_desc)) {
                 // output which requires no concatenation
                 output_primitive_maps.emplace_back(external_input_info, internal_id);
-                std::cout << "[output_primitive_maps][BodyOutputDescription] external:" << external_input_info << ", internal:"
-                        << internal_id << std::endl;
+                GPU_DEBUG_LOG << "loop_output_descs[" << layerName << "][BodyOutputDescription] external:"
+                        << external_input_info << ", internal:" << internal_id << std::endl;
             }
         }
     } else {
         for (const auto& loop_output_desc : loop_output_descs) {
             const uint64_t output_idx = loop_output_desc->m_output_index;
-            const auto body_idx = loop_output_desc->m_body_value_index;
 
             // Add additional mutable_data for multiple outputs
             // primitive ID should be <TI primitive ID>.<output_idx> if output_idx > 0
@@ -146,17 +145,14 @@ static void SetLoopInputOutputMap(ProgramBuilder& p,
             const auto& body_output = body_outputs.at(loop_output_desc->m_body_value_index);
             cldnn::primitive_id internal_id = layer_type_name_ID(body_output);
 
-            std::cout << "loop_output_descs = [output_idx:" << output_idx << "=> output idx of "
-                        << layerName << "-" << op->get_output_partial_shape(output_idx) << ", body_idx:" << body_idx
-                        << "=> internal_id: " << internal_id << "] - " << body_output->get_output_partial_shape(0) << std::endl;
-
             // update primitive_map
             if (const auto& concatOutput =
                 std::dynamic_pointer_cast<ov::op::util::MultiSubGraphOp::ConcatOutputDescription>(loop_output_desc)) {
                 // output which requires concatenation
                 output_primitive_maps.emplace_back(external_id, internal_id, concatOutput->m_axis,
                     concatOutput->m_start, concatOutput->m_end, concatOutput->m_stride);
-                std::cout << "[output_primitive_maps][ConcatOutputDescription] external:" << external_id << ", internal:"
+                GPU_DEBUG_LOG << "loop_output_descs[" << layerName << "][ConcatOutputDescription] external:"
+                        << external_id << ", internal:"
                         << internal_id << "(axis, start, end, stride)={"
                         << concatOutput->m_axis << "," << concatOutput->m_start << ","
                         << concatOutput->m_end << "," << concatOutput->m_stride << "}" << std::endl;
@@ -164,8 +160,8 @@ static void SetLoopInputOutputMap(ProgramBuilder& p,
             if (std::dynamic_pointer_cast<ov::op::util::MultiSubGraphOp::BodyOutputDescription>(loop_output_desc)) {
                 // output which requires no concatenation
                 output_primitive_maps.emplace_back(external_id, internal_id);
-                std::cout << "[output_primitive_maps][BodyOutputDescription] external:" << external_id << ", internal:"
-                        << internal_id << std::endl;
+                GPU_DEBUG_LOG << "loop_output_descs[" << layerName << "][BodyOutputDescription] external:"
+                        << external_id << ", internal:" << internal_id << std::endl;
             }
         }
     }
