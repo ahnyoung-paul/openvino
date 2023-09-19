@@ -1784,6 +1784,9 @@ void primitive_inst::load(cldnn::BinaryInputBuffer& ib) {
 }
 
 void primitive_inst::update_output_layout() {
+    if (_node == nullptr)
+        return;
+
     auto memory_deps = _node->get_const_memory_deps();
     for (auto& i : _node->get_shape_infer_dependencies()) {
         if (memory_deps.count(i) > 0 || i >= _node->get_dependencies().size()) {
