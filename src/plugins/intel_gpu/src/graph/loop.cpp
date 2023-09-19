@@ -270,7 +270,7 @@ void loop_inst::update_mapped_memory() {
     for (size_t memory_num = 0; memory_num < inputs_memory_count(); memory_num++) {
         const primitive_id& input_external_id = dependencies().at(memory_num).first->id();
         auto input_map_ptrs = find_io_primitive_maps(_input_primitive_maps,
-                                                     _output_primitive_maps, input_external_id, true);
+                                                    _output_primitive_maps, input_external_id, true);
         if (input_map_ptrs.empty()) {
             if (input_external_id == _trip_count_id ||
                 input_external_id == _initial_execution_id) {
@@ -299,7 +299,7 @@ void loop_inst::update_mapped_memory() {
     for (const auto& back_edge : _back_edges) {
         //find corresponding input of the backedge
         const auto input_map_ptrs = find_io_primitive_maps(_input_primitive_maps,
-                                                           _output_primitive_maps, back_edge.to, false);
+                                                            _output_primitive_maps, back_edge.to, false);
         assert(input_map_ptrs.size() == 1);
         const auto& input_map = input_map_ptrs.front();
         auto backedged_sliced_output_mems = get_sliced_mem(back_edge.from);
@@ -314,7 +314,7 @@ void loop_inst::update_mapped_memory() {
                 if (backedged_sliced_output_mems.empty()) {
                     // backedge output which does not need concatenation
                     const auto output_mapping = find_io_primitive_maps(_input_primitive_maps,
-                                                                       _output_primitive_maps, back_edge.from, false);
+                                                                        _output_primitive_maps, back_edge.from, false);
                     memory::ptr backedge_mem;
                     if (output_mapping.empty()) {
                         // from and to primitives in backedge are connected directly
@@ -395,10 +395,12 @@ void loop_inst::preprocess_input_memory() {
     for (size_t memory_num = 0; memory_num < inputs_memory_count(); memory_num++) {
         const primitive_id& input_external_id = dependencies().at(memory_num).first->id();
         auto input_map_ptrs = find_io_primitive_maps(_input_primitive_maps,
-                                                     _output_primitive_maps, input_external_id, true);
+                                                    _output_primitive_maps, input_external_id, true);
         if (input_map_ptrs.size() == 0) {
-            OPENVINO_ASSERT((input_external_id != _trip_count_id && input_external_id != _initial_execution_id),
-                                id(), "loop primitive_map is incomplete");
+            OPENVINO_ASSERT((input_external_id == _trip_count_id || input_external_id == _initial_execution_id),
+                                id(), "loop primitive_map is incomplete "
+                                "input_external_id(", input_external_id, ") != _trip_count_id(", _trip_count_id, ")",
+                                " && input_external_id(", input_external_id, ") != _initial_execution_id(", _initial_execution_id, ")");
             continue;
         }
 
@@ -440,7 +442,7 @@ void loop_inst::preprocess_backedge_memory() {
     for (const auto& back_edge : _back_edges) {
         //find corresponding input of the backedge
         const auto input_map_ptrs = find_io_primitive_maps(_input_primitive_maps,
-                                                           _output_primitive_maps, back_edge.to, false);
+                                                            _output_primitive_maps, back_edge.to, false);
         const auto backedge_to_prim = body_network->get_primitive(back_edge.to);
         const auto backedge_from_prim = body_network->get_primitive(back_edge.from);
 
@@ -454,7 +456,7 @@ void loop_inst::preprocess_backedge_memory() {
         if (backedged_sliced_output_mems.empty()) {
             // backedge output which does not need concatenation
             const auto output_mapping = find_io_primitive_maps(_input_primitive_maps,
-                                                               _output_primitive_maps, back_edge.from, false);
+                                                                _output_primitive_maps, back_edge.from, false);
             memory::ptr backedge_mem;
             if (output_mapping.empty()) {
                 // from and to primitives in backedge are connected directly
@@ -504,7 +506,7 @@ void loop_inst::validate_backedges(loop_node const & node) const {
     // check input with iteration axis has backedge
     for (const auto& back_edge : back_edges) {
         for (const auto& mapping : input_primitive_maps) {
-            OPENVINO_ASSERT(!(mapping.internal_id.pid == back_edge.to && mapping.axis >= 0),
+            OPENVINO_ASSERT((mapping.internal_id.pid != back_edge.to || mapping.axis < 0),
                 node.id(), ": input with iteration axis should not have backedges");
         }
     }
@@ -517,11 +519,11 @@ memory::ptr loop_inst::get_external_memory(const primitive_id& external_id, size
 
 loop_inst::typed_primitive_inst(network & network, loop_node const & node)
     : parent(network, node),
-      preproc_memories_done(false),
-      body_network(network::allocate_network(network.get_stream_ptr(),
-                                                  node.get_body_program(),
-                                                  false,
-                                                  network.is_primary_stream())) {
+        preproc_memories_done(false),
+        body_network(network::allocate_network(network.get_stream_ptr(),
+                                                node.get_body_program(),
+                                                false,
+                                                network.is_primary_stream())) {
     const primitive_id& num_iteration_id = node.get_num_iteration_id();
     OPENVINO_ASSERT(node.get_program().get_node(num_iteration_id).is_type<mutable_data>(),
                         node.id(), ": num_iteration is not mutable_data");

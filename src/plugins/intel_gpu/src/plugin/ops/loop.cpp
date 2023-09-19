@@ -101,6 +101,7 @@ static void SetLoopInputOutputMap(ProgramBuilder& p,
     if (use_new_shape_infer) {
         for (const auto& loop_output_desc : loop_output_descs) {
             cldnn::input_info external_input_info(layerName, loop_output_desc->m_output_index);
+            p.primitive_ids[layerName] = layerName;
 
             const auto& body_output = body_outputs.at(loop_output_desc->m_body_value_index);
             cldnn::primitive_id internal_id = layer_type_name_ID(body_output);
