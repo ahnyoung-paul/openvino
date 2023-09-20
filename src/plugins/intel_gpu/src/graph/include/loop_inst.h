@@ -324,6 +324,9 @@ public:
     void preprocess_output_memory();
     void preprocess_backedge_memory();
     void update_mapped_memory();
+    void update_input_mapped_memory();
+    void update_output_mapped_memory();
+    void update_backedge_mapped_memory();
     event::ptr set_output_memory(memory::ptr mem, bool check = true, size_t idx = 0) override;
 
     void save(BinaryOutputBuffer& ob) const override;

@@ -242,31 +242,7 @@ static void validate_mappings(loop_node const & node) {
     }
 }
 
-void loop_inst::update_mapped_memory() {
-    if (!preproc_memories_done) {
-        return;
-    }
-    // update output memory
-    for (size_t i = 0; i < _output_primitive_maps.size(); ++i) {
-        const auto& output_mapping = _output_primitive_maps.at(i);
-        const primitive_id& external_id = output_mapping.external_id.pid;
-        const size_t external_mem_idx = output_mapping.external_id.idx;
-        const primitive_id& internal_id = output_mapping.internal_id.pid;
-        const size_t internal_mem_idx = output_mapping.internal_id.idx;
-
-        memory::ptr to_mem = get_external_memory(external_id, external_mem_idx);
-        if (output_mapping.axis < 0) {
-            body_network->get_primitive(internal_id)->set_output_memory(to_mem, true, internal_mem_idx);
-        } else {
-            for (auto& mem_mapping : concatenated_output_mem_mappings) {
-                if (mem_mapping.sliced_data_prim->id() == internal_id) {
-                    mem_mapping.concatenated_mem = to_mem;
-                    break;
-                }
-            }
-        }
-    }
-    // update input memory
+void loop_inst::update_input_mapped_memory() {
     for (size_t memory_num = 0; memory_num < inputs_memory_count(); memory_num++) {
         const primitive_id& input_external_id = dependencies().at(memory_num).first->id();
         auto input_map_ptrs = find_io_primitive_maps(_input_primitive_maps,
@@ -294,7 +270,47 @@ void loop_inst::update_mapped_memory() {
             }
         }
     }
-    //update backedges memory
+}
+
+void loop_inst::update_output_mapped_memory() {
+    if (is_dynamic()) {
+        if (!outputs_allocated()) {
+            _outputs = allocate_outputs(_impl_params.get(), true, true);
+        }
+    }
+
+    for (size_t i = 0; i < _output_primitive_maps.size(); ++i) {
+        const auto& output_mapping = _output_primitive_maps.at(i);
+        const primitive_id& external_id = output_mapping.external_id.pid;
+        const size_t external_mem_idx = output_mapping.external_id.idx;
+        const primitive_id& internal_id = output_mapping.internal_id.pid;
+        const size_t internal_mem_idx = output_mapping.internal_id.idx;
+
+        memory::ptr to_mem = get_external_memory(external_id, external_mem_idx);
+        if (to_mem) {
+            if (output_mapping.axis < 0) {
+                body_network->get_primitive(internal_id)->set_output_memory(to_mem, true, internal_mem_idx);
+            } else {
+                for (auto& mem_mapping : concatenated_output_mem_mappings) {
+                    if (mem_mapping.sliced_data_prim->id() == internal_id) {
+                        mem_mapping.concatenated_mem = to_mem;
+                        break;
+                    }
+                }
+            }
+        } else {
+            std::cout << "external memory for " << external_id << " with " << external_mem_idx << " is null" << std::endl;
+            std::cout << "- output_mapping.axis     : " << output_mapping.axis << std::endl;
+            std::cout << "- output_mapping.start    : " << output_mapping.start << std::endl;
+            std::cout << "- output_mapping.end      : " << output_mapping.end << std::endl;
+            std::cout << "- output_mapping.stride   : " << output_mapping.stride << std::endl;
+            auto internal_mem = body_network->get_primitive(internal_id)->output_memory_ptr(internal_mem_idx);
+            std::cout << "- internal memory ptr " << internal_mem << " " << internal_mem->get_layout().to_short_string() << std::endl;
+        }
+    }
+}
+
+void loop_inst::update_backedge_mapped_memory() {
     // checking if memory is a destination of a backedge
     for (const auto& back_edge : _back_edges) {
         //find corresponding input of the backedge
@@ -345,6 +361,16 @@ void loop_inst::update_mapped_memory() {
     }
 }
 
+
+void loop_inst::update_mapped_memory() {
+    if (!preproc_memories_done) {
+        return;
+    }
+    update_output_mapped_memory();
+    update_input_mapped_memory();
+    update_backedge_mapped_memory();
+}
+
 event::ptr loop_inst::set_output_memory(memory::ptr mem, bool check, size_t idx) {
     auto ev = primitive_inst::set_output_memory(mem, check, idx);
     update_mapped_memory();
@@ -364,6 +390,7 @@ void loop_inst::preprocess_output_memory() {
         } else {
             memory::ptr to_mem = get_external_memory(external_id.pid, external_id.idx);
             auto output_prim = body_network->get_primitive(internal_id.pid);
+            // TODO: debug why body_network output does not have output buffer?
             layout sliced_layout = output_prim->output_memory(internal_id.idx).get_layout();
 
             const int64_t max_num_iteration = _max_iteration;

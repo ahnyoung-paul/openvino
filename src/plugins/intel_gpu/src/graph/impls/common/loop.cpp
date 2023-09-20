@@ -122,11 +122,17 @@ struct loop_impl : typed_primitive_impl<loop> {
 
         auto ev = stream.create_user_event(false);
 
-        if (!instance.preproc_memories_done) {
-            instance.preprocess_output_memory();
+        if (!instance.is_dynamic()) {
+            if (!instance.preproc_memories_done) {
+                instance.preprocess_output_memory();
+                instance.preprocess_input_memory();
+                instance.preprocess_backedge_memory();
+                instance.preproc_memories_done = true;
+            }
+        } else {
+            instance.preproc_memories_done = false;
+            instance.update_input_mapped_memory();
             instance.preprocess_input_memory();
-            instance.preprocess_backedge_memory();
-            instance.preproc_memories_done = true;
         }
 
         //////////////////////////////////////////
@@ -139,6 +145,8 @@ struct loop_impl : typed_primitive_impl<loop> {
             trip_count = read_scalar_value(std::move(trip_count_mem), stream);
         }
         trip_count = (trip_count > 0)? trip_count : max_num_iteration;
+
+        std::cout << "trip_count : " << trip_count << std::endl;
 
         // read initial execution condition from outer network
         int64_t execution_condition = 1;
@@ -243,6 +251,16 @@ struct loop_impl : typed_primitive_impl<loop> {
             ++current_iteration_idx;
             if (!loop_carried_dep.empty())
                 stream.wait_for_events(loop_carried_dep);
+
+            if (instance.is_dynamic()) {
+                if (!instance.preproc_memories_done) {
+                    instance.update_output_layout();
+                    instance.update_output_mapped_memory();
+                    instance.preprocess_output_memory();
+                    instance.preprocess_backedge_memory();
+                    instance.preproc_memories_done = true;
+                }
+            }
         }
 
         // Reset network and wait for all collected events
@@ -288,6 +306,11 @@ private:
 
 namespace detail {
 attach_loop_common::attach_loop_common() {
+    implementation_map<loop>::add(impl_types::common,
+                                    shape_types::dynamic_shape,
+                                    loop_impl::create,
+                                    {},
+                                    {});
     implementation_map<loop>::add(impl_types::common, loop_impl::create, {});
 }
 }  // namespace detail
