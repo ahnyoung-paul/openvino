@@ -131,7 +131,6 @@ struct loop_impl : typed_primitive_impl<loop> {
             }
         } else {
             instance.preproc_memories_done = false;
-            instance.update_input_mapped_memory();
             instance.preprocess_input_memory();
         }
 

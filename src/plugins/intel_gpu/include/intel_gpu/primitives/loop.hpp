@@ -58,7 +58,7 @@ struct loop : public primitive_base<loop> {
 
     struct io_primitive_map {
         /// @brief Constructs a mapping from external input/output primitive to input/output primitive in body topology
-        ///
+        ///         or a mapping from output of body topology to input of body topology for the next iteration.
         /// @param external_id Primitive id of input of loop or output of body network.
         /// @param internal_id Primitive id of input of body network.
         /// @param axis Axis to iterate through. Negative value means the axis will not iterate through and start, end, stride arguments will be ignored.
@@ -75,7 +75,7 @@ struct loop : public primitive_base<loop> {
             stride(stride) {}
 
         /// @brief Constructs a mapping from external input/output primitive to input/output primitive in body topology
-        ///
+        ///         or a mapping from output of body topology to input of body topology for the next iteration.
         /// @param external_id Primitive id of input of loop or output of body network.
         /// @param internal_id Primitive id of input of body network.
         /// @param axis Axis to iterate through. Negative value means the axis will not iterate through and start, end, stride arguments will be ignored.

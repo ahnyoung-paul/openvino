@@ -81,7 +81,7 @@ public:
             result << "}_";
         }
         result << ")_";
-        result << "netPRC=" << std::to_string(data_prc) << "_";
+        result << "netPRC=" << data_prc << "_";
         result << "targetDevice=" << targetDevice << "_";
 
         auto res_str = result.str();

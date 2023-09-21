@@ -27,9 +27,9 @@ namespace ov {
 namespace intel_gpu {
 
 template<class DATA_TYPE>
-static DATA_TYPE CreateScalarData(ProgramBuilder &p, const cldnn::primitive_id& id, int64_t num) {
-    auto mem = p.get_engine().allocate_memory({ cldnn::data_types::i64, cldnn::format::bfyx, { 1, 1, 1, 1 } });
-    cldnn::mem_lock<int64_t> ptr{mem, p.get_engine().get_service_stream()};
+static DATA_TYPE CreateScalarData(ProgramBuilder &p, const cldnn::primitive_id& id, int32_t num) {
+    auto mem = p.get_engine().allocate_memory({ cldnn::data_types::i32, cldnn::format::bfyx, { 1, 1, 1, 1 } });
+    cldnn::mem_lock<int32_t> ptr{mem, p.get_engine().get_service_stream()};
     *ptr.begin() = num;
     return {id, mem};
 }
@@ -195,6 +195,7 @@ static std::vector<cldnn::primitive_id> GetOutputNames(const cldnn::primitive_id
 static void CreateCommonLoopOp(ProgramBuilder& p, const std::shared_ptr<ov::op::util::SubGraphOp>& op, bool is_loop_op) {
     const std::string layerName = layer_type_name_ID(op);
     auto inputs = p.GetInputInfo(op);
+    bool is_dynamic = p.use_new_shape_infer() || op->is_dynamic();
 
     auto ov_model = op->get_function();
     // Set special body ports: current_iteration input , execution condition output
@@ -234,19 +235,25 @@ static void CreateCommonLoopOp(ProgramBuilder& p, const std::shared_ptr<ov::op::
     auto config = p.get_config();
     config.set_property(ov::intel_gpu::custom_outputs(output_names_vec));
     config.set_property(ov::intel_gpu::max_dynamic_batch(1));
-    config.set_property(ov::intel_gpu::allow_new_shape_infer(op->is_dynamic()));
+    config.set_property(ov::intel_gpu::allow_new_shape_infer(is_dynamic));
 
     // get body program from ov::Model
     ProgramBuilder prog(ov_model, p.get_engine(), config, false, false, p.get_task_executor(), true);
     auto body_program = prog.get_compiled_program();
 
-    // set trip count, initial execution condition, num iteration primitives
+    int64_t num_iterations = op->get_num_iterations();
+    OPENVINO_ASSERT((is_dynamic || num_iterations > 0), "loop's num_iteration should be positive on static shape model");
+
+    // set trip count, num iteration primitives
     // they should be mutable_data to prevent from being optimized out
-    const int64_t num_iterations = op->get_num_iterations();
     const cldnn::primitive_id num_iteration_id = layerName + "_numIteration";
-    {
-        cldnn::mutable_data num_iteration = CreateScalarData<cldnn::mutable_data>(p, num_iteration_id, 0);
-        p.add_primitive(*op, std::move(num_iteration));
+    cldnn::mutable_data num_iteration_data = CreateScalarData<cldnn::mutable_data>(p, num_iteration_id, 0);
+    p.add_primitive(*op, std::move(num_iteration_data));
+
+    if (trip_count_id.empty()) {
+        trip_count_id = layerName + "_tripCount";
+        cldnn::mutable_data trip_count_data = CreateScalarData<cldnn::mutable_data>(p, trip_count_id, num_iterations);
+        p.add_primitive(*op, std::move(trip_count_data));
     }
 
     const cldnn::loop loopPrimitive(

@@ -456,8 +456,6 @@ void loop_inst::preprocess_input_memory() {
                 concatenated_input_mem_mapping_info.sliced_data_prim = body_network->get_primitive(internal_id.pid);
                 iteration_mem.push_back(concatenated_input_mem_mapping_info);
             } else {
-                auto internal_data_type = body_network->get_primitive(internal_id.pid)->output_memory(internal_id.idx).get_layout().data_type;
-                OPENVINO_ASSERT(memory->get_layout().data_type == internal_data_type, id(), " has incompatible datatypes");
                 body_network->set_input_data(internal_id.pid, memory);
             }
         }
