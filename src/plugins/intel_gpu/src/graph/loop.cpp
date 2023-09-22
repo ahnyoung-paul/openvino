@@ -298,7 +298,7 @@ void loop_inst::update_input_mapped_memory() {
             if (is_concatenated_input) {
                 for (auto& mem_mapping : concatenated_input_mem_mappings) {
                     if (mem_mapping.sliced_data_prim->id() == input_map->internal_id.pid) {
-                        mem_mapping.concatenated_mem = memory;
+                        mem_mapping.update_concatenated_mem(memory);
                         break;
                     }
                 }
@@ -330,7 +330,7 @@ void loop_inst::update_output_mapped_memory() {
             } else {
                 for (auto& mem_mapping : concatenated_output_mem_mappings) {
                     if (mem_mapping.sliced_data_prim->id() == internal_id) {
-                        mem_mapping.concatenated_mem = to_mem;
+                        mem_mapping.update_concatenated_mem(to_mem);
                         break;
                     }
                 }
@@ -553,12 +553,12 @@ void loop_inst::preprocess_backedge_memory() {
 std::vector<memory::ptr> loop_inst::get_sliced_mem(const primitive_id& internal_id) const {
     for (const auto& mem_mapping : concatenated_input_mem_mappings) {
         if (mem_mapping.sliced_data_prim->id() == internal_id) {
-            return mem_mapping.sliced_mems;
+            return mem_mapping.get_sliced_mems();
         }
     }
     for (const auto& mem_mapping : concatenated_output_mem_mappings) {
         if (mem_mapping.sliced_data_prim->id() == internal_id) {
-            return mem_mapping.sliced_mems;
+            return mem_mapping.get_sliced_mems();
         }
     }
     return {}; // not found

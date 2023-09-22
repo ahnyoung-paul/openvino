@@ -207,16 +207,19 @@ private:
             concatenated_mem(concatenated_mem),
             sliced_mems(sliced_mems),
             stream(stream),
-            bytes_per_element(data_type_traits::size_of(concatenated_mem->get_layout().data_type)),
-            batch_size(get_batch_size(concatenated_mem->get_layout(), axis)),
-            bytes_batch_stride((static_cast<int64_t>(concatenated_mem->get_layout().count()) / batch_size) * bytes_per_element),
-            bytes_iteration(iteration_elements * bytes_per_element),
-            bytes_iteration_stride(stride * bytes_iteration),
-            bytes_iteration_initial_offset(initial_offset * bytes_iteration) {}
+            iteration_elements(iteration_elements),
+            stride(stride),
+            initial_offset(initial_offset) {
+                calculate_concatenated_mem();
+            }
 
         static int64_t get_batch_size(layout mem_layout, int64_t axis) {
             if (axis < 0) {
                 throw std::runtime_error("axis should be positive integer or zero");
+            }
+
+            if (mem_layout.is_dynamic()) {
+                return -1;
             }
 
             int64_t batch_size = 1;
@@ -227,6 +230,24 @@ private:
                 batch_size *= mem_layout.get_tensor().raw[i];
             }
             return batch_size;
+        }
+
+        void calculate_concatenated_mem() const {
+            bytes_per_element = data_type_traits::size_of(concatenated_mem->get_layout().data_type);
+            batch_size = get_batch_size(concatenated_mem->get_layout(), axis);
+            bytes_batch_stride = (static_cast<int64_t>(concatenated_mem->get_layout().count()) / batch_size) * bytes_per_element;
+            bytes_iteration = iteration_elements * bytes_per_element;
+            bytes_iteration_stride = stride * bytes_iteration;
+            bytes_iteration_initial_offset = initial_offset * bytes_iteration;
+        }
+
+        void update_concatenated_mem(memory::ptr mem) {
+            if (concatenated_mem != nullptr && concatenated_mem->get_layout() == mem->get_layout()) {
+                concatenated_mem = mem;
+            } else {
+                concatenated_mem = mem;
+                calculate_concatenated_mem();
+            }
         }
 
         void restore_concatenated_mem() const {
@@ -269,6 +290,8 @@ private:
             return sliced_mems.at(iteration);
         }
 
+        std::vector<memory::ptr> get_sliced_mems() const { return sliced_mems; }
+
         std::string to_string() const {
             std::stringstream ss;
             ss << "concatenated_memory_mapping [" << std::endl;
@@ -295,22 +318,27 @@ private:
         const int64_t axis;
         std::shared_ptr<primitive_inst> concat_data_prim;
         std::shared_ptr<primitive_inst> sliced_data_prim;
+
+private:
         memory::ptr concatenated_mem;
         std::vector<memory::ptr> sliced_mems;
         cldnn::stream& stream;
-        // element size
-        const int64_t bytes_per_element;
-        // number of higher level of dimension of slicing axis
-        const int64_t batch_size;
-        // stride of batch in concatanated memory
-        const int64_t bytes_batch_stride;
-        // byte size of each iteration per batch in a sliced memory
-        const int64_t bytes_iteration;
-        // byte size of each iteration (bytes_iteration * batch_size) in a sliced memory
-        const int64_t bytes_iteration_stride;
-        // byte offset of 1st iteration in a batch in a sliced memory
-        const int64_t bytes_iteration_initial_offset;
         const int64_t iteration_elements = 0;
+        const int64_t stride = 0;
+        const int64_t initial_offset = 0;
+
+        // element size
+        mutable int64_t bytes_per_element;
+        // number of higher level of dimension of slicing axis
+        mutable int64_t batch_size;
+        // stride of batch in concatenated memory
+        mutable int64_t bytes_batch_stride;
+        // byte size of each iteration per batch in a sliced memory
+        mutable int64_t bytes_iteration;
+        // byte size of each iteration (bytes_iteration * batch_size) in a sliced memory
+        mutable int64_t bytes_iteration_stride;
+        // byte offset of 1st iteration in a batch in a sliced memory
+        mutable int64_t bytes_iteration_initial_offset;
     };
 
     template<typename ShapeType>

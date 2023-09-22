@@ -122,18 +122,6 @@ struct loop_impl : typed_primitive_impl<loop> {
 
         auto ev = stream.create_user_event(false);
 
-        if (!instance.is_dynamic()) {
-            if (!instance.preproc_memories_done) {
-                instance.preprocess_output_memory();
-                instance.preprocess_input_memory();
-                instance.preprocess_backedge_memory();
-                instance.preproc_memories_done = true;
-            }
-        } else {
-            instance.preproc_memories_done = false;
-            instance.preprocess_input_memory();
-        }
-
         //////////////////////////////////////////
         // memory pointers for outer network
         //////////////////////////////////////////
@@ -142,14 +130,21 @@ struct loop_impl : typed_primitive_impl<loop> {
         if (!primitive->trip_count_id.empty()) {
             memory::ptr trip_count_mem = outer_network.get_primitive(primitive->trip_count_id)->output_memory_ptr();
             trip_count = read_scalar_value(std::move(trip_count_mem), stream);
+        } else {
+            trip_count = max_num_iteration;
         }
-        trip_count = (trip_count > 0)? trip_count : max_num_iteration;
 
         // read initial execution condition from outer network
         int64_t execution_condition = 1;
         if (!primitive->first_execution_condition_id.empty()) {
             memory::ptr first_execution_condition_mem = outer_network.get_primitive(primitive->first_execution_condition_id)->output_memory_ptr();
             execution_condition = read_scalar_value(first_execution_condition_mem, stream);
+        }
+
+        // When execution_condition is false, return execute_impl without any body_network execution.
+        if (!execution_condition) {
+            ev->set();
+            return ev;
         }
 
         //////////////////////////////////////////
@@ -165,6 +160,18 @@ struct loop_impl : typed_primitive_impl<loop> {
         memory::ptr body_current_iteration_mem = nullptr;
         if (!primitive->body_current_iteration_id.empty()) {
             body_current_iteration_mem = body_network->get_primitive(primitive->body_current_iteration_id)->output_memory_ptr();
+        }
+
+        if (!instance.is_dynamic()) {
+            if (!instance.preproc_memories_done) {
+                instance.preprocess_output_memory();
+                instance.preprocess_input_memory();
+                instance.preprocess_backedge_memory();
+                instance.preproc_memories_done = true;
+            }
+        } else {
+            instance.preproc_memories_done = false;
+            instance.preprocess_input_memory();
         }
 
         const auto& concatenated_input_mem_mappings = instance.concatenated_input_mem_mappings;
