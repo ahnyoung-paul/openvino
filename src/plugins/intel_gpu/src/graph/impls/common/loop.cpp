@@ -134,6 +134,8 @@ struct loop_impl : typed_primitive_impl<loop> {
             trip_count = max_num_iteration;
         }
 
+        OPENVINO_ASSERT(trip_count > 0, "which test has minus trip_count ?");
+
         // read initial execution condition from outer network
         int64_t execution_condition = 1;
         if (!primitive->first_execution_condition_id.empty()) {
@@ -176,10 +178,11 @@ struct loop_impl : typed_primitive_impl<loop> {
 
         const auto& concatenated_input_mem_mappings = instance.concatenated_input_mem_mappings;
         const auto& concatenated_output_mem_mappings = instance.concatenated_output_mem_mappings;
+        const auto& backedge_memory_mappings = instance.backedge_memory_mappings;
 
         // If there are concatenated_output_mem_mappings or backedge_memory_mappings we need to wait for
         // previous tasks before accessing memory in get_sliced_mem() and setup_iteration() functions
-        if (!concatenated_input_mem_mappings.empty() || !instance.backedge_memory_mappings.empty()) {
+        if (!concatenated_input_mem_mappings.empty() || !backedge_memory_mappings.empty()) {
             for (auto& e : events) {
                 e->wait();
             }
@@ -188,9 +191,9 @@ struct loop_impl : typed_primitive_impl<loop> {
         // Set sliced input data
         for (size_t i = 0; i < concatenated_input_mem_mappings.size(); ++i) {
             const auto& concatenated_input = concatenated_input_mem_mappings.at(i);
-            memory::ptr mem = concatenated_input.get_sliced_mem(0);
+            memory::ptr mem = concatenated_input->get_sliced_mem(0);
             if (mem) {
-                body_network->set_input_data(concatenated_input.sliced_data_prim->id(), mem);
+                body_network->set_input_data(concatenated_input->sliced_data_prim->id(), mem);
             } else {
                 CLDNN_ERROR_MESSAGE(instance.id(), "sliced input memory of loop is not allocated properly");
             }
@@ -208,22 +211,22 @@ struct loop_impl : typed_primitive_impl<loop> {
             // Copy & Set sliced input memory
             for (size_t i = 0; i < concatenated_input_mem_mappings.size(); ++i) {
                 const auto& concatenated_input = concatenated_input_mem_mappings.at(i);
-                memory::ptr mem = concatenated_input.get_sliced_mem(current_iteration_idx);
+                memory::ptr mem = concatenated_input->get_sliced_mem(current_iteration_idx);
                 if (mem) {
-                    concatenated_input.sliced_data_prim->set_output_memory(mem);
+                    concatenated_input->sliced_data_prim->set_output_memory(mem);
                 } else {
                     CLDNN_ERROR_MESSAGE(instance.id(), "sliced input memory of loop is not allocated properly");
                 }
             }
 
             // Set backedges
-            for (const auto& backedge_memory_mapping : instance.backedge_memory_mappings) {
+            for (const auto& backedge_memory_mapping : backedge_memory_mappings) {
                 backedge_memory_mapping.setup_iteration(current_iteration_idx);
             }
 
             // Set sliced output memory
             for (const auto& concat_output_mem_mapping : concatenated_output_mem_mappings) {
-                concat_output_mem_mapping.setup_sliced_output_memory(current_iteration_idx);
+                concat_output_mem_mapping->setup_sliced_output_memory(current_iteration_idx);
             }
 
             // execute body network
@@ -274,7 +277,7 @@ struct loop_impl : typed_primitive_impl<loop> {
         // Concatenate sliced output to the outer network
         for (size_t i = 0; i < concatenated_output_mem_mappings.size(); ++i) {
             const auto& concat_output = concatenated_output_mem_mappings.at(i);
-            concat_output.restore_concatenated_mem();
+            concat_output->restore_concatenated_mem();
         }
 
         // Update actual num iteration

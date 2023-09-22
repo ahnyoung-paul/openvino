@@ -297,8 +297,8 @@ void loop_inst::update_input_mapped_memory() {
             bool is_concatenated_input = (input_map->axis >= 0);
             if (is_concatenated_input) {
                 for (auto& mem_mapping : concatenated_input_mem_mappings) {
-                    if (mem_mapping.sliced_data_prim->id() == input_map->internal_id.pid) {
-                        mem_mapping.update_concatenated_mem(memory);
+                    if (mem_mapping->sliced_data_prim->id() == input_map->internal_id.pid) {
+                        mem_mapping->update_concatenated_mem(memory);
                         break;
                     }
                 }
@@ -329,8 +329,8 @@ void loop_inst::update_output_mapped_memory() {
                 body_network->get_primitive(internal_id)->set_output_memory(to_mem, true, internal_mem_idx);
             } else {
                 for (auto& mem_mapping : concatenated_output_mem_mappings) {
-                    if (mem_mapping.sliced_data_prim->id() == internal_id) {
-                        mem_mapping.update_concatenated_mem(to_mem);
+                    if (mem_mapping->sliced_data_prim->id() == internal_id) {
+                        mem_mapping->update_concatenated_mem(to_mem);
                         break;
                     }
                 }
@@ -421,34 +421,52 @@ void loop_inst::preprocess_output_memory() {
         const auto& output_mapping = _output_primitive_maps.at(i);
         const auto& external_id = output_mapping.external_id;
         const auto& internal_id = output_mapping.internal_id;
-        if (output_mapping.axis < 0) {
-            memory::ptr memory = get_external_memory(external_id.pid, external_id.idx);
-            body_network->get_primitive(internal_id.pid)->set_output_memory(memory, true, internal_id.idx);
-        } else {
-            memory::ptr to_mem = get_external_memory(external_id.pid, external_id.idx);
-            auto output_prim = body_network->get_primitive(internal_id.pid);
-            // TODO: debug why body_network output does not have output buffer?
-            layout sliced_layout = output_prim->output_memory(internal_id.idx).get_layout();
 
-            const int64_t max_num_iteration = _max_iteration;
-            std::vector<memory::ptr> sliced_mems;
-            sliced_mems.reserve(max_num_iteration);
-            for (int32_t j = 0; j < max_num_iteration; ++j) {
-                memory::ptr sliced_mem = engine.allocate_memory(sliced_layout, 0);
-                sliced_mems.push_back(sliced_mem);
+        std::cout << "preprocess_output_memory : " << external_id.pid << ", " << external_id.idx << std::endl;
+        auto out_layout = get_external_output_layout(external_id.pid, external_id.idx);
+        if (out_layout.is_dynamic()) {
+            if (output_mapping.axis >= 0) {
+                // 여기서는 num_elements_iteration, start 도 알 수 없고 sliced_layout 을 가지고 있지도 못한다.
+                // 이것을 계산할 수 있는 건 backedge preprocessing 뿐이다.
+                auto memory_mapping_info = std::make_shared<concatenated_memory_mapping>(
+                                                output_mapping.axis, nullptr, std::vector<memory::ptr>{}, _network.get_stream(),
+                                                _network.get_engine(), 0, output_mapping.stride, 0);
+                // TODO how to set index of output memory
+                memory_mapping_info->sliced_data_prim = body_network->get_primitive(internal_id.pid);
+                memory_mapping_info->concat_data_prim = get_network().get_primitive(external_id.pid);
+                concatenated_output_mem_mappings.push_back(memory_mapping_info);
             }
+        } else {
+            memory::ptr memory = get_external_memory(external_id.pid, external_id.idx);
+            if (output_mapping.axis < 0) {
+                // body network execution 이 끝나기 전까지는 loop 노드의 아웃풋 메모리를 알 수 없음.
+                body_network->get_primitive(internal_id.pid)->set_output_memory(memory, true, internal_id.idx);
+            } else {
+                // 여기서 아웃풋 노드의 사이즈를 알 수 없으나 backedge를 통해서 보면 아웃풋 노드의 사이즈를 추정할 수 있음. 왜냐하면 인풋과 같을 것이기 때문임.
+                auto output_prim = body_network->get_primitive(internal_id.pid);
+                // TODO: debug why body_network output does not have output buffer?
+                layout sliced_layout = output_prim->output_memory(internal_id.idx).get_layout();
 
-            const int64_t num_elements_batch = concatenated_memory_mapping::get_batch_size(
-                sliced_layout, output_mapping.axis);
-            const int64_t num_elements_iteration = sliced_layout.count() / num_elements_batch;
-            const int64_t start = output_mapping.start < 0? _max_iteration - 1: output_mapping.start;
-            concatenated_memory_mapping memory_mapping_info(
-                output_mapping.axis, std::move(to_mem), sliced_mems, _network.get_stream(),
-                num_elements_iteration, output_mapping.stride, start);
-            // TODO how to set index of output memory
-            memory_mapping_info.sliced_data_prim = body_network->get_primitive(internal_id.pid);
-            memory_mapping_info.concat_data_prim = get_network().get_primitive(external_id.pid);
-            concatenated_output_mem_mappings.push_back(memory_mapping_info);
+                std::vector<memory::ptr> sliced_mems;
+                const int64_t max_num_iteration = _max_iteration;
+                sliced_mems.reserve(max_num_iteration);
+                for (int32_t j = 0; j < max_num_iteration; ++j) {
+                    memory::ptr sliced_mem = engine.allocate_memory(sliced_layout, 0);
+                    sliced_mems.push_back(sliced_mem);
+                }
+
+                const int64_t num_elements_batch = concatenated_memory_mapping::get_batch_size(
+                    sliced_layout, output_mapping.axis);
+                const int64_t num_elements_iteration = sliced_layout.count() / num_elements_batch;
+                const int64_t start = output_mapping.start < 0? _max_iteration - 1: output_mapping.start;
+                auto memory_mapping_info = std::make_shared<concatenated_memory_mapping>(
+                                                output_mapping.axis, std::move(memory), sliced_mems, _network.get_stream(),
+                                                _network.get_engine(), num_elements_iteration, output_mapping.stride, start);
+                // TODO how to set index of output memory
+                memory_mapping_info->sliced_data_prim = body_network->get_primitive(internal_id.pid);
+                memory_mapping_info->concat_data_prim = get_network().get_primitive(external_id.pid);
+                concatenated_output_mem_mappings.push_back(memory_mapping_info);
+            }
         }
     }
 }
@@ -490,10 +508,12 @@ void loop_inst::preprocess_input_memory() {
                     sliced_layout, input_map->axis);
                 const int64_t num_elements_iteration = sliced_layout.count() / num_elements_batch;
                 const int64_t start = input_map->start < 0? _max_iteration - 1: input_map->start;
-                concatenated_memory_mapping concatenated_input_mem_mapping_info(
-                    input_map->axis, memory, sliced_mems, _network.get_stream(),
-                    num_elements_iteration, input_map->stride, start);
-                concatenated_input_mem_mapping_info.sliced_data_prim = body_network->get_primitive(internal_id.pid);
+                //TODO: max_iteration이 -1 일 경우 sliced_mem은 첫번째 한개만 할당하고
+                // 이후에는 추가로 sliced mem을 요청할 경우 그 때 메모리를 할당해서 사용함.
+                auto concatenated_input_mem_mapping_info = std::make_shared<concatenated_memory_mapping>(
+                                                                input_map->axis, memory, sliced_mems, _network.get_stream(),
+                                                                _network.get_engine(), num_elements_iteration, input_map->stride, start);
+                concatenated_input_mem_mapping_info->sliced_data_prim = body_network->get_primitive(internal_id.pid);
                 iteration_mem.push_back(concatenated_input_mem_mapping_info);
             } else {
                 body_network->set_input_data(internal_id.pid, memory);
@@ -517,6 +537,8 @@ void loop_inst::preprocess_backedge_memory() {
         initial_mem = get_external_memory(external_id.pid, external_id.idx);
 
 
+        // TODO: 마찬가지로 첫번째 sliced_output_mems 에서 레이아웃을 가져와서 그것을 바탕으로 레이아웃 셋팅을 하고
+        // 추가적으로 메모리가 필요한 경우 할당해서 사용하도록 함.
         auto backedged_sliced_output_mems = get_sliced_mem(back_edge.from);
         if (backedged_sliced_output_mems.empty()) {
             // backedge output which does not need concatenation
@@ -526,6 +548,7 @@ void loop_inst::preprocess_backedge_memory() {
             if (output_mapping.empty()) {
                 // from and to primitives in backedge are connected directly
                 if (backedge_to_prim == backedge_from_prim->dependencies().front().first) {
+                    // SINGLE
                     backedge_memory_mappings.emplace_back(
                         backedge_from_prim, backedge_to_prim, initial_mem, body_network->get_stream());
                     continue;
@@ -537,13 +560,16 @@ void loop_inst::preprocess_backedge_memory() {
             } else {
                 auto& external_id = output_mapping.front()->external_id;
                 backedge_mem = get_external_memory(external_id.pid, external_id.idx);
+                // 여기서 널일 경우 아직할당이 되지 않은 것이기 때문에 여기서 메모리를 할당해서 넣어줌.
             }
             body_network->set_input_data(back_edge.to, backedge_mem);
             body_network->set_output_memory(back_edge.from, backedge_mem);
+            // SINGLE_SHARED
             backedge_memory_mappings.emplace_back(
                 backedge_from_prim, backedge_to_prim, backedge_mem, initial_mem, body_network->get_stream());
         } else {
             // backedge output which needs concatenation
+            // CONCAT_OUTPUT
             backedge_memory_mappings.emplace_back(
                 backedge_from_prim, backedge_to_prim, backedged_sliced_output_mems, initial_mem, body_network->get_stream());
         }
@@ -552,13 +578,13 @@ void loop_inst::preprocess_backedge_memory() {
 
 std::vector<memory::ptr> loop_inst::get_sliced_mem(const primitive_id& internal_id) const {
     for (const auto& mem_mapping : concatenated_input_mem_mappings) {
-        if (mem_mapping.sliced_data_prim->id() == internal_id) {
-            return mem_mapping.get_sliced_mems();
+        if (mem_mapping->sliced_data_prim->id() == internal_id) {
+            return mem_mapping->get_sliced_mems();
         }
     }
     for (const auto& mem_mapping : concatenated_output_mem_mappings) {
-        if (mem_mapping.sliced_data_prim->id() == internal_id) {
-            return mem_mapping.get_sliced_mems();
+        if (mem_mapping->sliced_data_prim->id() == internal_id) {
+            return mem_mapping->get_sliced_mems();
         }
     }
     return {}; // not found
@@ -580,6 +606,11 @@ void loop_inst::validate_backedges(loop_node const & node) const {
 memory::ptr loop_inst::get_external_memory(const primitive_id& external_id, size_t mem_idx) const {
     const auto outputPrim = _network.get_primitive(external_id);
     return outputPrim->output_memory_ptr(mem_idx);
+}
+
+layout loop_inst::get_external_output_layout(const primitive_id& external_id, size_t mem_idx) const {
+    const auto outputPrim = _network.get_primitive(external_id);
+    return outputPrim->get_output_layout(mem_idx);
 }
 
 loop_inst::typed_primitive_inst(network & network, loop_node const & node)
