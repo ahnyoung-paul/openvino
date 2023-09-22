@@ -3,6 +3,8 @@
 //
 #include "loop_inst.h"
 
+#include "data_inst.h"
+#include "mutable_data_inst.h"
 #include "json_object.h"
 #include "primitive_type_base.h"
 #include "intel_gpu/primitives/data.hpp"
@@ -14,6 +16,24 @@
 
 namespace cldnn {
 GPU_DEFINE_PRIMITIVE_TYPE_ID(loop)
+
+std::map<size_t, memory::ptr> loop_node::get_memory_deps() const {
+    auto memory_deps = get_const_memory_deps();
+    for (auto& i : get_shape_infer_dependencies()) {
+        auto& dep = get_dependency(i);
+        auto dep_id = dep.id();
+        if (memory_deps.count(i) > 0 || i >= get_dependencies().size()) {
+            continue;
+        }
+
+        if (dep.is_type<data>()) {
+            memory_deps.insert({i, dep.as<data>().get_attached_memory_ptr()});
+        } else if (dep.is_type<mutable_data>()) {
+            memory_deps.insert({1, dep.as<mutable_data>().get_attached_memory_ptr()});
+        }
+    }
+    return memory_deps;
+}
 
 static size_t convert_to_raw_axis(size_t axis, size_t ndim) {
     // convert between bfyx, bfzyx, bfzyxw and tensor.size.raw
@@ -92,7 +112,7 @@ layout loop_inst::calc_output_layout(loop_node const& /*node*/, kernel_impl_para
     if (axis_to_iterate_through != -1) {
         const size_t ndim = loop_output_layout.get_rank();
         auto shape = loop_output_layout.get_dims();
-        shape[axis_to_iterate_through] = static_cast<int32_t>(prim->get_max_num_iteration());
+        shape[axis_to_iterate_through] = static_cast<int32_t>(prim->max_num_iteration);
         loop_output_layout.set_tensor(tensor(format::get_default_format(ndim), shape));
     }
 
@@ -101,8 +121,25 @@ layout loop_inst::calc_output_layout(loop_node const& /*node*/, kernel_impl_para
 
 template<typename T>
 static std::vector<layout> get_output_layouts(kernel_impl_params const& impl_param, std::vector<T> body_outputs) {
-    std::vector<layout> output_layouts;
     auto prim = impl_param.typed_desc<loop>();
+    std::vector<layout> output_layouts;
+
+    auto& memory_deps = impl_param.memory_deps;
+
+    OPENVINO_ASSERT(memory_deps.count(0) > 0, "The count of memory deps(trip_count) should not be zero");
+    cldnn::mem_lock<int32_t, mem_lock_type::read> num_iteration_lock(memory_deps.at(0), impl_param.get_stream());
+    int32_t num_iterations = static_cast<int32_t>(*num_iteration_lock.data());
+    GPU_DEBUG_LOG << "* num_iterations      : " << num_iterations << std::endl;
+
+    OPENVINO_ASSERT(memory_deps.count(1) > 0, "The count of memory deps(current_iteration) should not be zero");
+    cldnn::mem_lock<int32_t, mem_lock_type::read> current_iterations_lock(memory_deps.at(1), impl_param.get_stream());
+    int32_t current_iterations = static_cast<int32_t>(*current_iterations_lock.data());
+    GPU_DEBUG_LOG << "* current_iterations  : " << current_iterations << std::endl;
+
+    if (current_iterations > 0) {
+        num_iterations = current_iterations;
+    }
+
     const auto& output_primitive_maps = prim->output_primitive_maps;
     for (auto& output_mapping : output_primitive_maps) {
         const primitive_id& output_internal_id = output_mapping.internal_id.pid;
@@ -116,7 +153,7 @@ static std::vector<layout> get_output_layouts(kernel_impl_params const& impl_par
         const int64_t axis_to_iterate_through = output_mapping.axis;
         if (axis_to_iterate_through != -1) {
             auto shape = loop_output_layout.get_partial_shape();
-            shape[axis_to_iterate_through] = static_cast<int32_t>(prim->get_max_num_iteration());
+            shape[axis_to_iterate_through] = num_iterations;
             loop_output_layout.set_partial_shape(shape);
         }
         output_layouts.push_back(loop_output_layout);
@@ -424,9 +461,12 @@ void loop_inst::preprocess_input_memory() {
         auto input_map_ptrs = find_io_primitive_maps(_input_primitive_maps,
                                                     _output_primitive_maps, input_external_id, true);
         if (input_map_ptrs.size() == 0) {
-            OPENVINO_ASSERT((input_external_id == _trip_count_id || input_external_id == _initial_execution_id),
+            OPENVINO_ASSERT((input_external_id == _trip_count_id
+                                || input_external_id == _num_iteration_id
+                                || input_external_id == _initial_execution_id),
                                 id(), "loop primitive_map is incomplete "
                                 "input_external_id(", input_external_id, ") != _trip_count_id(", _trip_count_id, ")",
+                                "input_external_id(", input_external_id, ") != _num_iteration_id(", _num_iteration_id, ")",
                                 " && input_external_id(", input_external_id, ") != _initial_execution_id(", _initial_execution_id, ")");
             continue;
         }
@@ -566,7 +606,7 @@ loop_inst::typed_primitive_inst(network & network, loop_node const & node)
     _current_iteration_id = node.get_current_iteration_id();
     _condition_id = node.get_execution_condition_id();
     _num_iteration_id = node.get_num_iteration_id();
-    _max_iteration = node.get_max_iteration();
+    _max_iteration = node.get_max_num_iteration();
 }
 
 void loop_inst::save(BinaryOutputBuffer& ob) const {

@@ -213,11 +213,7 @@ struct loop : public primitive_base<loop> {
     /// @brief Rules to transfer data from body outputs at one iteration to body input at the next iteration.
     std::vector<backedge_mapping> back_edges;
 
-    int64_t max_num_iteration;
-
-    int64_t get_max_num_iteration() const {
-        return ((max_num_iteration < 0) ? DEFAULT_MAX_NUM_ITERATION : max_num_iteration);
-    }
+    int32_t max_num_iteration;
 
     size_t hash() const override {
         size_t seed = primitive::hash();
@@ -253,8 +249,9 @@ struct loop : public primitive_base<loop> {
 
 protected:
     std::vector<std::reference_wrapper<const primitive_id>> get_dependencies() const override {
-        std::vector<std::reference_wrapper<const primitive_id>> ret {std::ref(num_iteration_id)};
-        if (!trip_count_id.empty()) ret.push_back(std::ref(trip_count_id));
+        std::vector<std::reference_wrapper<const primitive_id>> ret;
+        ret.push_back(std::ref(trip_count_id));
+        ret.push_back(std::ref(num_iteration_id));
         if (!first_execution_condition_id.empty()) ret.push_back(std::ref(first_execution_condition_id));
 
         // add external_id in dependencies if not exist

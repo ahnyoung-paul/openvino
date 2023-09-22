@@ -117,7 +117,7 @@ struct loop_impl : typed_primitive_impl<loop> {
         auto& outer_network = instance.get_network();
         auto& stream = outer_network.get_stream();
 
-        const auto max_num_iteration = primitive->get_max_num_iteration();
+        const auto max_num_iteration = primitive->max_num_iteration;
         auto body_network = instance.get_body_network();
 
         auto ev = stream.create_user_event(false);
@@ -144,8 +144,6 @@ struct loop_impl : typed_primitive_impl<loop> {
             trip_count = read_scalar_value(std::move(trip_count_mem), stream);
         }
         trip_count = (trip_count > 0)? trip_count : max_num_iteration;
-
-        std::cout << "trip_count : " << trip_count << std::endl;
 
         // read initial execution condition from outer network
         int64_t execution_condition = 1;

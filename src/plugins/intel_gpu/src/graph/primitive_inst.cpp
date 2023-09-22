@@ -1789,10 +1789,10 @@ void primitive_inst::update_output_layout() {
 
     auto memory_deps = _node->get_const_memory_deps();
     for (auto& i : _node->get_shape_infer_dependencies()) {
+        auto dep_id = _node->get_dependency(i).id();
         if (memory_deps.count(i) > 0 || i >= _node->get_dependencies().size()) {
             continue;
         }
-        auto dep_id = _node->get_dependency(i).id();
 
         auto dep_mem = _network.get_output_memory(dep_id);
         memory_deps.insert({i, dep_mem});

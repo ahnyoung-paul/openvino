@@ -241,7 +241,7 @@ static void CreateCommonLoopOp(ProgramBuilder& p, const std::shared_ptr<ov::op::
     ProgramBuilder prog(ov_model, p.get_engine(), config, false, false, p.get_task_executor(), true);
     auto body_program = prog.get_compiled_program();
 
-    int64_t num_iterations = op->get_num_iterations();
+    int32_t num_iterations = static_cast<int32_t>(op->get_num_iterations());
     OPENVINO_ASSERT((is_dynamic || num_iterations > 0), "loop's num_iteration should be positive on static shape model");
 
     // set trip count, num iteration primitives
@@ -255,6 +255,21 @@ static void CreateCommonLoopOp(ProgramBuilder& p, const std::shared_ptr<ov::op::
         cldnn::mutable_data trip_count_data = CreateScalarData<cldnn::mutable_data>(p, trip_count_id, num_iterations);
         p.add_primitive(*op, std::move(trip_count_data));
     }
+
+    auto found = std::find_if(inputs.begin(), inputs.end(), [&](const cldnn::input_info& d) -> bool {
+        return (d.pid == trip_count_id);
+    });
+    if (found == inputs.end()) {
+        inputs.insert(inputs.begin(), cldnn::input_info(trip_count_id, 0));
+    }
+
+    inputs.insert(inputs.begin()+1, cldnn::input_info(num_iteration_id, 0));
+
+    GPU_DEBUG_LOG << "* trip_count                    : " << trip_count_id << std::endl;
+    GPU_DEBUG_LOG << "* num_iteration_id              : " << num_iteration_id << std::endl;
+    GPU_DEBUG_LOG << "* body_current_iteration_id     : " << body_current_iteration_id << std::endl;
+    GPU_DEBUG_LOG << "* first_execution_condition_id  : " << first_execution_condition_id << std::endl;
+    GPU_DEBUG_LOG << "* body_execution_condition_id   : " << body_execution_condition_id << std::endl;
 
     const cldnn::loop loopPrimitive(
         layerName,                      /* layer name of this primitive (output id) */

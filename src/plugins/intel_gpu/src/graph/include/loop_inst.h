@@ -33,7 +33,6 @@ public:
         output_primitive_maps(prim->output_primitive_maps),
         back_edges(prim->back_edges) {}
 
-    int64_t get_max_iteration() const { return get_primitive()->get_max_num_iteration(); }
     program::ptr get_body_program() const { return get_primitive()->body_program; }
 
     const primitive_id& get_trip_count_id() const { return get_primitive()->trip_count_id; }
@@ -41,6 +40,7 @@ public:
     const primitive_id& get_current_iteration_id() const { return get_primitive()->body_current_iteration_id; }
     const primitive_id& get_execution_condition_id() const { return get_primitive()->body_execution_condition_id; }
     const primitive_id& get_num_iteration_id() const { return get_primitive()->num_iteration_id; }
+    const int32_t get_max_num_iteration() const { return get_primitive()->max_num_iteration; }
 
     const std::vector<loop::io_primitive_map>& get_input_primitive_maps() const { return input_primitive_maps; }
     const std::vector<loop::io_primitive_map>& get_output_primitive_maps() const { return output_primitive_maps; }
@@ -80,12 +80,18 @@ public:
         }
     }
 
+    std::vector<size_t> get_shape_infer_dependencies() const override { return {0, 1}; }
+
     using parent::get_kernel_impl_params;
     std::unique_ptr<kernel_impl_params> get_kernel_impl_params(const std::vector<layout>& in_layouts, const std::vector<layout>& out_layouts) const override {
         auto params = parent::get_kernel_impl_params(in_layouts, out_layouts);
         params->inner_progs = { get_primitive()->body_program };
+        params->memory_deps = get_memory_deps();
         return params;
     }
+
+private:
+    std::map<size_t, memory::ptr> get_memory_deps() const;
 };
 
 using loop_node = typed_program_node<loop>;
@@ -354,6 +360,4 @@ static inline std::ostream& operator<< (std::ostream& os, loop_inst::concatenate
     os << map.to_string();
     return os;
 }
-
-
 }  // namespace cldnn
