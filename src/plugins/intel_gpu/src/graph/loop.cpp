@@ -423,26 +423,9 @@ void loop_inst::preprocess_output_memory(const int64_t trip_count) {
         GPU_DEBUG_LOG << i << ") output mapping - external " << external_id.to_string() << std::endl;
         GPU_DEBUG_LOG << i << ") output mapping - internal " << internal_id.to_string() << std::endl;
 
-        auto out_layout = get_external_output_layout(external_id.pid, external_id.idx);
-        if (out_layout.is_dynamic()) {
-            if (output_mapping.axis >= 0) {
-                // 여기서는 num_elements_iteration, start 도 알 수 없고 sliced_layout 을 가지고 있지도 못한다.
-                // 이것을 계산할 수 있는 건 backedge preprocessing 뿐이다.
-                const int64_t start = output_mapping.start < 0? trip_count - 1: output_mapping.start;
-                // Can't calculate num_elements_iteration now, update num_elements_iteration after execution
-                auto concat_output_memory_mapping = std::make_shared<concatenated_memory_mapping>(
-                                                output_mapping.axis, nullptr, std::vector<memory::ptr>{}, _network.get_stream(),
-                                                _network.get_engine(), 0, output_mapping.stride, start);
-                // TODO how to set index of output memory
-                concat_output_memory_mapping->sliced_data_prim = body_network->get_primitive(internal_id.pid);
-                concat_output_memory_mapping->concat_data_prim = get_network().get_primitive(external_id.pid);
-                concatenated_output_mem_mappings.push_back(concat_output_memory_mapping);
-                GPU_DEBUG_LOG << i << ") output mapping - concat output memory mapping: "
-                                << concat_output_memory_mapping->to_string() << std::endl;
-            }
-        } else {
+        memory::ptr memory = get_external_memory(external_id.pid, external_id.idx);
+        if (memory != nullptr) {
             auto& engine = _network.get_engine();
-            memory::ptr memory = get_external_memory(external_id.pid, external_id.idx);
             if (output_mapping.axis < 0) {
                 // body network execution 이 끝나기 전까지는 loop 노드의 아웃풋 메모리를 알 수 없음.
                 body_network->get_primitive(internal_id.pid)->set_output_memory(memory, true, internal_id.idx);
@@ -471,6 +454,22 @@ void loop_inst::preprocess_output_memory(const int64_t trip_count) {
                 memory_mapping_info->sliced_data_prim = body_network->get_primitive(internal_id.pid);
                 memory_mapping_info->concat_data_prim = get_network().get_primitive(external_id.pid);
                 concatenated_output_mem_mappings.push_back(memory_mapping_info);
+            }
+        } else {
+            if (output_mapping.axis >= 0) {
+                // 여기서는 num_elements_iteration, start 도 알 수 없고 sliced_layout 을 가지고 있지도 못한다.
+                // 이것을 계산할 수 있는 건 backedge preprocessing 뿐이다.
+                const int64_t start = output_mapping.start < 0? trip_count - 1: output_mapping.start;
+                // Can't calculate num_elements_iteration now, update num_elements_iteration after execution
+                auto concat_output_memory_mapping = std::make_shared<concatenated_memory_mapping>(
+                                                output_mapping.axis, nullptr, std::vector<memory::ptr>{}, _network.get_stream(),
+                                                _network.get_engine(), 0, output_mapping.stride, start);
+                // TODO how to set index of output memory
+                concat_output_memory_mapping->sliced_data_prim = body_network->get_primitive(internal_id.pid);
+                concat_output_memory_mapping->concat_data_prim = get_network().get_primitive(external_id.pid);
+                concatenated_output_mem_mappings.push_back(concat_output_memory_mapping);
+                GPU_DEBUG_LOG << i << ") output mapping - concat output memory mapping: "
+                                << concat_output_memory_mapping->to_string() << std::endl;
             }
         }
     }
@@ -555,8 +554,6 @@ void loop_inst::preprocess_backedge_memory() {
         GPU_DEBUG_LOG << idx << ") back_edge mapping - back_edge.from " << back_edge.from << std::endl;
         GPU_DEBUG_LOG << idx << ") back_edge mapping - back_edge.to   " << back_edge.to << std::endl;
 
-        // TODO: 마찬가지로 첫번째 sliced_output_mems 에서 레이아웃을 가져와서 그것을 바탕으로 레이아웃 셋팅을 하고
-        // 추가적으로 메모리가 필요한 경우 할당해서 사용하도록 함.
         auto backedged_sliced_output = get_sliced_mem(back_edge.from);
         if (backedged_sliced_output == nullptr) {
             // backedge output which does not need concatenation
@@ -566,7 +563,7 @@ void loop_inst::preprocess_backedge_memory() {
             if (output_mapping.empty()) {
                 // from and to primitives in backedge are connected directly
                 if (backedge_to_prim == backedge_from_prim->dependencies().front().first) {
-                    // SINGLE
+                    // SINGLE mode
                     backedge_memory_mappings.emplace_back(
                         backedge_from_prim, backedge_to_prim, initial_mem, body_network->get_stream());
                     GPU_DEBUG_LOG << idx << ") add back_edge mapping with SINGLE type, initial_mem(" << initial_mem << ")" << std::endl;
@@ -584,14 +581,13 @@ void loop_inst::preprocess_backedge_memory() {
             body_network->set_input_data(back_edge.to, backedge_mem);
             body_network->set_output_memory(back_edge.from, backedge_mem);
 
-            // SINGLE_SHARED
+            // SINGLE_SHARED mode
             backedge_memory_mappings.emplace_back(
                 backedge_from_prim, backedge_to_prim, backedge_mem, initial_mem, body_network->get_stream());
             GPU_DEBUG_LOG << idx << ") add back_edge mapping with SINGLE_SHARED type, backedge_mem("
                             << backedge_mem << "), initial_mem(" << initial_mem << ")" << std::endl;
         } else {
-            // backedge output which needs concatenation
-            // CONCAT_OUTPUT
+            // backedge output which needs concatenation, CONCAT_OUTPUT mode
             backedge_memory_mappings.emplace_back(
                 backedge_from_prim, backedge_to_prim, backedged_sliced_output, initial_mem, body_network->get_stream());
             GPU_DEBUG_LOG << idx << ") add back_edge mapping with CONCAT_OUTPUT type, backedged_sliced_output("
@@ -629,7 +625,10 @@ void loop_inst::validate_backedges(loop_node const & node) const {
 
 memory::ptr loop_inst::get_external_memory(const primitive_id& external_id, size_t mem_idx) const {
     const auto outputPrim = _network.get_primitive(external_id);
-    return outputPrim->output_memory_ptr(mem_idx);
+    if (outputPrim->outputs_allocated()) {
+        return outputPrim->output_memory_ptr(mem_idx);
+    }
+    return nullptr;
 }
 
 layout loop_inst::get_external_output_layout(const primitive_id& external_id, size_t mem_idx) const {
@@ -694,22 +693,26 @@ void loop_inst::load(BinaryInputBuffer& ib) {
 }
 
 void loop_inst::restore_output_memory() {
-    // for (size_t i = 0; i < _output_primitive_maps.size(); ++i) {
-    //     const auto& output_mapping = _output_primitive_maps.at(i);
-    //     const auto& external_id = output_mapping.external_id;
-    //     const auto& internal_id = output_mapping.internal_id;
-    //     if (output_mapping.axis < 0) {
-    //         auto internalOutputPrim = get_body_network()->get_primitive(internal_id.pid);
-    //         auto internal_mem = internalOutputPrim->output_memory_ptr(internal_id.idx);
-    //         auto externalOutputPrim = _network.get_primitive(external_id.pid);
-    //         externalOutputPrim->set_output_memory(internal_mem, external_id.idx);
-    //     } else {
-    //         auto concat_layout = _impl_params->get_output_layout(external_id.idx);
-    //         auto concat_mem = _network.get_engine().allocate_memory(concat_layout, 0);
-    //         auto externalOutputPrim = _network.get_primitive(external_id.pid);
-    //         externalOutputPrim->set_output_memory(concat_mem, external_id.idx);
-    //     }
-    // }
+    for (size_t i = 0; i < _output_primitive_maps.size(); ++i) {
+        const auto& output_mapping = _output_primitive_maps.at(i);
+        const auto& external_id = output_mapping.external_id;
+        const auto& internal_id = output_mapping.internal_id;
+        if (output_mapping.axis < 0) {
+            auto internalOutputPrim = get_body_network()->get_primitive(internal_id.pid);
+            auto internal_mem = internalOutputPrim->output_memory_ptr(internal_id.idx);
+            auto externalOutputPrim = _network.get_primitive(external_id.pid);
+            if (!externalOutputPrim->outputs_allocated()) {
+                externalOutputPrim->set_output_memory(internal_mem, external_id.idx);
+            }
+        } else {
+            auto externalOutputPrim = _network.get_primitive(external_id.pid);
+            if (!externalOutputPrim->outputs_allocated()) {
+                auto concat_layout = _impl_params->get_output_layout(external_id.idx);
+                auto concat_mem = _network.get_engine().allocate_memory(concat_layout, 0);
+                externalOutputPrim->set_output_memory(concat_mem, external_id.idx);
+            }
+        }
+    }
 
     for (size_t i = 0; i < concatenated_output_mem_mappings.size(); ++i) {
         const auto& concat_output = concatenated_output_mem_mappings.at(i);

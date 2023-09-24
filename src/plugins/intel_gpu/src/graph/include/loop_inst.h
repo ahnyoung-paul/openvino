@@ -203,24 +203,30 @@ public:
         }
 
         // To Set sliced output memory for concatenated_output_mem_mappings
-        void setup_sliced_output_memory(uint64_t iteration) const {
+        void setup_sliced_output_memory(size_t iteration) const {
             if (iteration < sliced_mems.size()) {
                 const auto& sliced_output_mem = sliced_mems.at(iteration);
                 sliced_data_prim->set_output_memory(sliced_output_mem);
-            } else {
-                OPENVINO_ASSERT(iteration == sliced_mems.size(), "the count of sliced_mems should be same with iteration");
             }
         }
 
         // Store output of sliced_data_prim to sliced mems vector
-        void store_output_to_sliced_mems() const {
-            auto output_mem_ptr = sliced_data_prim->output_memory_ptr();
-            bool recalc_data = !sliced_mems.empty();
-            sliced_mems.push_back(output_mem_ptr);
-            memory::ptr new_sliced_mem = engine.allocate_memory(output_mem_ptr->get_layout(), 0);
-            sliced_data_prim->set_output_memory(new_sliced_mem);
-            if (recalc_data) {
-                calculate_concatenated_mem();
+        // After execution of body network, sliced_data_prim will has output memory buffer
+        // current memory buffer move to sliced_mems and new memory buffer will be allocated in sliced_data_prim
+        void store_output_to_sliced_mems(size_t iteration) const {
+            if (iteration >= sliced_mems.size()) {
+                OPENVINO_ASSERT(sliced_data_prim != nullptr, "sliced_data_prim should not be nullptr");
+                auto output_mem_ptr = sliced_data_prim->output_memory_ptr();
+                OPENVINO_ASSERT(output_mem_ptr != nullptr, "output memory pointer of sliced_data_prim should not be nullptr");
+
+                bool recalc_data = !sliced_mems.empty();
+                sliced_mems.push_back(output_mem_ptr);
+                memory::ptr new_sliced_mem = engine.allocate_memory(output_mem_ptr->get_layout(), 0);
+                sliced_data_prim->set_output_memory(new_sliced_mem);
+                // Get the data for iteration_offset when sliced_mem is added to the iteration_offset af first
+                if (recalc_data) {
+                    calculate_concatenated_mem();
+                }
             }
         }
 

@@ -295,15 +295,16 @@ struct loop_impl : typed_primitive_impl<loop> {
                 execution_condition = read_scalar_value(body_execution_condition_mem, body_network->get_stream());
             }
 
-            // update index & execution condition for the next iteration
-            ++current_iteration_idx;
             if (!loop_carried_dep.empty())
                 stream.wait_for_events(loop_carried_dep);
 
-            // // Move output of sliced_data_prim to spliced_mems vector
-            // for (const auto& concat_output_mem_mapping : concatenated_output_mem_mappings) {
-            //     concat_output_mem_mapping->store_output_to_sliced_mems();
-            // }
+            // Move output of sliced_data_prim to spliced_mems vector
+            for (const auto& concat_output_mem_mapping : concatenated_output_mem_mappings) {
+                concat_output_mem_mapping->store_output_to_sliced_mems(current_iteration_idx);
+            }
+
+            // update index & execution condition for the next iteration
+            ++current_iteration_idx;
         }
 
         // Reset network and wait for all collected events
