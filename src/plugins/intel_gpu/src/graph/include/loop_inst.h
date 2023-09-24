@@ -342,7 +342,7 @@ private:
         std::shared_ptr<primitive_inst> from_primitive;
         std::shared_ptr<primitive_inst> to_primitive;
         std::shared_ptr<concatenated_memory_mapping> concat_mem_mapping;
-        memory::ptr from_mem;
+        mutable memory::ptr from_mem;
         memory::ptr initial_mem;
         cldnn::stream& stream;
         backedge_type type;
@@ -398,8 +398,22 @@ private:
                 } else {
                     throw std::runtime_error("Invalid iteration count" + std::to_string(iter));
                 }
-            } else if (type == SINGLE_SHARED && iter == 0) {
-                from_mem->copy_from(stream, *initial_mem);
+            } else if (type == SINGLE_SHARED) {
+                if (iter == 0) {
+                    if (from_mem != nullptr) {
+                        from_mem->copy_from(stream, *initial_mem);
+                    } else {
+                        std::cout << "pass copy because from_mem is null" << std::endl;
+                    }
+                } else {
+                    // In dynamic model, output memory is not defined before execution.
+                    // After body network execution, replace input memory from initial_mem(external input memory) to output memory.
+                    if (from_mem == nullptr) {
+                        from_mem = from_primitive->output_memory_ptr();
+                        OPENVINO_ASSERT(from_mem != nullptr, "from_mem should not be null");
+                        to_primitive->set_output_memory(from_mem, 0);
+                    }
+                }
             } else if (type == SINGLE) {
                 memory::ptr mem1 = to_primitive->output_memory_ptr();
                 if (iter == 0) {

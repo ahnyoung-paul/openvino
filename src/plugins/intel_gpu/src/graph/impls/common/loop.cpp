@@ -290,13 +290,13 @@ struct loop_impl : typed_primitive_impl<loop> {
                 }
             }
 
+            if (!loop_carried_dep.empty())
+                stream.wait_for_events(loop_carried_dep);
+
             // execution condition is the result of body network execution
             if (body_execution_condition_mem != nullptr) {
                 execution_condition = read_scalar_value(body_execution_condition_mem, body_network->get_stream());
             }
-
-            if (!loop_carried_dep.empty())
-                stream.wait_for_events(loop_carried_dep);
 
             // Move output of sliced_data_prim to spliced_mems vector
             for (const auto& concat_output_mem_mapping : concatenated_output_mem_mappings) {
@@ -306,6 +306,8 @@ struct loop_impl : typed_primitive_impl<loop> {
             // update index & execution condition for the next iteration
             ++current_iteration_idx;
         }
+
+        std::cout << "Loop execution : " << current_iteration_idx << std::endl;
 
         // Reset network and wait for all collected events
         body_network->reset_execution(false);

@@ -572,14 +572,20 @@ void loop_inst::preprocess_backedge_memory() {
                     auto output_prim = body_network->get_primitive(back_edge.from);
                     layout output_layout = output_prim->output_memory().get_layout();
                     backedge_mem = body_network->get_engine().allocate_memory(output_layout, 0);
+                    GPU_DEBUG_LOG << idx << ") Get backedge_mem from back_edge.from(" << back_edge.from << ")" << std::endl;
                 }
             } else {
-                auto& external_id = output_mapping.front()->external_id;
+                auto& out_mapping_ext_id = output_mapping.front()->external_id;
                 backedge_mem = get_external_memory(external_id.pid, external_id.idx);
-                // 여기서 널일 경우 아직할당이 되지 않은 것이기 때문에 여기서 메모리를 할당해서 넣어줌.
+                GPU_DEBUG_LOG << idx << ") Get backedge_mem from output_mapping_external_id.pid("
+                                << out_mapping_ext_id.pid << ")" << std::endl;
             }
-            body_network->set_input_data(back_edge.to, backedge_mem);
-            body_network->set_output_memory(back_edge.from, backedge_mem);
+            if (backedge_mem != nullptr) {
+                body_network->set_input_data(back_edge.to, backedge_mem);
+                body_network->set_output_memory(back_edge.from, backedge_mem);
+            } else {
+                body_network->set_input_data(back_edge.to, initial_mem);
+            }
 
             // SINGLE_SHARED mode
             backedge_memory_mappings.emplace_back(
