@@ -400,8 +400,8 @@ private:
 public:
     typed_primitive_inst(network& network, const loop_node& node);
     network::ptr get_body_network() const { return body_network; }
-    void preprocess_input_memory();
-    void preprocess_output_memory();
+    void preprocess_input_memory(const int64_t trip_count);
+    void preprocess_output_memory(const int64_t trip_count);
     void preprocess_backedge_memory();
     void update_mapped_memory();
     void update_input_mapped_memory();

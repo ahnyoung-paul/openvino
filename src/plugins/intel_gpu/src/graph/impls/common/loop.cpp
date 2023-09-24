@@ -175,14 +175,14 @@ struct loop_impl : typed_primitive_impl<loop> {
 
         if (!instance.is_dynamic()) {
             if (!instance.preproc_memories_done) {
-                instance.preprocess_output_memory();
-                instance.preprocess_input_memory();
+                instance.preprocess_output_memory(trip_count);
+                instance.preprocess_input_memory(trip_count);
                 instance.preprocess_backedge_memory();
                 instance.preproc_memories_done = true;
             }
         } else {
             instance.preproc_memories_done = false;
-            instance.preprocess_input_memory();
+            instance.preprocess_input_memory(trip_count);
         }
 
         const auto& concatenated_input_mem_mappings = instance.concatenated_input_mem_mappings;
@@ -271,7 +271,7 @@ struct loop_impl : typed_primitive_impl<loop> {
                 if (!instance.preproc_memories_done) {
                     instance.update_output_layout();
                     instance.update_output_mapped_memory();
-                    instance.preprocess_output_memory();
+                    instance.preprocess_output_memory(trip_count);
                     instance.preprocess_backedge_memory();
                     instance.preproc_memories_done = true;
                 }
