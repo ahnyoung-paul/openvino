@@ -310,13 +310,6 @@ struct loop_impl : typed_primitive_impl<loop> {
         body_network->reset_execution(false);
         stream.wait_for_events(all_events);
 
-        //Temorary added for debug
-        // Concatenate sliced output to the outer network
-        // for (size_t i = 0; i < concatenated_output_mem_mappings.size(); ++i) {
-        //     const auto& concat_output = concatenated_output_mem_mappings.at(i);
-        //     concat_output->restore_concatenated_mem();
-        // }
-
         // Update actual num iteration
         if (!primitive->num_iteration_id.empty()) {
             // update num_iterations (actual number of iterations)

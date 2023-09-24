@@ -163,17 +163,17 @@ public:
         }
 
         void calculate_concatenated_mem() const {
-            // if (!sliced_mems.empty() && concatenated_mem != nullptr) {
-            //     auto& sliced_layout = sliced_mems.front()->get_layout();
-            //     const int64_t num_elements_batch = get_batch_size(sliced_layout, axis);
-            //     iteration_elements = sliced_layout.count() / num_elements_batch;
+            if (!sliced_mems.empty() && concatenated_mem != nullptr) {
+                auto& sliced_layout = sliced_mems.front()->get_layout();
+                const int64_t num_elements_batch = get_batch_size(sliced_layout, axis);
+                iteration_elements = sliced_layout.count() / num_elements_batch;
                 bytes_per_element = data_type_traits::size_of(concatenated_mem->get_layout().data_type);
                 batch_size = get_batch_size(concatenated_mem->get_layout(), axis);
                 bytes_batch_stride = (static_cast<int64_t>(concatenated_mem->get_layout().count()) / batch_size) * bytes_per_element;
                 bytes_iteration = iteration_elements * bytes_per_element;
                 bytes_iteration_stride = stride * bytes_iteration;
                 bytes_iteration_initial_offset = initial_offset * bytes_iteration;
-            // }
+            }
         }
 
         void update_concatenated_mem(memory::ptr mem) {
@@ -207,6 +207,8 @@ public:
             if (iteration < sliced_mems.size()) {
                 const auto& sliced_output_mem = sliced_mems.at(iteration);
                 sliced_data_prim->set_output_memory(sliced_output_mem);
+            } else {
+                OPENVINO_ASSERT(iteration == sliced_mems.size(), "the count of sliced_mems should be same with iteration");
             }
         }
 

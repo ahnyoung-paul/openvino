@@ -447,7 +447,8 @@ void loop_inst::preprocess_output_memory(const int64_t trip_count) {
                 // body network execution 이 끝나기 전까지는 loop 노드의 아웃풋 메모리를 알 수 없음.
                 body_network->get_primitive(internal_id.pid)->set_output_memory(memory, true, internal_id.idx);
             } else {
-                // 여기서 아웃풋 노드의 사이즈를 알 수 없으나 backedge를 통해서 보면 아웃풋 노드의 사이즈를 추정할 수 있음. 왜냐하면 인풋과 같을 것이기 때문임.
+                // 여기서 아웃풋 노드의 사이즈를 알 수 없으나 backedge를 통해서 보면 아웃풋 노드의 사이즈를 추정할 수 있음.
+                // 왜냐하면 인풋과 같을 것이기 때문임.
                 auto output_prim = body_network->get_primitive(internal_id.pid);
                 // TODO: debug why body_network output does not have output buffer?
                 layout sliced_layout = output_prim->output_memory(internal_id.idx).get_layout();
