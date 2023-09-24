@@ -245,14 +245,14 @@ public:
         }
 
         memory::ptr get_or_create_sliced_mem(int64_t idx, const layout& mem_layout) const {
-            // bool recalc_data = !sliced_mems.empty();
-            // while (sliced_mems.size() <= static_cast<size_t>(idx)) {
-            //     memory::ptr sliced_mem = engine.allocate_memory(mem_layout, 0);
-            //     sliced_mems.push_back(sliced_mem);
-            // }
-            // if (recalc_data) {
-            //     calculate_concatenated_mem();
-            // }
+            bool recalc_data = !sliced_mems.empty();
+            while (sliced_mems.size() <= static_cast<size_t>(idx)) {
+                memory::ptr sliced_mem = engine.allocate_memory(mem_layout, 0);
+                sliced_mems.push_back(sliced_mem);
+            }
+            if (recalc_data) {
+                calculate_concatenated_mem();
+            }
             return sliced_mems.at(idx);
         }
 

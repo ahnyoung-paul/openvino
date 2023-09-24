@@ -693,22 +693,22 @@ void loop_inst::load(BinaryInputBuffer& ib) {
 }
 
 void loop_inst::restore_output_memory() {
-    for (size_t i = 0; i < _output_primitive_maps.size(); ++i) {
-        const auto& output_mapping = _output_primitive_maps.at(i);
-        const auto& external_id = output_mapping.external_id;
-        const auto& internal_id = output_mapping.internal_id;
-        if (output_mapping.axis < 0) {
-            auto internalOutputPrim = get_body_network()->get_primitive(internal_id.pid);
-            auto internal_mem = internalOutputPrim->output_memory_ptr(internal_id.idx);
-            auto externalOutputPrim = _network.get_primitive(external_id.pid);
-            externalOutputPrim->set_output_memory(internal_mem, external_id.idx);
-        } else {
-            auto concat_layout = _impl_params->get_output_layout(external_id.idx);
-            auto concat_mem = _network.get_engine().allocate_memory(concat_layout, 0);
-            auto externalOutputPrim = _network.get_primitive(external_id.pid);
-            externalOutputPrim->set_output_memory(concat_mem, external_id.idx);
-        }
-    }
+    // for (size_t i = 0; i < _output_primitive_maps.size(); ++i) {
+    //     const auto& output_mapping = _output_primitive_maps.at(i);
+    //     const auto& external_id = output_mapping.external_id;
+    //     const auto& internal_id = output_mapping.internal_id;
+    //     if (output_mapping.axis < 0) {
+    //         auto internalOutputPrim = get_body_network()->get_primitive(internal_id.pid);
+    //         auto internal_mem = internalOutputPrim->output_memory_ptr(internal_id.idx);
+    //         auto externalOutputPrim = _network.get_primitive(external_id.pid);
+    //         externalOutputPrim->set_output_memory(internal_mem, external_id.idx);
+    //     } else {
+    //         auto concat_layout = _impl_params->get_output_layout(external_id.idx);
+    //         auto concat_mem = _network.get_engine().allocate_memory(concat_layout, 0);
+    //         auto externalOutputPrim = _network.get_primitive(external_id.pid);
+    //         externalOutputPrim->set_output_memory(concat_mem, external_id.idx);
+    //     }
+    // }
 
     for (size_t i = 0; i < concatenated_output_mem_mappings.size(); ++i) {
         const auto& concat_output = concatenated_output_mem_mappings.at(i);

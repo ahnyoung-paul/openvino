@@ -312,10 +312,10 @@ struct loop_impl : typed_primitive_impl<loop> {
 
         //Temorary added for debug
         // Concatenate sliced output to the outer network
-        for (size_t i = 0; i < concatenated_output_mem_mappings.size(); ++i) {
-            const auto& concat_output = concatenated_output_mem_mappings.at(i);
-            concat_output->restore_concatenated_mem();
-        }
+        // for (size_t i = 0; i < concatenated_output_mem_mappings.size(); ++i) {
+        //     const auto& concat_output = concatenated_output_mem_mappings.at(i);
+        //     concat_output->restore_concatenated_mem();
+        // }
 
         // Update actual num iteration
         if (!primitive->num_iteration_id.empty()) {
@@ -325,7 +325,7 @@ struct loop_impl : typed_primitive_impl<loop> {
         }
 
         instance.update_output_layout();
-        // instance.restore_output_memory();
+        instance.restore_output_memory();
 
         // auto out_layout_vec = instance.get_impl_params()->output_layouts;
         // std::cout << "Debug loop : " << instance.id()  << " - " << out_layout_vec.size()
