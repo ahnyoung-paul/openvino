@@ -355,7 +355,7 @@ void loop_inst::update_backedge_mapped_memory() {
                                                             _output_primitive_maps, back_edge.to, false);
         assert(input_map_ptrs.size() == 1);
         const auto& input_map = input_map_ptrs.front();
-        auto backedged_sliced_output_mems = get_sliced_mem(back_edge.from);
+        auto backedged_sliced_output = get_sliced_mem(back_edge.from);
         const auto backedge_to_prim = body_network->get_primitive(back_edge.to);
         const auto backedge_from_prim = body_network->get_primitive(back_edge.from);
 
@@ -364,7 +364,7 @@ void loop_inst::update_backedge_mapped_memory() {
         for (auto& backedge_mapping : backedge_memory_mappings) {
             if (backedge_mapping.from_primitive->id() == backedge_from_prim->id() &&
                 backedge_mapping.to_primitive->id() == backedge_to_prim->id()) {
-                if (backedged_sliced_output_mems.empty()) {
+                if (backedged_sliced_output == nullptr) {
                     // backedge output which does not need concatenation
                     const auto output_mapping = find_io_primitive_maps(_input_primitive_maps,
                                                                         _output_primitive_maps, back_edge.from, false);
@@ -386,10 +386,10 @@ void loop_inst::update_backedge_mapped_memory() {
                     }
                     body_network->set_input_data(back_edge.to, backedge_mem);
                     body_network->set_output_memory(back_edge.from, backedge_mem);
-                    backedge_mapping.from_mems = { backedge_mem };
+                    backedge_mapping.from_mem = backedge_mem;
                     backedge_mapping.initial_mem = initial_mem;
                 } else {
-                    backedge_mapping.from_mems = backedged_sliced_output_mems;
+                    backedge_mapping.concat_mem_mapping = backedged_sliced_output;
                     backedge_mapping.initial_mem = initial_mem;
                 }
                 break;
@@ -539,8 +539,8 @@ void loop_inst::preprocess_backedge_memory() {
 
         // TODO: 마찬가지로 첫번째 sliced_output_mems 에서 레이아웃을 가져와서 그것을 바탕으로 레이아웃 셋팅을 하고
         // 추가적으로 메모리가 필요한 경우 할당해서 사용하도록 함.
-        auto backedged_sliced_output_mems = get_sliced_mem(back_edge.from);
-        if (backedged_sliced_output_mems.empty()) {
+        auto backedged_sliced_output = get_sliced_mem(back_edge.from);
+        if (backedged_sliced_output == nullptr) {
             // backedge output which does not need concatenation
             const auto output_mapping = find_io_primitive_maps(_input_primitive_maps,
                                                                 _output_primitive_maps, back_edge.from, false);
@@ -571,23 +571,23 @@ void loop_inst::preprocess_backedge_memory() {
             // backedge output which needs concatenation
             // CONCAT_OUTPUT
             backedge_memory_mappings.emplace_back(
-                backedge_from_prim, backedge_to_prim, backedged_sliced_output_mems, initial_mem, body_network->get_stream());
+                backedge_from_prim, backedge_to_prim, backedged_sliced_output, initial_mem, body_network->get_stream());
         }
     }
 }
 
-std::vector<memory::ptr> loop_inst::get_sliced_mem(const primitive_id& internal_id) const {
+std::shared_ptr<loop_inst::concatenated_memory_mapping> loop_inst::get_sliced_mem(const primitive_id& internal_id) const {
     for (const auto& mem_mapping : concatenated_input_mem_mappings) {
         if (mem_mapping->sliced_data_prim->id() == internal_id) {
-            return mem_mapping->get_sliced_mems();
+            return mem_mapping;
         }
     }
     for (const auto& mem_mapping : concatenated_output_mem_mappings) {
         if (mem_mapping->sliced_data_prim->id() == internal_id) {
-            return mem_mapping->get_sliced_mems();
+            return mem_mapping;
         }
     }
-    return {}; // not found
+    return nullptr; // not found
 }
 
 void loop_inst::validate_backedges(loop_node const & node) const {

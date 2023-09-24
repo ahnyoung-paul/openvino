@@ -295,7 +295,8 @@ private:
         };
         std::shared_ptr<primitive_inst> from_primitive;
         std::shared_ptr<primitive_inst> to_primitive;
-        std::vector<memory::ptr> from_mems;
+        std::shared_ptr<concatenated_memory_mapping> concat_mem_mapping;
+        memory::ptr from_mem;
         memory::ptr initial_mem;
         cldnn::stream& stream;
         backedge_type type;
@@ -303,10 +304,11 @@ private:
 
         backedge_memory_mapping(
             std::shared_ptr<primitive_inst> _from_primitive, std::shared_ptr<primitive_inst> _to_primitive,
-            std::vector<memory::ptr> _from_mems, memory::ptr _initial_mem, cldnn::stream& _stream, backedge_type _type = CONCAT_OUTPUT):
+            std::shared_ptr<concatenated_memory_mapping> _concat_mem_mapping, memory::ptr _initial_mem,
+            cldnn::stream& _stream, backedge_type _type = CONCAT_OUTPUT):
             from_primitive(_from_primitive),
             to_primitive(std::move(_to_primitive)),
-            from_mems(_from_mems),
+            concat_mem_mapping(std::move(_concat_mem_mapping)),
             initial_mem(std::move(_initial_mem)),
             stream(_stream),
             type(_type),
@@ -319,12 +321,13 @@ private:
             memory::ptr _from_mem, memory::ptr _initial_mem, cldnn::stream& _stream, backedge_type _type = SINGLE_SHARED):
             from_primitive(_from_primitive),
             to_primitive(std::move(_to_primitive)),
-            from_mems{std::move(_from_mem)},
+            from_mem{std::move(_from_mem)},
             initial_mem(std::move(_initial_mem)),
             stream(_stream),
             type(_type),
             total_bytes(initial_mem->get_layout().bytes_count()) {
                 validate_backedge_memory();
+                OPENVINO_ASSERT(from_mem != nullptr, "SINGLE_SHARED] from_mem is nullptr");
             }
 
         backedge_memory_mapping(
@@ -344,12 +347,13 @@ private:
                 if (iter == 0) {
                     to_primitive->set_output_memory(initial_mem);
                 } else if (iter > 0) {
-                    to_primitive->set_output_memory(from_mems.at(iter - 1));
+                    auto mem = concat_mem_mapping->get_sliced_mem((iter-1));
+                    to_primitive->set_output_memory(mem);
                 } else {
                     throw std::runtime_error("Invalid iteration count" + std::to_string(iter));
                 }
             } else if (type == SINGLE_SHARED && iter == 0) {
-                from_mems.front()->copy_from(stream, *initial_mem);
+                from_mem->copy_from(stream, *initial_mem);
             } else if (type == SINGLE) {
                 memory::ptr mem1 = to_primitive->output_memory_ptr();
                 if (iter == 0) {
@@ -364,11 +368,20 @@ private:
 
 private:
         void validate_backedge_memory() {
-            for (const auto& from_mem : from_mems) {
+            if (from_mem) {
                 const size_t from_mem_bytes = from_mem->get_layout().bytes_count();
                 if (from_mem_bytes != total_bytes) {
                     throw std::runtime_error("Invalid backedge memory layout: "
                         "size not matched with that of initial_mem");
+                }
+            }
+            if (concat_mem_mapping) {
+                for (const auto& from_mem : concat_mem_mapping->get_sliced_mems()) {
+                    const size_t from_mem_bytes = from_mem->get_layout().bytes_count();
+                    if (from_mem_bytes != total_bytes) {
+                        throw std::runtime_error("Invalid backedge memory layout: "
+                            "size not matched with that of initial_mem");
+                    }
                 }
             }
         }
@@ -404,7 +417,7 @@ private:
     network::ptr body_network;
     memory::ptr get_external_memory(const primitive_id& external_id, size_t mem_idx = 0) const;
     layout get_external_output_layout(const primitive_id& external_id, size_t mem_idx = 0) const;
-    std::vector<memory::ptr> get_sliced_mem(const primitive_id& internal_id) const;
+    std::shared_ptr<concatenated_memory_mapping> get_sliced_mem(const primitive_id& internal_id) const;
     std::vector<loop::io_primitive_map> _input_primitive_maps;
     std::vector<loop::io_primitive_map> _output_primitive_maps;
     std::vector<loop::backedge_mapping> _back_edges;
