@@ -136,6 +136,7 @@ public:
     }
     memory& output_memory(size_t index = 0) const { return *_outputs[index]; }
     memory::ptr output_memory_ptr(size_t index = 0) const { return _outputs[index]; }
+    size_t output_memory_size() const { return _outputs.size(); }
     size_t inputs_memory_count() const { return _inputs_memory_count; }
     size_t outputs_memory_count() const { return _outputs_memory_count; }
     bool outputs_allocated() const {

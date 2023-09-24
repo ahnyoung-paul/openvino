@@ -163,12 +163,17 @@ public:
         }
 
         void calculate_concatenated_mem() const {
-            bytes_per_element = data_type_traits::size_of(concatenated_mem->get_layout().data_type);
-            batch_size = get_batch_size(concatenated_mem->get_layout(), axis);
-            bytes_batch_stride = (static_cast<int64_t>(concatenated_mem->get_layout().count()) / batch_size) * bytes_per_element;
-            bytes_iteration = iteration_elements * bytes_per_element;
-            bytes_iteration_stride = stride * bytes_iteration;
-            bytes_iteration_initial_offset = initial_offset * bytes_iteration;
+            // if (!sliced_mems.empty() && concatenated_mem != nullptr) {
+            //     auto& sliced_layout = sliced_mems.front()->get_layout();
+            //     const int64_t num_elements_batch = get_batch_size(sliced_layout, axis);
+            //     iteration_elements = sliced_layout.count() / num_elements_batch;
+                bytes_per_element = data_type_traits::size_of(concatenated_mem->get_layout().data_type);
+                batch_size = get_batch_size(concatenated_mem->get_layout(), axis);
+                bytes_batch_stride = (static_cast<int64_t>(concatenated_mem->get_layout().count()) / batch_size) * bytes_per_element;
+                bytes_iteration = iteration_elements * bytes_per_element;
+                bytes_iteration_stride = stride * bytes_iteration;
+                bytes_iteration_initial_offset = initial_offset * bytes_iteration;
+            // }
         }
 
         void update_concatenated_mem(memory::ptr mem) {
@@ -199,34 +204,56 @@ public:
 
         // To Set sliced output memory for concatenated_output_mem_mappings
         void setup_sliced_output_memory(uint64_t iteration) const {
-            const auto& sliced_output_mem = sliced_mems.at(iteration);
-            sliced_data_prim->set_output_memory(sliced_output_mem);
+            if (iteration < sliced_mems.size()) {
+                const auto& sliced_output_mem = sliced_mems.at(iteration);
+                sliced_data_prim->set_output_memory(sliced_output_mem);
+            }
+        }
+
+        // Store output of sliced_data_prim to sliced mems vector
+        void store_output_to_sliced_mems() const {
+            auto output_mem_ptr = sliced_data_prim->output_memory_ptr();
+            bool recalc_data = !sliced_mems.empty();
+            sliced_mems.push_back(output_mem_ptr);
+            memory::ptr new_sliced_mem = engine.allocate_memory(output_mem_ptr->get_layout(), 0);
+            sliced_data_prim->set_output_memory(new_sliced_mem);
+            if (recalc_data) {
+                calculate_concatenated_mem();
+            }
         }
 
         // Get sliced mem for the iteration idx and copy data from external input to sliced mem
         // In the case of dynamic model, concatenated_mem is always non nullptr.
         memory::ptr get_sliced_mem(int64_t iteration) const {
+            OPENVINO_ASSERT(!sliced_mems.empty(), "For input data, sliced_mems should not be empty");
             mem_lock<uint8_t, mem_lock_type::read> from_lock{ concatenated_mem, stream };
             int64_t batch_offset = 0;
+            auto sliced_mem = get_or_create_sliced_mem(iteration, sliced_mems.front()->get_layout());
             const int64_t iteration_offset = bytes_iteration_initial_offset +
                 bytes_iteration_stride * iteration;
             // To support multi-batch, just repeat memcpy for each batch
             for (int64_t batch = 0; batch < batch_size; ++batch) {
                 const int64_t src_offset = batch_offset + iteration_offset;
                 const int64_t dst_offset = batch * bytes_iteration;
-                mem_lock<uint8_t> to_lock{ sliced_mems.at(iteration), stream };
+                mem_lock<uint8_t> to_lock{ sliced_mem, stream };
                 const auto src = from_lock.begin() + src_offset;
                 const auto dst = to_lock.begin() + dst_offset;
                 std::copy(src, src + bytes_iteration, dst);
                 batch_offset += bytes_batch_stride;
             }
-            return sliced_mems.at(iteration);
+            return sliced_mem;
         }
 
-        memory::ptr get_or_create_sliced_mem(size_t idx) {
-            // if (sliced_mems.size() <= idx) {
+        memory::ptr get_or_create_sliced_mem(int64_t idx, const layout& mem_layout) const {
+            // bool recalc_data = !sliced_mems.empty();
+            // while (sliced_mems.size() <= static_cast<size_t>(idx)) {
+            //     memory::ptr sliced_mem = engine.allocate_memory(mem_layout, 0);
+            //     sliced_mems.push_back(sliced_mem);
             // }
-            return nullptr;
+            // if (recalc_data) {
+            //     calculate_concatenated_mem();
+            // }
+            return sliced_mems.at(idx);
         }
 
         std::vector<memory::ptr> get_sliced_mems() const { return sliced_mems; }
@@ -237,15 +264,26 @@ public:
             ss << "* axis                           : " << axis << std::endl;
             ss << "* bytes_per_element              : " << bytes_per_element << std::endl;
             ss << "* batch_size                     : " << batch_size << std::endl;
-            ss << "* bytes_batch_stride             : " << bytes_batch_stride << " = (static_cast<int64_t>("
-                << concatenated_mem->get_layout().count() << ") / batch_size:" << batch_size << ") * bytes_per_element:" << bytes_per_element << std::endl;
+            if (concatenated_mem != nullptr && concatenated_mem->get_layout().is_static()) {
+                ss << "* bytes_batch_stride             : " << bytes_batch_stride << " = (static_cast<int64_t>("
+                    << concatenated_mem->get_layout().count() << ") / batch_size:" << batch_size << ") * bytes_per_element:" << bytes_per_element << std::endl;
+            } else {
+                ss << "* bytes_batch_stride             : " << bytes_batch_stride << std::endl;
+            }
             ss << "* bytes_iteration                : " << bytes_iteration << " = (iteration_elements:"
                 << iteration_elements << " * bytes_per_element:" << bytes_per_element << ")" << std::endl;
             ss << "* bytes_iteration_stride         : " << bytes_iteration_stride << std::endl;
             ss << "* bytes_iteration_initial_offset : " << bytes_iteration_initial_offset << std::endl;
-            ss << "* concat_data_prim               : " << concat_data_prim->id() << std::endl;
-            ss << "* sliced_data_prim               : " << sliced_data_prim->id() << std::endl;
-            ss << "* concatenated_mem               : " << concatenated_mem->get_layout().to_short_string() << std::endl;
+            ss << "* concat_data_prim               : " << ((concat_data_prim != nullptr)? concat_data_prim->id() : "nullptr") << std::endl;
+            ss << "* sliced_data_prim               : " << ((sliced_data_prim != nullptr)? sliced_data_prim->id()  : "nullptr") << std::endl;
+            if (concatenated_mem) {
+                ss << "* concatenated_mem               : " << concatenated_mem->get_layout().to_short_string() << std::endl;
+            } else {
+                ss << "* concatenated_mem               : nullptr" << std::endl;
+            }
+            ss << "* iteration_elements             : " << iteration_elements << std::endl;
+            ss << "* stride                         : " << stride << std::endl;
+            ss << "* initial_offset                 : " << initial_offset << std::endl;
             ss << "* sliced_mems                    :{ ";
             for (auto mem : sliced_mems) {
                 ss << mem->get_layout().to_short_string() << ",";
@@ -259,11 +297,11 @@ public:
         std::shared_ptr<primitive_inst> sliced_data_prim;
 
 private:
-        memory::ptr concatenated_mem;
-        std::vector<memory::ptr> sliced_mems;
+        mutable memory::ptr concatenated_mem;
+        mutable std::vector<memory::ptr> sliced_mems;
         cldnn::stream& stream;
         cldnn::engine& engine;
-        const int64_t iteration_elements = 0;
+        mutable int64_t iteration_elements = 0;
         const int64_t stride = 0;
         const int64_t initial_offset = 0;
 
@@ -347,7 +385,7 @@ private:
                 if (iter == 0) {
                     to_primitive->set_output_memory(initial_mem);
                 } else if (iter > 0) {
-                    auto mem = concat_mem_mapping->get_sliced_mem((iter-1));
+                    auto mem = concat_mem_mapping->get_or_create_sliced_mem((iter - 1), initial_mem->get_layout());
                     to_primitive->set_output_memory(mem);
                 } else {
                     throw std::runtime_error("Invalid iteration count" + std::to_string(iter));
@@ -407,6 +445,7 @@ public:
     void update_input_mapped_memory();
     void update_output_mapped_memory();
     void update_backedge_mapped_memory();
+    void restore_output_memory();
     event::ptr set_output_memory(memory::ptr mem, bool check = true, size_t idx = 0) override;
 
     void save(BinaryOutputBuffer& ob) const override;

@@ -335,7 +335,7 @@ void loop_inst::update_output_mapped_memory() {
                     }
                 }
             }
-        } else {
+} else {
             std::cout << "external memory for " << external_id << " with " << external_mem_idx << " is null" << std::endl;
             std::cout << "- output_mapping.axis     : " << output_mapping.axis << std::endl;
             std::cout << "- output_mapping.start    : " << output_mapping.start << std::endl;
@@ -415,7 +415,6 @@ event::ptr loop_inst::set_output_memory(memory::ptr mem, bool check, size_t idx)
 }
 
 void loop_inst::preprocess_output_memory(const int64_t trip_count) {
-    auto& engine = _network.get_engine();
     concatenated_output_mem_mappings.reserve(_output_primitive_maps.size());
     for (size_t i = 0; i < _output_primitive_maps.size(); ++i) {
         const auto& output_mapping = _output_primitive_maps.at(i);
@@ -429,17 +428,20 @@ void loop_inst::preprocess_output_memory(const int64_t trip_count) {
             if (output_mapping.axis >= 0) {
                 // 여기서는 num_elements_iteration, start 도 알 수 없고 sliced_layout 을 가지고 있지도 못한다.
                 // 이것을 계산할 수 있는 건 backedge preprocessing 뿐이다.
-                auto memory_mapping_info = std::make_shared<concatenated_memory_mapping>(
+                const int64_t start = output_mapping.start < 0? trip_count - 1: output_mapping.start;
+                // Can't calculate num_elements_iteration now, update num_elements_iteration after execution
+                auto concat_output_memory_mapping = std::make_shared<concatenated_memory_mapping>(
                                                 output_mapping.axis, nullptr, std::vector<memory::ptr>{}, _network.get_stream(),
-                                                _network.get_engine(), 0, output_mapping.stride, 0);
+                                                _network.get_engine(), 0, output_mapping.stride, start);
                 // TODO how to set index of output memory
-                memory_mapping_info->sliced_data_prim = body_network->get_primitive(internal_id.pid);
-                memory_mapping_info->concat_data_prim = get_network().get_primitive(external_id.pid);
-                concatenated_output_mem_mappings.push_back(memory_mapping_info);
+                concat_output_memory_mapping->sliced_data_prim = body_network->get_primitive(internal_id.pid);
+                concat_output_memory_mapping->concat_data_prim = get_network().get_primitive(external_id.pid);
+                concatenated_output_mem_mappings.push_back(concat_output_memory_mapping);
                 GPU_DEBUG_LOG << i << ") output mapping - concat output memory mapping: "
-                                << memory_mapping_info->to_string() << std::endl;
+                                << concat_output_memory_mapping->to_string() << std::endl;
             }
         } else {
+            auto& engine = _network.get_engine();
             memory::ptr memory = get_external_memory(external_id.pid, external_id.idx);
             if (output_mapping.axis < 0) {
                 // body network execution 이 끝나기 전까지는 loop 노드의 아웃풋 메모리를 알 수 없음.
@@ -504,10 +506,15 @@ void loop_inst::preprocess_input_memory(const int64_t trip_count) {
                 layout sliced_layout
                     = body_network->get_primitive(internal_id.pid)->output_memory(internal_id.idx).get_layout();
                 std::vector<memory::ptr> sliced_mems;
-                sliced_mems.reserve(trip_count);
-                for (int j=0; j < trip_count; ++j) {
+                if (trip_count < 0) {
                     memory::ptr sliced_mem = engine.allocate_memory(sliced_layout, 0);
                     sliced_mems.push_back(sliced_mem);
+                } else {
+                    sliced_mems.reserve(trip_count);
+                    for (int j=0; j < trip_count; ++j) {
+                        memory::ptr sliced_mem = engine.allocate_memory(sliced_layout, 0);
+                        sliced_mems.push_back(sliced_mem);
+                    }
                 }
                 const int64_t num_elements_batch = concatenated_memory_mapping::get_batch_size(
                     sliced_layout, input_map->axis);
@@ -575,6 +582,7 @@ void loop_inst::preprocess_backedge_memory() {
             }
             body_network->set_input_data(back_edge.to, backedge_mem);
             body_network->set_output_memory(back_edge.from, backedge_mem);
+
             // SINGLE_SHARED
             backedge_memory_mappings.emplace_back(
                 backedge_from_prim, backedge_to_prim, backedge_mem, initial_mem, body_network->get_stream());
@@ -682,6 +690,30 @@ void loop_inst::load(BinaryInputBuffer& ib) {
     ib >> _num_iteration_id;
     ib >> _max_iteration;
     body_network = std::make_shared<cldnn::network>(ib, get_network().get_stream_ptr(), get_network().get_engine(), get_network().is_primary_stream(), 0);
+}
+
+void loop_inst::restore_output_memory() {
+    for (size_t i = 0; i < _output_primitive_maps.size(); ++i) {
+        const auto& output_mapping = _output_primitive_maps.at(i);
+        const auto& external_id = output_mapping.external_id;
+        const auto& internal_id = output_mapping.internal_id;
+        if (output_mapping.axis < 0) {
+            auto internalOutputPrim = get_body_network()->get_primitive(internal_id.pid);
+            auto internal_mem = internalOutputPrim->output_memory_ptr(internal_id.idx);
+            auto externalOutputPrim = _network.get_primitive(external_id.pid);
+            externalOutputPrim->set_output_memory(internal_mem, external_id.idx);
+        } else {
+            auto concat_layout = _impl_params->get_output_layout(external_id.idx);
+            auto concat_mem = _network.get_engine().allocate_memory(concat_layout, 0);
+            auto externalOutputPrim = _network.get_primitive(external_id.pid);
+            externalOutputPrim->set_output_memory(concat_mem, external_id.idx);
+        }
+    }
+
+    for (size_t i = 0; i < concatenated_output_mem_mappings.size(); ++i) {
+        const auto& concat_output = concatenated_output_mem_mappings.at(i);
+        concat_output->restore_concatenated_mem();
+    }
 }
 
 }  // namespace cldnn

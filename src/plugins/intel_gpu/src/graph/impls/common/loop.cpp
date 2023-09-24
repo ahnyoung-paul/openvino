@@ -84,6 +84,45 @@ static void write_scalar_value(memory::ptr mem, stream& stream, int64_t input) {
     }
 }
 
+// static float convert_element1(int64_t i) { return static_cast<float>(i); }
+// static float convert_element1(int32_t i) { return static_cast<float>(i); }
+// static float convert_element1(uint32_t i) { return static_cast<float>(i); }
+// static float convert_element1(float f) { return f; }
+// static float convert_element1(half_t h) { return half_to_float(h); }
+
+// template <class T>
+// static std::string dump_to_str(memory::ptr mem, stream& stream) {
+//     mem_lock<T, mem_lock_type::read> lock(mem, stream);
+//     auto mem_ptr = lock.data();
+//     std::stringstream buffer;
+//     buffer << "{";
+//     for (size_t i = 0; i < lock.size(); ++i) {
+//         buffer << convert_element1(mem_ptr[i]) << ",";
+//     }
+//     buffer << "}";
+//     return buffer.str();
+// }
+
+// static std::string log_memory_to_str(memory::ptr mem, stream& stream) {
+//     auto mem_dt = mem->get_layout().data_type;
+//     if (mem_dt == cldnn::data_types::f32)
+//         return dump_to_str<float>(mem, stream);
+//     else if (mem_dt == cldnn::data_types::f16)
+//         return dump_to_str<half_t>(mem, stream);
+//     else if (mem_dt == cldnn::data_types::bin)
+//         return dump_to_str<uint32_t>(mem, stream);
+//     else if (mem_dt == cldnn::data_types::i64)
+//         return dump_to_str<int64_t>(mem, stream);
+//     else if (mem_dt == cldnn::data_types::i32)
+//         return dump_to_str<int32_t>(mem, stream);
+//     else if (mem_dt == cldnn::data_types::i8)
+//         return dump_to_str<int8_t>(mem, stream);
+//     else if (mem_dt == cldnn::data_types::u8)
+//         return dump_to_str<uint8_t>(mem, stream);
+//     else
+//         return "unknown_type_data";
+// }
+
 struct loop_impl : typed_primitive_impl<loop> {
     using parent = typed_primitive_impl<loop>;
     using parent::parent;
@@ -135,8 +174,6 @@ struct loop_impl : typed_primitive_impl<loop> {
             trip_count = max_num_iteration;
         }
 
-        OPENVINO_ASSERT(trip_count > 0, "which test has minus trip_count ?");
-
         // read initial execution condition from outer network
         int64_t execution_condition = 1;
         if (!primitive->first_execution_condition_id.empty()) {
@@ -173,16 +210,12 @@ struct loop_impl : typed_primitive_impl<loop> {
             body_current_iteration_mem = body_network->get_primitive(primitive->body_current_iteration_id)->output_memory_ptr();
         }
 
-        if (!instance.is_dynamic()) {
-            if (!instance.preproc_memories_done) {
-                instance.preprocess_output_memory(trip_count);
-                instance.preprocess_input_memory(trip_count);
-                instance.preprocess_backedge_memory();
-                instance.preproc_memories_done = true;
-            }
-        } else {
-            instance.preproc_memories_done = false;
+        // TODO: preprocess working condition input layout are changed?
+        if (!instance.preproc_memories_done) {
+            instance.preprocess_output_memory(trip_count);
             instance.preprocess_input_memory(trip_count);
+            instance.preprocess_backedge_memory();
+            instance.preproc_memories_done = true;
         }
 
         const auto& concatenated_input_mem_mappings = instance.concatenated_input_mem_mappings;
@@ -267,21 +300,17 @@ struct loop_impl : typed_primitive_impl<loop> {
             if (!loop_carried_dep.empty())
                 stream.wait_for_events(loop_carried_dep);
 
-            if (instance.is_dynamic()) {
-                if (!instance.preproc_memories_done) {
-                    instance.update_output_layout();
-                    instance.update_output_mapped_memory();
-                    instance.preprocess_output_memory(trip_count);
-                    instance.preprocess_backedge_memory();
-                    instance.preproc_memories_done = true;
-                }
-            }
+            // // Move output of sliced_data_prim to spliced_mems vector
+            // for (const auto& concat_output_mem_mapping : concatenated_output_mem_mappings) {
+            //     concat_output_mem_mapping->store_output_to_sliced_mems();
+            // }
         }
 
         // Reset network and wait for all collected events
         body_network->reset_execution(false);
         stream.wait_for_events(all_events);
 
+        //Temorary added for debug
         // Concatenate sliced output to the outer network
         for (size_t i = 0; i < concatenated_output_mem_mappings.size(); ++i) {
             const auto& concat_output = concatenated_output_mem_mappings.at(i);
@@ -296,6 +325,25 @@ struct loop_impl : typed_primitive_impl<loop> {
         }
 
         instance.update_output_layout();
+        // instance.restore_output_memory();
+
+        // auto out_layout_vec = instance.get_impl_params()->output_layouts;
+        // std::cout << "Debug loop : " << instance.id()  << " - " << out_layout_vec.size()
+        //     << "output_memory_size: " << instance.output_memory_size() << std::endl;
+        // for (size_t i = 0; i < out_layout_vec.size(); i++) {
+        //     auto& out_layout = out_layout_vec[i];
+        //     std::stringstream ss;
+        //     ss << " * " << out_layout.to_short_string() << ", ";
+
+        //     if (i < instance.output_memory_size()) {
+        //         auto out_mem_ptr = instance.output_memory_ptr(i);
+        //         ss << log_memory_to_str(out_mem_ptr, stream);
+        //     } else {
+        //         ss << "has no output memory ptr";
+        //     }
+
+        //     std::cout << ss.str() << std::endl;
+        // }
 
         ev->set();
         return ev;
