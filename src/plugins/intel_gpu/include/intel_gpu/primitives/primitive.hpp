@@ -70,10 +70,16 @@ struct input_info {
         ib >> pid;
         ib >> idx;
     }
+
+    std::string to_string() const {
+        std::stringstream ss;
+        ss << "input_info(pid:" << pid << ",idx:" << idx << ")";
+        return ss.str();
+    }
 };
 
 static inline std::ostream& operator<< (std::ostream& os, input_info& info) {
-    os << "input_info(pid:" << info.pid << ",idx:" << info.idx << ")";
+    os << info.to_string();
     return os;
 }
 

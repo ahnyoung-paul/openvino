@@ -119,6 +119,7 @@ struct loop_impl : typed_primitive_impl<loop> {
 
         const auto max_num_iteration = primitive->max_num_iteration;
         auto body_network = instance.get_body_network();
+        int64_t current_iteration_idx = 0;
 
         auto ev = stream.create_user_event(false);
 
@@ -143,8 +144,16 @@ struct loop_impl : typed_primitive_impl<loop> {
             execution_condition = read_scalar_value(first_execution_condition_mem, stream);
         }
 
-        // When execution_condition is false, return execute_impl without any body_network execution.
-        if (!execution_condition) {
+        // When execution_condition is false or trip_count is zero, return execute_impl without any body_network execution.
+        if (!execution_condition || trip_count == 0) {
+            // Update actual num iteration
+            if (!primitive->num_iteration_id.empty()) {
+                // update num_iterations (actual number of iterations)
+                memory::ptr num_actual_iterations_mem = outer_network.get_primitive(primitive->num_iteration_id)->output_memory_ptr();
+                write_scalar_value(num_actual_iterations_mem, stream, current_iteration_idx);
+            }
+
+            instance.update_output_layout();
             ev->set();
             return ev;
         }
@@ -201,7 +210,6 @@ struct loop_impl : typed_primitive_impl<loop> {
 
         std::vector<event::ptr> all_events;
         std::vector<event::ptr> loop_carried_dep(events.begin(), events.end());
-        int64_t current_iteration_idx = 0;
         while (current_iteration_idx < trip_count && execution_condition) {
             if (body_current_iteration_mem != nullptr) {
                 write_scalar_value(body_current_iteration_mem, stream, current_iteration_idx);
