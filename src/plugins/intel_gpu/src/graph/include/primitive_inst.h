@@ -272,6 +272,8 @@ public:
 
     virtual void update_output_layout();
 
+    virtual void update_shape();
+
 protected:
     primitive_inst(network& network, program_node const& node, bool allocate_memory);
 
@@ -353,7 +355,6 @@ protected:
     // _impl->execute() mainly for reshape (to update output memory if reshape_node.is_in_place() == true)
     virtual void on_execute() {}
 
-    virtual void update_shape();
     virtual event::ptr update_weights();
     bool use_async_compilation();
     // if primitive_inst doesn't replace impl to new impl(static impl with opt kerenl or dynamic impl), return false

@@ -335,14 +335,6 @@ void loop_inst::update_output_mapped_memory() {
                     }
                 }
             }
-} else {
-            std::cout << "external memory for " << external_id << " with " << external_mem_idx << " is null" << std::endl;
-            std::cout << "- output_mapping.axis     : " << output_mapping.axis << std::endl;
-            std::cout << "- output_mapping.start    : " << output_mapping.start << std::endl;
-            std::cout << "- output_mapping.end      : " << output_mapping.end << std::endl;
-            std::cout << "- output_mapping.stride   : " << output_mapping.stride << std::endl;
-            auto internal_mem = body_network->get_primitive(internal_id)->output_memory_ptr(internal_mem_idx);
-            std::cout << "- internal memory ptr " << internal_mem << " " << internal_mem->get_layout().to_short_string() << std::endl;
         }
     }
 }
@@ -427,13 +419,10 @@ void loop_inst::preprocess_output_memory(const int64_t trip_count) {
         if (memory != nullptr) {
             auto& engine = _network.get_engine();
             if (output_mapping.axis < 0) {
-                // body network execution 이 끝나기 전까지는 loop 노드의 아웃풋 메모리를 알 수 없음.
+                // In dynamic model, Don't get output memory of loop node because body network's output layouts are not calculated
                 body_network->get_primitive(internal_id.pid)->set_output_memory(memory, true, internal_id.idx);
             } else {
-                // 여기서 아웃풋 노드의 사이즈를 알 수 없으나 backedge를 통해서 보면 아웃풋 노드의 사이즈를 추정할 수 있음.
-                // 왜냐하면 인풋과 같을 것이기 때문임.
                 auto output_prim = body_network->get_primitive(internal_id.pid);
-                // TODO: debug why body_network output does not have output buffer?
                 layout sliced_layout = output_prim->output_memory(internal_id.idx).get_layout();
 
                 std::vector<memory::ptr> sliced_mems;
@@ -456,9 +445,10 @@ void loop_inst::preprocess_output_memory(const int64_t trip_count) {
                 concatenated_output_mem_mappings.push_back(memory_mapping_info);
             }
         } else {
+            // if memory is nullptr, that means memory is not allocated yet because current network is dynamic shape model.
             if (output_mapping.axis >= 0) {
-                // 여기서는 num_elements_iteration, start 도 알 수 없고 sliced_layout 을 가지고 있지도 못한다.
-                // 이것을 계산할 수 있는 건 backedge preprocessing 뿐이다.
+                // In dynamic model, we can't calculate num_element_iteration, start, and sliced_layout.
+                // will recalculate that parameters in backedge preprocessing map after first execution.
                 const int64_t start = output_mapping.start < 0? trip_count - 1: output_mapping.start;
                 // Can't calculate num_elements_iteration now, update num_elements_iteration after execution
                 auto concat_output_memory_mapping = std::make_shared<concatenated_memory_mapping>(
@@ -520,8 +510,7 @@ void loop_inst::preprocess_input_memory(const int64_t trip_count) {
                     sliced_layout, input_map->axis);
                 const int64_t num_elements_iteration = sliced_layout.count() / num_elements_batch;
                 const int64_t start = input_map->start < 0? trip_count - 1: input_map->start;
-                //TODO: max_iteration이 -1 일 경우 sliced_mem은 첫번째 한개만 할당하고
-                // 이후에는 추가로 sliced mem을 요청할 경우 그 때 메모리를 할당해서 사용함.
+                // When max_iteration is -1, allocate first sliced_mem and allocate sliced memory if additional sliced mem is required
                 auto concatenated_input_mem_mapping_info = std::make_shared<concatenated_memory_mapping>(
                                                                 input_map->axis, memory, sliced_mems, _network.get_stream(),
                                                                 _network.get_engine(), num_elements_iteration, input_map->stride, start);
@@ -531,6 +520,14 @@ void loop_inst::preprocess_input_memory(const int64_t trip_count) {
                                 << concatenated_input_mem_mapping_info->to_string() << std::endl;
             } else {
                 body_network->set_input_data(internal_id.pid, memory);
+                auto input_inst = body_network->get_primitive(internal_id.pid);
+
+                if (memory->get_layout() != input_inst->get_output_layout()) {
+                    input_inst->set_output_layout(memory->get_layout());
+                    GPU_DEBUG_LOG << input_inst->id() << " is changed memory because layout is changed from "
+                                        << input_inst->get_output_layout().to_short_string()
+                                        << " to " << memory->get_layout().to_short_string() << std::endl;
+                }
             }
         }
     }
@@ -576,9 +573,13 @@ void loop_inst::preprocess_backedge_memory() {
                 }
             } else {
                 auto& out_mapping_ext_id = output_mapping.front()->external_id;
-                backedge_mem = get_external_memory(external_id.pid, external_id.idx);
+                backedge_mem = get_external_memory(out_mapping_ext_id.pid, out_mapping_ext_id.idx);
                 GPU_DEBUG_LOG << idx << ") Get backedge_mem from output_mapping_external_id.pid("
                                 << out_mapping_ext_id.pid << ")" << std::endl;
+                // when input layout is changed, set backedge_mem to nullptr and update it after first execution.
+                if (backedge_mem != nullptr && backedge_mem->get_layout() != initial_mem->get_layout()) {
+                    backedge_mem = nullptr;
+                }
             }
             if (backedge_mem != nullptr) {
                 body_network->set_input_data(back_edge.to, backedge_mem);
@@ -709,6 +710,11 @@ void loop_inst::restore_output_memory() {
             auto externalOutputPrim = _network.get_primitive(external_id.pid);
             if (!externalOutputPrim->outputs_allocated()) {
                 externalOutputPrim->set_output_memory(internal_mem, external_id.idx);
+            } else {
+                auto external_mem = externalOutputPrim->output_memory_ptr(external_id.idx);
+                if (external_mem->get_layout() != internal_mem->get_layout()) {
+                    externalOutputPrim->set_output_memory(internal_mem, external_id.idx);
+                }
             }
         } else {
             auto externalOutputPrim = _network.get_primitive(external_id.pid);
@@ -724,6 +730,12 @@ void loop_inst::restore_output_memory() {
         const auto& concat_output = concatenated_output_mem_mappings.at(i);
         concat_output->restore_concatenated_mem();
     }
+}
+
+void loop_inst::reset_mems() {
+    backedge_memory_mappings.clear();
+    concatenated_input_mem_mappings.clear();
+    concatenated_output_mem_mappings.clear();
 }
 
 }  // namespace cldnn

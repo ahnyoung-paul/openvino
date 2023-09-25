@@ -40,16 +40,15 @@ static int64_t read_scalar_value(memory::ptr mem, stream& stream) {
         break;
     }
     default:
-        throw std::runtime_error("Invalid data type : " + data_type_traits::name(prim_layout.data_type));
+        OPENVINO_THROW("Invalid data type : ", data_type_traits::name(prim_layout.data_type));
     }
     return trip_count;
 }
 
 template<typename T>
 static inline void validate_input_value(int64_t input) {
-    if (input < std::numeric_limits<T>::min() || input > std::numeric_limits<T>::max()) {
-        throw std::runtime_error("Invalid data value : " + std::to_string(input));
-    }
+    OPENVINO_ASSERT((input >= std::numeric_limits<T>::min() && input <= std::numeric_limits<T>::max()),
+                "Invalid data value : ", input);
 }
 
 static void write_scalar_value(memory::ptr mem, stream& stream, int64_t input) {
@@ -80,48 +79,9 @@ static void write_scalar_value(memory::ptr mem, stream& stream, int64_t input) {
         break;
     }
     default:
-        throw std::runtime_error("Invalid data type : " + data_type_traits::name(prim_layout.data_type));
+        OPENVINO_THROW("Invalid data type : ", data_type_traits::name(prim_layout.data_type));
     }
 }
-
-// static float convert_element1(int64_t i) { return static_cast<float>(i); }
-// static float convert_element1(int32_t i) { return static_cast<float>(i); }
-// static float convert_element1(uint32_t i) { return static_cast<float>(i); }
-// static float convert_element1(float f) { return f; }
-// static float convert_element1(half_t h) { return half_to_float(h); }
-
-// template <class T>
-// static std::string dump_to_str(memory::ptr mem, stream& stream) {
-//     mem_lock<T, mem_lock_type::read> lock(mem, stream);
-//     auto mem_ptr = lock.data();
-//     std::stringstream buffer;
-//     buffer << "{";
-//     for (size_t i = 0; i < lock.size(); ++i) {
-//         buffer << convert_element1(mem_ptr[i]) << ",";
-//     }
-//     buffer << "}";
-//     return buffer.str();
-// }
-
-// static std::string log_memory_to_str(memory::ptr mem, stream& stream) {
-//     auto mem_dt = mem->get_layout().data_type;
-//     if (mem_dt == cldnn::data_types::f32)
-//         return dump_to_str<float>(mem, stream);
-//     else if (mem_dt == cldnn::data_types::f16)
-//         return dump_to_str<half_t>(mem, stream);
-//     else if (mem_dt == cldnn::data_types::bin)
-//         return dump_to_str<uint32_t>(mem, stream);
-//     else if (mem_dt == cldnn::data_types::i64)
-//         return dump_to_str<int64_t>(mem, stream);
-//     else if (mem_dt == cldnn::data_types::i32)
-//         return dump_to_str<int32_t>(mem, stream);
-//     else if (mem_dt == cldnn::data_types::i8)
-//         return dump_to_str<int8_t>(mem, stream);
-//     else if (mem_dt == cldnn::data_types::u8)
-//         return dump_to_str<uint8_t>(mem, stream);
-//     else
-//         return "unknown_type_data";
-// }
 
 struct loop_impl : typed_primitive_impl<loop> {
     using parent = typed_primitive_impl<loop>;
@@ -210,6 +170,14 @@ struct loop_impl : typed_primitive_impl<loop> {
             body_current_iteration_mem = body_network->get_primitive(primitive->body_current_iteration_id)->output_memory_ptr();
         }
 
+        if (instance.is_dynamic()) {
+            instance.update_shape();
+            if (instance.shape_changed()) {
+                instance.preproc_memories_done = false;
+                instance.reset_mems();
+            }
+        }
+
         // TODO: preprocess working condition input layout are changed?
         if (!instance.preproc_memories_done) {
             instance.preprocess_output_memory(trip_count);
@@ -234,11 +202,8 @@ struct loop_impl : typed_primitive_impl<loop> {
         for (size_t i = 0; i < concatenated_input_mem_mappings.size(); ++i) {
             const auto& concatenated_input = concatenated_input_mem_mappings.at(i);
             memory::ptr mem = concatenated_input->get_sliced_mem(0);
-            if (mem) {
-                body_network->set_input_data(concatenated_input->sliced_data_prim->id(), mem);
-            } else {
-                CLDNN_ERROR_MESSAGE(instance.id(), "sliced input memory of loop is not allocated properly");
-            }
+            OPENVINO_ASSERT(mem != nullptr, instance.id(), "sliced input memory of loop is not allocated properly");
+            body_network->set_input_data(concatenated_input->sliced_data_prim->id(), mem);
         }
 
         std::vector<event::ptr> all_events;
@@ -253,11 +218,8 @@ struct loop_impl : typed_primitive_impl<loop> {
             for (size_t i = 0; i < concatenated_input_mem_mappings.size(); ++i) {
                 const auto& concatenated_input = concatenated_input_mem_mappings.at(i);
                 memory::ptr mem = concatenated_input->get_sliced_mem(current_iteration_idx);
-                if (mem) {
-                    concatenated_input->sliced_data_prim->set_output_memory(mem);
-                } else {
-                    CLDNN_ERROR_MESSAGE(instance.id(), "sliced input memory of loop is not allocated properly");
-                }
+                OPENVINO_ASSERT(mem != nullptr, instance.id(), "sliced input memory of loop is not allocated properly");
+                concatenated_input->sliced_data_prim->set_output_memory(mem);
             }
 
             // Set backedges
@@ -297,6 +259,9 @@ struct loop_impl : typed_primitive_impl<loop> {
             if (body_execution_condition_mem != nullptr) {
                 execution_condition = read_scalar_value(body_execution_condition_mem, body_network->get_stream());
             }
+            GPU_DEBUG_IF(!execution_condition) {
+                GPU_DEBUG_LOG << "body_exec_condition is false at "<< current_iteration_idx << " iterations" << std::endl;
+            }
 
             // Move output of sliced_data_prim to spliced_mems vector
             for (const auto& concat_output_mem_mapping : concatenated_output_mem_mappings) {
@@ -306,8 +271,6 @@ struct loop_impl : typed_primitive_impl<loop> {
             // update index & execution condition for the next iteration
             ++current_iteration_idx;
         }
-
-        std::cout << "Loop execution : " << current_iteration_idx << std::endl;
 
         // Reset network and wait for all collected events
         body_network->reset_execution(false);
@@ -322,24 +285,6 @@ struct loop_impl : typed_primitive_impl<loop> {
 
         instance.update_output_layout();
         instance.restore_output_memory();
-
-        // auto out_layout_vec = instance.get_impl_params()->output_layouts;
-        // std::cout << "Debug loop : " << instance.id()  << " - " << out_layout_vec.size()
-        //     << "output_memory_size: " << instance.output_memory_size() << std::endl;
-        // for (size_t i = 0; i < out_layout_vec.size(); i++) {
-        //     auto& out_layout = out_layout_vec[i];
-        //     std::stringstream ss;
-        //     ss << " * " << out_layout.to_short_string() << ", ";
-
-        //     if (i < instance.output_memory_size()) {
-        //         auto out_mem_ptr = instance.output_memory_ptr(i);
-        //         ss << log_memory_to_str(out_mem_ptr, stream);
-        //     } else {
-        //         ss << "has no output memory ptr";
-        //     }
-
-        //     std::cout << ss.str() << std::endl;
-        // }
 
         ev->set();
         return ev;

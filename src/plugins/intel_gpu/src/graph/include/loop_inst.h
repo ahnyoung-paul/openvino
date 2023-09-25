@@ -373,7 +373,6 @@ private:
             type(_type),
             total_bytes(initial_mem->get_layout().bytes_count()) {
                 validate_backedge_memory();
-                OPENVINO_ASSERT(from_mem != nullptr, "SINGLE_SHARED] from_mem is nullptr");
             }
 
         backedge_memory_mapping(
@@ -396,14 +395,12 @@ private:
                     auto mem = concat_mem_mapping->get_or_create_sliced_mem((iter - 1), initial_mem->get_layout());
                     to_primitive->set_output_memory(mem);
                 } else {
-                    throw std::runtime_error("Invalid iteration count" + std::to_string(iter));
+                    OPENVINO_THROW("Invalid iteration count", iter);
                 }
             } else if (type == SINGLE_SHARED) {
                 if (iter == 0) {
                     if (from_mem != nullptr) {
                         from_mem->copy_from(stream, *initial_mem);
-                    } else {
-                        std::cout << "pass copy because from_mem is null" << std::endl;
                     }
                 } else {
                     // In dynamic model, output memory is not defined before execution.
@@ -430,18 +427,14 @@ private:
         void validate_backedge_memory() {
             if (from_mem) {
                 const size_t from_mem_bytes = from_mem->get_layout().bytes_count();
-                if (from_mem_bytes != total_bytes) {
-                    throw std::runtime_error("Invalid backedge memory layout: "
-                        "size not matched with that of initial_mem");
-                }
+                OPENVINO_ASSERT((from_mem_bytes == total_bytes), "Invalid backedge memory layout: size(",
+                        from_mem_bytes, ") not matched with that of initial_mem(", total_bytes, ")");
             }
             if (concat_mem_mapping) {
                 for (const auto& from_mem : concat_mem_mapping->get_sliced_mems()) {
                     const size_t from_mem_bytes = from_mem->get_layout().bytes_count();
-                    if (from_mem_bytes != total_bytes) {
-                        throw std::runtime_error("Invalid backedge memory layout: "
-                            "size not matched with that of initial_mem");
-                    }
+                    OPENVINO_ASSERT((from_mem_bytes == total_bytes), "Invalid backedge concat memory layout: size(",
+                        from_mem_bytes, ") not matched with that of initial_mem(", total_bytes, ")");
                 }
             }
         }
@@ -469,6 +462,7 @@ public:
     void update_backedge_mapped_memory();
     void restore_output_memory();
     event::ptr set_output_memory(memory::ptr mem, bool check = true, size_t idx = 0) override;
+    void reset_mems();
 
     void save(BinaryOutputBuffer& ob) const override;
     void load(BinaryInputBuffer& ib) override;
