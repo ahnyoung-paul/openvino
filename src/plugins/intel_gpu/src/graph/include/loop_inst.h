@@ -202,34 +202,6 @@ public:
             }
         }
 
-        // To Set sliced output memory for concatenated_output_mem_mappings
-        void setup_sliced_output_memory(size_t iteration) const {
-            if (iteration < sliced_mems.size()) {
-                const auto& sliced_output_mem = sliced_mems.at(iteration);
-                sliced_data_prim->set_output_memory(sliced_output_mem);
-            }
-        }
-
-        // Store output of sliced_data_prim to sliced mems vector
-        // After execution of body network, sliced_data_prim will has output memory buffer
-        // current memory buffer move to sliced_mems and new memory buffer will be allocated in sliced_data_prim
-        void store_output_to_sliced_mems(size_t iteration) const {
-            if (iteration >= sliced_mems.size()) {
-                OPENVINO_ASSERT(sliced_data_prim != nullptr, "sliced_data_prim should not be nullptr");
-                auto output_mem_ptr = sliced_data_prim->output_memory_ptr();
-                OPENVINO_ASSERT(output_mem_ptr != nullptr, "output memory pointer of sliced_data_prim should not be nullptr");
-
-                bool recalc_data = !sliced_mems.empty();
-                sliced_mems.push_back(output_mem_ptr);
-                memory::ptr new_sliced_mem = engine.allocate_memory(output_mem_ptr->get_layout(), 0);
-                sliced_data_prim->set_output_memory(new_sliced_mem);
-                // Get the data for iteration_offset when sliced_mem is added to the iteration_offset af first
-                if (recalc_data) {
-                    calculate_concatenated_mem();
-                }
-            }
-        }
-
         // Get sliced mem for the iteration idx and copy data from external input to sliced mem
         // In the case of dynamic model, concatenated_mem is always non nullptr.
         memory::ptr get_sliced_mem(int64_t iteration) const {
@@ -264,7 +236,7 @@ public:
             return sliced_mems.at(idx);
         }
 
-        std::vector<memory::ptr> get_sliced_mems() const { return sliced_mems; }
+        std::vector<memory::ptr>& get_sliced_mems() const { return sliced_mems; }
 
         std::string to_string() const {
             std::stringstream ss;
@@ -386,42 +358,6 @@ private:
             total_bytes(initial_mem->get_layout().bytes_count()) {
                 validate_backedge_memory();
             }
-
-        void setup_iteration(int64_t iter) const {
-            if (type == CONCAT_OUTPUT) {
-                if (iter == 0) {
-                    to_primitive->set_output_memory(initial_mem);
-                } else if (iter > 0) {
-                    auto mem = concat_mem_mapping->get_sliced_mems().at((iter-1));
-                    to_primitive->set_output_memory(mem);
-                } else {
-                    OPENVINO_THROW("Invalid iteration count", iter);
-                }
-            } else if (type == SINGLE_SHARED) {
-                if (iter == 0) {
-                    if (from_mem != nullptr) {
-                        from_mem->copy_from(stream, *initial_mem);
-                    }
-                } else {
-                    // In dynamic model, output memory is not defined before execution.
-                    // After body network execution, replace input memory from initial_mem(external input memory) to output memory.
-                    if (from_mem == nullptr) {
-                        from_mem = from_primitive->output_memory_ptr();
-                        OPENVINO_ASSERT(from_mem != nullptr, "from_mem should not be null");
-                        to_primitive->set_output_memory(from_mem, 0);
-                    }
-                }
-            } else if (type == SINGLE) {
-                memory::ptr mem1 = to_primitive->output_memory_ptr();
-                if (iter == 0) {
-                    mem1->copy_from(stream, *initial_mem);
-                } else {
-                    memory::ptr mem2 = from_primitive->output_memory_ptr();
-                    to_primitive->set_output_memory(std::move(mem2));
-                    from_primitive->set_output_memory(mem1);
-                }
-            }
-        }
 
 private:
         void validate_backedge_memory() {

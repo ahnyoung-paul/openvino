@@ -110,6 +110,52 @@ struct loop_impl : typed_primitive_impl<loop> {
         _back_edges = node.get_back_edges();
     }
 
+    void set_body_output_memory(cldnn::network::ptr network, const std::shared_ptr<cldnn::primitive_inst>& inst, memory::ptr mem) const {
+        if (inst->is_input()) {
+            network->set_input_data(inst->id(), mem);
+        } else if (inst->is_output()) {
+            network->set_output_memory(inst->id(), mem);
+        } else {
+            inst->set_output_memory(mem, true);
+        }
+    }
+
+    void change_memory_buffer(const loop_inst::backedge_memory_mapping& mapping, network::ptr network, int64_t iter) const {
+        if (mapping.type == loop_inst::backedge_memory_mapping::CONCAT_OUTPUT) {
+            if (iter == 0) {
+                set_body_output_memory(network, mapping.to_primitive, mapping.initial_mem);
+            } else if (iter > 0) {
+                auto mem = mapping.concat_mem_mapping->get_sliced_mems().at(iter - 1);
+                set_body_output_memory(network, mapping.to_primitive, mem);
+            } else {
+                OPENVINO_THROW("Invalid iteration count", iter);
+            }
+        } else if (mapping.type ==  loop_inst::backedge_memory_mapping::SINGLE_SHARED) {
+            if (iter == 0) {
+                if (mapping.from_mem != nullptr) {
+                    mapping.from_mem->copy_from(network->get_stream(), *(mapping.initial_mem));
+                }
+            } else {
+                // In dynamic model, output memory is not defined before execution.
+                // After body network execution, replace input memory from initial_mem(external input memory) to output memory.
+                if (mapping.from_mem == nullptr) {
+                    mapping.from_mem = mapping.from_primitive->output_memory_ptr();
+                    OPENVINO_ASSERT(mapping.from_mem != nullptr, "from_mem should not be null");
+                    set_body_output_memory(network, mapping.to_primitive, mapping.from_mem);
+                }
+            }
+        } else if (mapping.type ==  loop_inst::backedge_memory_mapping::SINGLE) {
+            memory::ptr mem1 = mapping.to_primitive->output_memory_ptr();
+            if (iter == 0) {
+                mem1->copy_from(network->get_stream(), *(mapping.initial_mem));
+            } else {
+                memory::ptr mem2 = mapping.from_primitive->output_memory_ptr();
+                set_body_output_memory(network, mapping.to_primitive, std::move(mem2));
+                set_body_output_memory(network, mapping.from_primitive, std::move(mem1));
+            }
+        }
+    }
+
     event::ptr execute_impl(const std::vector<event::ptr>& events, loop_inst& instance) override {
         const auto& impl_params = instance.get_impl_params();
         const auto& primitive = impl_params->typed_desc<loop>();
@@ -219,17 +265,22 @@ struct loop_impl : typed_primitive_impl<loop> {
                 const auto& concatenated_input = concatenated_input_mem_mappings.at(i);
                 memory::ptr mem = concatenated_input->get_sliced_mem(current_iteration_idx);
                 OPENVINO_ASSERT(mem != nullptr, instance.id(), "sliced input memory of loop is not allocated properly");
-                concatenated_input->sliced_data_prim->set_output_memory(mem);
+                body_network->set_input_data(concatenated_input->sliced_data_prim->id(), mem);
             }
 
             // Set backedges
-            for (const auto& backedge_memory_mapping : backedge_memory_mappings) {
-                backedge_memory_mapping.setup_iteration(current_iteration_idx);
+            for (auto& backedge_memory_mapping : backedge_memory_mappings) {
+                change_memory_buffer(backedge_memory_mapping, body_network, current_iteration_idx);
             }
 
             // Set sliced output memory
+            // But, in dynamic model, sliced mem is not allocated yet.
             for (const auto& concat_output_mem_mapping : concatenated_output_mem_mappings) {
-                concat_output_mem_mapping->setup_sliced_output_memory(current_iteration_idx);
+                auto& sliced_mems = concat_output_mem_mapping->get_sliced_mems();
+                if (static_cast<size_t>(current_iteration_idx) < sliced_mems.size()) {
+                    auto sliced_data_prim_id = concat_output_mem_mapping->sliced_data_prim->id();
+                    body_network->set_output_memory(sliced_data_prim_id, sliced_mems.at(current_iteration_idx));
+                }
             }
 
             // execute body network
@@ -263,9 +314,15 @@ struct loop_impl : typed_primitive_impl<loop> {
                 GPU_DEBUG_LOG << "body_exec_condition is false at "<< current_iteration_idx << " iterations" << std::endl;
             }
 
-            // Move output of sliced_data_prim to spliced_mems vector
+            // Store output of sliced_data_prim to sliced mems vector
+            // After execution of body network, sliced_data_prim will has output memory buffer
+            // current memory buffer move to sliced_mems and new memory buffer will be allocated in sliced_data_prim
             for (const auto& concat_output_mem_mapping : concatenated_output_mem_mappings) {
-                concat_output_mem_mapping->store_output_to_sliced_mems(current_iteration_idx);
+                auto sliced_data_prim = concat_output_mem_mapping->sliced_data_prim;
+                auto output_mem_ptr = sliced_data_prim->output_memory_ptr();
+                memory::ptr new_sliced_mem = concat_output_mem_mapping->get_or_create_sliced_mem(current_iteration_idx,
+                                                                                                output_mem_ptr->get_layout());
+                body_network->set_output_memory(sliced_data_prim->id(), new_sliced_mem);
             }
 
             // update index & execution condition for the next iteration
