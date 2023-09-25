@@ -392,7 +392,7 @@ private:
                 if (iter == 0) {
                     to_primitive->set_output_memory(initial_mem);
                 } else if (iter > 0) {
-                    auto mem = concat_mem_mapping->get_or_create_sliced_mem((iter - 1), initial_mem->get_layout());
+                    auto mem = concat_mem_mapping->get_sliced_mems().at((iter-1));
                     to_primitive->set_output_memory(mem);
                 } else {
                     OPENVINO_THROW("Invalid iteration count", iter);

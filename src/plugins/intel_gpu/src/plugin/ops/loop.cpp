@@ -96,7 +96,6 @@ static void SetLoopInputOutputMap(ProgramBuilder& p,
         }
     }
 
-    use_new_shape_infer = false;
     // set output mapping
     if (use_new_shape_infer) {
         for (const auto& loop_output_desc : loop_output_descs) {
