@@ -416,7 +416,7 @@ void loop_inst::preprocess_output_memory(const int64_t trip_count) {
         GPU_DEBUG_LOG << i << ") output mapping - internal " << internal_id.to_string() << std::endl;
 
         memory::ptr memory = get_external_memory(external_id.pid, external_id.idx);
-        if (memory != nullptr) {
+        if (memory != nullptr && !shape_changed()) {
             auto& engine = _network.get_engine();
             if (output_mapping.axis < 0) {
                 // In dynamic model, Don't get output memory of loop node because body network's output layouts are not calculated
@@ -439,7 +439,6 @@ void loop_inst::preprocess_output_memory(const int64_t trip_count) {
                 auto memory_mapping_info = std::make_shared<concatenated_memory_mapping>(
                                                 output_mapping.axis, std::move(memory), sliced_mems, _network.get_stream(),
                                                 _network.get_engine(), num_elements_iteration, output_mapping.stride, start);
-                // TODO how to set index of output memory
                 memory_mapping_info->sliced_data_prim = body_network->get_primitive(internal_id.pid);
                 memory_mapping_info->concat_data_prim = get_network().get_primitive(external_id.pid);
                 concatenated_output_mem_mappings.push_back(memory_mapping_info);
@@ -454,7 +453,6 @@ void loop_inst::preprocess_output_memory(const int64_t trip_count) {
                 auto concat_output_memory_mapping = std::make_shared<concatenated_memory_mapping>(
                                                 output_mapping.axis, nullptr, std::vector<memory::ptr>{}, _network.get_stream(),
                                                 _network.get_engine(), 0, output_mapping.stride, start);
-                // TODO how to set index of output memory
                 concat_output_memory_mapping->sliced_data_prim = body_network->get_primitive(internal_id.pid);
                 concat_output_memory_mapping->concat_data_prim = get_network().get_primitive(external_id.pid);
                 concatenated_output_mem_mappings.push_back(concat_output_memory_mapping);
@@ -718,10 +716,18 @@ void loop_inst::restore_output_memory() {
             }
         } else {
             auto externalOutputPrim = _network.get_primitive(external_id.pid);
-            if (!externalOutputPrim->outputs_allocated()) {
+            if (!externalOutputPrim->outputs_allocated() || shape_changed()) {
                 auto concat_layout = _impl_params->get_output_layout(external_id.idx);
                 auto concat_mem = _network.get_engine().allocate_memory(concat_layout, 0);
                 externalOutputPrim->set_output_memory(concat_mem, external_id.idx);
+                auto iter = std::find_if(concatenated_output_mem_mappings.begin(),
+                                            concatenated_output_mem_mappings.end(),
+                                            [&](std::shared_ptr<loop_inst::concatenated_memory_mapping> &concat_output){
+                                                return concat_output->concat_data_prim->id() == external_id.pid;
+                                            });
+                if (iter != concatenated_output_mem_mappings.end()) {
+                    (*iter)->update_concatenated_mem(concat_mem);
+                }
             }
         }
     }
@@ -732,7 +738,7 @@ void loop_inst::restore_output_memory() {
     }
 }
 
-void loop_inst::reset_mems() {
+void loop_inst::reset_memory() {
     backedge_memory_mappings.clear();
     concatenated_input_mem_mappings.clear();
     concatenated_output_mem_mappings.clear();

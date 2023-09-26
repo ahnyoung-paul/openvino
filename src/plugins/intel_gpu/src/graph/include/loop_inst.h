@@ -186,6 +186,7 @@ public:
         }
 
         void restore_concatenated_mem() const {
+            OPENVINO_ASSERT(concatenated_mem != nullptr, "concatenated_mem should not be nullptr");
             mem_lock<uint8_t> concat_mem_lock{ concatenated_mem, stream };
             int64_t iteration_offset = bytes_iteration_initial_offset;
             for (const auto& sliced_mem : sliced_mems) {
@@ -364,13 +365,17 @@ private:
             if (from_mem) {
                 const size_t from_mem_bytes = from_mem->get_layout().bytes_count();
                 OPENVINO_ASSERT((from_mem_bytes == total_bytes), "Invalid backedge memory layout: size(",
-                        from_mem_bytes, ") not matched with that of initial_mem(", total_bytes, ")");
+                        from_mem_bytes, ",", from_mem->get_layout().to_short_string(),
+                        ") not matched with that of initial_mem(", total_bytes,
+                        ",", initial_mem->get_layout().to_short_string(), ")");
             }
             if (concat_mem_mapping) {
                 for (const auto& from_mem : concat_mem_mapping->get_sliced_mems()) {
                     const size_t from_mem_bytes = from_mem->get_layout().bytes_count();
-                    OPENVINO_ASSERT((from_mem_bytes == total_bytes), "Invalid backedge concat memory layout: size(",
-                        from_mem_bytes, ") not matched with that of initial_mem(", total_bytes, ")");
+                    OPENVINO_ASSERT((from_mem_bytes == total_bytes), "Invalid backedge memory layout: size(",
+                        from_mem_bytes, ",", from_mem->get_layout().to_short_string(),
+                        ") not matched with that of initial_mem(", total_bytes,
+                        ",", initial_mem->get_layout().to_short_string(), ")");
                 }
             }
         }
@@ -398,11 +403,22 @@ public:
     void update_backedge_mapped_memory();
     void restore_output_memory();
     event::ptr set_output_memory(memory::ptr mem, bool check = true, size_t idx = 0) override;
-    void reset_mems();
+    void reset_memory();
 
     void save(BinaryOutputBuffer& ob) const override;
     void load(BinaryInputBuffer& ib) override;
     void validate_backedges(loop_node const & node) const;
+
+    void update_shape() override {
+        primitive_inst::update_shape();
+    }
+    void debug_memory_status(std::string title) const {
+        std::cout << "************************************************************************" << std::endl;
+        std::cout << "** [" << title << "] concatenated_input_mem_mappings    : " << concatenated_input_mem_mappings.size() << std::endl;
+        std::cout << "** [" << title << "] concatenated_output_mem_mappings   : " << concatenated_output_mem_mappings.size() << std::endl;
+        std::cout << "** [" << title << "] backedge_memory_mappings           : " << backedge_memory_mappings.size() << std::endl;
+        std::cout << "************************************************************************" << std::endl;
+    }
 
 private:
     network::ptr body_network;
