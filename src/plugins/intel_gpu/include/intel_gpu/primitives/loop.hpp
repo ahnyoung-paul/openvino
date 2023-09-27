@@ -54,7 +54,7 @@ struct loop : public primitive_base<loop> {
     CLDNN_DECLARE_PRIMITIVE(loop)
 
     loop() : primitive_base("", {}),
-             max_num_iteration(0) {}
+             max_num_iterations(0) {}
 
     struct io_primitive_map {
         /// @brief Constructs a mapping from external input/output primitive to input/output primitive in body topology
@@ -171,7 +171,7 @@ struct loop : public primitive_base<loop> {
          const std::vector<io_primitive_map>& input_primitive_maps,
          const std::vector<io_primitive_map>& output_primitive_maps,
          const std::vector<backedge_mapping>& back_edges,
-         int64_t max_num_iteration = -1,
+         int64_t max_num_iterations = -1,
          const primitive_id& body_current_iteration_id = primitive_id(),
          const primitive_id& body_execution_condition_id = primitive_id(),
          const padding& output_padding = padding())
@@ -185,7 +185,7 @@ struct loop : public primitive_base<loop> {
               input_primitive_maps(input_primitive_maps),
               output_primitive_maps(output_primitive_maps),
               back_edges(back_edges),
-              max_num_iteration(max_num_iteration)
+              max_num_iterations(max_num_iterations)
               {}
 
     /// @brief Body program to be recurrently executed.
@@ -213,7 +213,7 @@ struct loop : public primitive_base<loop> {
     /// @brief Rules to transfer data from body outputs at one iteration to body input at the next iteration.
     std::vector<backedge_mapping> back_edges;
 
-    int32_t max_num_iteration;
+    int32_t max_num_iterations;
 
     size_t hash() const override {
         size_t seed = primitive::hash();
@@ -231,7 +231,7 @@ struct loop : public primitive_base<loop> {
         ob << input_primitive_maps;
         ob << output_primitive_maps;
         ob << back_edges;
-        ob << max_num_iteration;
+        ob << max_num_iterations;
     }
 
     void load(BinaryInputBuffer& ib) override {
@@ -244,7 +244,7 @@ struct loop : public primitive_base<loop> {
         ib >> input_primitive_maps;
         ib >> output_primitive_maps;
         ib >> back_edges;
-        ib >> max_num_iteration;
+        ib >> max_num_iterations;
     }
 
 protected:

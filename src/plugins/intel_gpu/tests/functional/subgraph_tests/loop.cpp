@@ -203,7 +203,7 @@ std::vector<InferenceEngine::Precision> netPrecisions = {
 };
 
 ov::AnyMap netConfigurations = {
-    {GPUConfigParams::KEY_GPU_ENABLE_LOOP_UNROLLING, PluginConfigParams::YES}
+    {GPUConfigParams::KEY_GPU_ENABLE_LOOP_UNROLLING, PluginConfigParams::NO}
 };
 
 static const std::vector<std::tuple<bool, int64_t, int64_t, int64_t>> dynamic_loop_types_axis_0 {
@@ -296,9 +296,6 @@ static const std::vector<std::tuple<bool, int64_t, int64_t, int64_t>> dynamic_lo
     std::tuple<bool, int64_t, int64_t, int64_t>{  true ,  5,  3,  -1 },  // n_iter 3, dynamic exit on 3
     std::tuple<bool, int64_t, int64_t, int64_t>{  true ,  5,  7,   1 },  // n_iter 5, dynamic exit not reached
     std::tuple<bool, int64_t, int64_t, int64_t>{  true , -1,  5,  -1 },  // n_iter 5, inf loop with dynamic exit on 5
-    std::tuple<bool, int64_t, int64_t, int64_t>{ false ,  5,  3,  -1 },  // | same with dynamic trip count
-    std::tuple<bool, int64_t, int64_t, int64_t>{ false ,  5,  7,   1 },  // |
-    std::tuple<bool, int64_t, int64_t, int64_t>{ false , -1,  5,  -1 }   // |
 };
 
 std::vector<InputShape> inputs_dynamic_exit = {

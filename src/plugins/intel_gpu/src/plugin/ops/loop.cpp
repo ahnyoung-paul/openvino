@@ -258,10 +258,7 @@ static void CreateCommonLoopOp(ProgramBuilder& p, const std::shared_ptr<ov::op::
     auto found = std::find_if(inputs.begin(), inputs.end(), [&](const cldnn::input_info& d) -> bool {
         return (d.pid == trip_count_id);
     });
-    if (found == inputs.end()) {
-        inputs.insert(inputs.begin(), cldnn::input_info(trip_count_id, 0));
-    }
-
+    if (found == inputs.end()) inputs.insert(inputs.begin(), cldnn::input_info(trip_count_id, 0));
     inputs.insert(inputs.begin()+1, cldnn::input_info(num_iteration_id, 0));
 
     GPU_DEBUG_LOG << "* trip_count                    : " << trip_count_id << std::endl;
@@ -273,7 +270,7 @@ static void CreateCommonLoopOp(ProgramBuilder& p, const std::shared_ptr<ov::op::
     const cldnn::loop loopPrimitive(
         layerName,                      /* layer name of this primitive (output id) */
         inputs,                         /* inputs of this layer */
-        body_program,                  /* body network */
+        body_program,                   /* body network */
         trip_count_id,                  /* trip_count data in outer network, always same as num_iterations in TI */
         first_execution_condition_id,   /* initial_execution_condition data in outer network, always true in TI */
         num_iteration_id,               /* actual number of iteration data in body network */

@@ -39,8 +39,8 @@ public:
     const primitive_id& get_initial_execution_id() const { return get_primitive()->first_execution_condition_id; }
     const primitive_id& get_current_iteration_id() const { return get_primitive()->body_current_iteration_id; }
     const primitive_id& get_execution_condition_id() const { return get_primitive()->body_execution_condition_id; }
-    const primitive_id& get_num_iteration_id() const { return get_primitive()->num_iteration_id; }
-    const int32_t get_max_num_iteration() const { return get_primitive()->max_num_iteration; }
+    const primitive_id& get_num_iterations_id() const { return get_primitive()->num_iteration_id; }
+    const int32_t get_max_num_iteration() const { return get_primitive()->max_num_iterations; }
 
     const std::vector<loop::io_primitive_map>& get_input_primitive_maps() const { return input_primitive_maps; }
     const std::vector<loop::io_primitive_map>& get_output_primitive_maps() const { return output_primitive_maps; }
@@ -432,8 +432,7 @@ private:
     primitive_id _initial_execution_id;
     primitive_id _current_iteration_id;
     primitive_id _condition_id;
-    primitive_id _num_iteration_id;
-    int64_t _max_iteration = 0;
+    primitive_id _num_iterations_id;
 };
 
 using loop_inst = typed_primitive_inst<loop>;

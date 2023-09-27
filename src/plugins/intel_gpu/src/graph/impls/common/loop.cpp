@@ -85,66 +85,6 @@ static void write_scalar_value(memory::ptr mem, stream& stream, int64_t input) {
     }
 }
 
-#ifdef DEBUG_BODY_NETWORK
-static float convert_element1(int64_t i) { return static_cast<float>(i); }
-static float convert_element1(int32_t i) { return static_cast<float>(i); }
-static float convert_element1(uint32_t i) { return static_cast<float>(i); }
-static float convert_element1(float f) { return f; }
-static float convert_element1(half_t h) { return half_to_float(h); }
-template <class T>
-static std::string dump_to_str(memory::ptr mem, stream& stream) {
-    mem_lock<T, mem_lock_type::read> lock(mem, stream);
-    auto mem_ptr = lock.data();
-    std::stringstream buffer;
-    buffer << "mem: " << mem << "(" << mem_ptr << ") - {";
-    for (size_t i = 0; i < lock.size(); ++i) {
-        buffer << convert_element1(mem_ptr[i]) << ",";
-    }
-    buffer << "}";
-    return buffer.str();
-}
-static std::string log_memory_to_str(memory::ptr mem, stream& stream) {
-    auto mem_dt = mem->get_layout().data_type;
-    if (mem_dt == cldnn::data_types::f32)
-        return dump_to_str<float>(mem, stream);
-    else if (mem_dt == cldnn::data_types::f16)
-        return dump_to_str<half_t>(mem, stream);
-    else if (mem_dt == cldnn::data_types::bin)
-        return dump_to_str<uint32_t>(mem, stream);
-    else if (mem_dt == cldnn::data_types::i64)
-        return dump_to_str<int64_t>(mem, stream);
-    else if (mem_dt == cldnn::data_types::i32)
-        return dump_to_str<int32_t>(mem, stream);
-    else if (mem_dt == cldnn::data_types::i8)
-        return dump_to_str<int8_t>(mem, stream);
-    else if (mem_dt == cldnn::data_types::u8)
-        return dump_to_str<uint8_t>(mem, stream);
-    else
-        return "unknown_type_data";
-}
-static void print_output_vec(const int64_t idx,  const std::shared_ptr<cldnn::primitive_inst> &instance, cldnn::stream &stream) {
-    if (!instance->outputs_allocated()) {
-        std::cout << "Debug loop[" << idx << "] : inst(" << instance << ")"
-                    << instance->id() << " doesn't allocate outputs" << std::endl;
-    }
-    auto out_layout_vec = instance->get_impl_params()->output_layouts;
-    std::cout << "Debug loop[" << idx << "] : inst(" << instance << ")" << instance->id()  << " - " << out_layout_vec.size()
-        << ", output_memory_size: " << instance->output_memory_size()
-        << ", can_be_optimized: " << instance->can_be_optimized() << std::endl;
-    for (size_t i = 0; i < out_layout_vec.size(); i++) {
-        auto& out_layout = out_layout_vec[i];
-        std::stringstream ss;
-        ss << " * " << out_layout.to_short_string() << ", ";
-        if (i < instance->output_memory_size()) {
-            auto out_mem_ptr = instance->output_memory_ptr(i);
-            ss << log_memory_to_str(out_mem_ptr, stream);
-        } else {
-            ss << "has no output memory ptr";
-        }
-        std::cout << ss.str() << std::endl;
-    }
-}
-#endif
 struct loop_impl : typed_primitive_impl<loop> {
     using parent = typed_primitive_impl<loop>;
     using parent::parent;
@@ -260,7 +200,7 @@ struct loop_impl : typed_primitive_impl<loop> {
         auto& outer_network = instance.get_network();
         auto& stream = outer_network.get_stream();
 
-        const auto max_num_iteration = primitive->max_num_iteration;
+        const auto max_num_iterations = primitive->max_num_iterations;
         auto body_network = instance.get_body_network();
         int64_t current_iteration_idx = 0;
 
@@ -275,7 +215,7 @@ struct loop_impl : typed_primitive_impl<loop> {
             memory::ptr trip_count_mem = outer_network.get_primitive(primitive->trip_count_id)->output_memory_ptr();
             trip_count = read_scalar_value(std::move(trip_count_mem), stream);
         } else {
-            trip_count = max_num_iteration;
+            trip_count = max_num_iterations;
         }
 
         // read initial execution condition from outer network
@@ -351,7 +291,7 @@ struct loop_impl : typed_primitive_impl<loop> {
 
         std::vector<event::ptr> all_events;
         std::vector<event::ptr> loop_carried_dep(events.begin(), events.end());
-        while (current_iteration_idx < trip_count && execution_condition) {
+        while (((trip_count <= 0) || (current_iteration_idx < trip_count)) && execution_condition) {
             if (body_current_iteration_mem != nullptr) {
                 write_scalar_value(body_current_iteration_mem, stream, current_iteration_idx);
                 body_network->set_input_data(primitive->body_current_iteration_id, body_current_iteration_mem);
@@ -383,21 +323,6 @@ struct loop_impl : typed_primitive_impl<loop> {
                 }
             }
 
-#ifdef DEBUG_BODY_NETWORK
-            {//TODO : Debug
-                std::cout << "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT" << std::endl;
-                std::cout << "TTTT " << current_iteration_idx << "-th iteration" << std::endl;
-                std::cout << "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT" << std::endl << std::endl;
-
-                if (current_iteration_idx > 0) {
-                    std::cout << "************************************************" << std::endl;
-                    std::cout << "*** OUT (Before execution)" << std::endl;
-                    for (auto& out : body_network->get_outputs()) {
-                        print_output_vec(current_iteration_idx, out, stream);
-                    }
-                }
-            }
-#endif
             // execute body network
             body_network->execute(loop_carried_dep);
 
@@ -420,20 +345,7 @@ struct loop_impl : typed_primitive_impl<loop> {
 
             if (!loop_carried_dep.empty())
                 stream.wait_for_events(loop_carried_dep);
-#ifdef DEBUG_BODY_NETWORK
-            {//TODO : DEBUG
-                std::cout << "************************************************" << std::endl;
-                std::cout << "*** IN" << std::endl;
-                for (auto& in_id : body_network->get_input_ids()) {
-                    auto input_inst = body_network->get_primitive(in_id);
-                    print_output_vec(current_iteration_idx, input_inst, stream);
-                }
-                std::cout << "*** OUT" << std::endl;
-                for (auto& out : body_network->get_outputs()) {
-                    print_output_vec(current_iteration_idx, out, stream);
-                }
-            }
-#endif
+
             // execution condition is the result of body network execution
             if (body_execution_condition_mem != nullptr) {
                 execution_condition = read_scalar_value(body_execution_condition_mem, body_network->get_stream());
@@ -458,23 +370,6 @@ struct loop_impl : typed_primitive_impl<loop> {
                     body_network->set_output_memory(sliced_data_prim->id(), new_sliced_mem);
                 }
             }
-
-#ifdef DEBUG_BODY_NETWORK
-            for (const auto& concat_output_mem_mapping : concatenated_output_mem_mappings) {
-                //TODO : DEBUG
-                {
-                    auto sliced_data_prim = concat_output_mem_mapping->sliced_data_prim;
-                    auto& sliced_mems = concat_output_mem_mapping->get_sliced_mems();
-                    std::stringstream ss;
-                    ss << "^^^^^^^^^^^ sliced_mems[" << sliced_data_prim->id() << "](" << concat_output_mem_mapping << ") {";
-                    for (auto& m : sliced_mems) {
-                        ss << m << ",";
-                    }
-                    ss << "}";
-                    std::cout << ss.str() << std::endl;
-                }
-            }
-#endif
 
             // update index & execution condition for the next iteration
             ++current_iteration_idx;

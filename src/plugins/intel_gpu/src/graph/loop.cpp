@@ -112,7 +112,7 @@ layout loop_inst::calc_output_layout(loop_node const& /*node*/, kernel_impl_para
     if (axis_to_iterate_through != -1) {
         const size_t ndim = loop_output_layout.get_rank();
         auto shape = loop_output_layout.get_dims();
-        shape[axis_to_iterate_through] = static_cast<int32_t>(prim->max_num_iteration);
+        shape[axis_to_iterate_through] = static_cast<int32_t>(prim->max_num_iterations);
         loop_output_layout.set_tensor(tensor(format::get_default_format(ndim), shape));
     }
 
@@ -120,25 +120,9 @@ layout loop_inst::calc_output_layout(loop_node const& /*node*/, kernel_impl_para
 }
 
 template<typename T>
-static std::vector<layout> get_output_layouts(kernel_impl_params const& impl_param, std::vector<T> body_outputs) {
+static std::vector<layout> get_output_layouts(kernel_impl_params const& impl_param, std::vector<T> body_outputs, const int32_t num_iterations = -1) {
     auto prim = impl_param.typed_desc<loop>();
     std::vector<layout> output_layouts;
-
-    auto& memory_deps = impl_param.memory_deps;
-
-    OPENVINO_ASSERT(memory_deps.count(0) > 0, "The count of memory deps(trip_count) should not be zero");
-    cldnn::mem_lock<int32_t, mem_lock_type::read> num_iteration_lock(memory_deps.at(0), impl_param.get_stream());
-    int32_t num_iterations = static_cast<int32_t>(*num_iteration_lock.data());
-    GPU_DEBUG_LOG << "* num_iterations      : " << num_iterations << std::endl;
-
-    OPENVINO_ASSERT(memory_deps.count(1) > 0, "The count of memory deps(current_iteration) should not be zero");
-    cldnn::mem_lock<int32_t, mem_lock_type::read> current_iterations_lock(memory_deps.at(1), impl_param.get_stream());
-    int32_t current_iterations = static_cast<int32_t>(*current_iterations_lock.data());
-    GPU_DEBUG_LOG << "* current_iterations  : " << current_iterations << std::endl;
-
-    if (current_iterations > 0) {
-        num_iterations = current_iterations;
-    }
 
     const auto& output_primitive_maps = prim->output_primitive_maps;
     for (auto& output_mapping : output_primitive_maps) {
@@ -170,9 +154,15 @@ std::vector<layout> loop_inst::calc_output_layouts(loop_node const& /*node*/, ke
         const auto& body_outputs = impl_param.inner_progs.front()->get_outputs();
         output_layouts = get_output_layouts<program_node*>(impl_param, body_outputs);
     } else {
+        auto& memory_deps = impl_param.memory_deps;
+        OPENVINO_ASSERT(memory_deps.count(1) > 0, "The count of memory deps(current_iteration) should not be zero");
+        cldnn::mem_lock<int32_t, mem_lock_type::read> current_iterations_lock(memory_deps.at(1), impl_param.get_stream());
+        int32_t current_iteration = static_cast<int32_t>(*current_iterations_lock.data());
+        GPU_DEBUG_LOG << "* current_iteration  : " << current_iteration << std::endl;
+
         OPENVINO_ASSERT(impl_param.inner_nets.size() == 1, "Loop(", prim->id, ") should have only one inner program");
         const auto& body_outputs = impl_param.inner_nets.front()->get_outputs();
-        output_layouts = get_output_layouts<std::shared_ptr<primitive_inst>>(impl_param, body_outputs);
+        output_layouts = get_output_layouts<std::shared_ptr<primitive_inst>>(impl_param, body_outputs, current_iteration);
     }
     return output_layouts;
 }
@@ -245,7 +235,7 @@ static void validate_mappings(loop_node const & node) {
     for (const auto& id : outer_inputs) {
         if (id == node.get_trip_count_id() ||
             id == node.get_initial_execution_id() ||
-            id == node.get_num_iteration_id()) {
+            id == node.get_num_iterations_id()) {
             continue;
         }
         const auto results = find_io_primitive_maps(node.get_input_primitive_maps(),
@@ -395,6 +385,7 @@ void loop_inst::update_mapped_memory() {
     if (!preproc_memories_done) {
         return;
     }
+
     update_output_mapped_memory();
     update_input_mapped_memory();
     update_backedge_mapped_memory();
@@ -402,11 +393,15 @@ void loop_inst::update_mapped_memory() {
 
 event::ptr loop_inst::set_output_memory(memory::ptr mem, bool check, size_t idx) {
     auto ev = primitive_inst::set_output_memory(mem, check, idx);
+    if (mem == nullptr) {
+        std::cout << "loop_inst::set_output_memory : " << mem << std::endl;
+        std::cout << "loop_inst::set_output_memory : " << mem->get_layout().to_short_string() << std::endl;
+    }
     update_mapped_memory();
     return ev;
 }
 
-void loop_inst::preprocess_output_memory(const int64_t trip_count) {
+void loop_inst::preprocess_output_memory(const int64_t num_iterations) {
     concatenated_output_mem_mappings.reserve(_output_primitive_maps.size());
     for (size_t i = 0; i < _output_primitive_maps.size(); ++i) {
         const auto& output_mapping = _output_primitive_maps.at(i);
@@ -426,8 +421,8 @@ void loop_inst::preprocess_output_memory(const int64_t trip_count) {
                 layout sliced_layout = output_prim->output_memory(internal_id.idx).get_layout();
 
                 std::vector<memory::ptr> sliced_mems;
-                sliced_mems.reserve(trip_count);
-                for (int32_t j = 0; j < trip_count; ++j) {
+                sliced_mems.reserve(num_iterations);
+                for (int32_t j = 0; j < num_iterations; ++j) {
                     memory::ptr sliced_mem = engine.allocate_memory(sliced_layout, 0);
                     sliced_mems.push_back(sliced_mem);
                 }
@@ -435,7 +430,7 @@ void loop_inst::preprocess_output_memory(const int64_t trip_count) {
                 const int64_t num_elements_batch = concatenated_memory_mapping::get_batch_size(
                     sliced_layout, output_mapping.axis);
                 const int64_t num_elements_iteration = sliced_layout.count() / num_elements_batch;
-                const int64_t start = output_mapping.start < 0? trip_count - 1: output_mapping.start;
+                const int64_t start = output_mapping.start < 0? num_iterations - 1: output_mapping.start;
                 auto memory_mapping_info = std::make_shared<concatenated_memory_mapping>(
                                                 output_mapping.axis, std::move(memory), sliced_mems, _network.get_stream(),
                                                 _network.get_engine(), num_elements_iteration, output_mapping.stride, start);
@@ -448,7 +443,7 @@ void loop_inst::preprocess_output_memory(const int64_t trip_count) {
             if (output_mapping.axis >= 0) {
                 // In dynamic model, we can't calculate num_element_iteration, start, and sliced_layout.
                 // will recalculate that parameters in backedge preprocessing map after first execution.
-                const int64_t start = output_mapping.start < 0? trip_count - 1: output_mapping.start;
+                const int64_t start = output_mapping.start < 0? num_iterations - 1: output_mapping.start;
                 // Can't calculate num_elements_iteration now, update num_elements_iteration after execution
                 auto concat_output_memory_mapping = std::make_shared<concatenated_memory_mapping>(
                                                 output_mapping.axis, nullptr, std::vector<memory::ptr>{}, _network.get_stream(),
@@ -463,7 +458,7 @@ void loop_inst::preprocess_output_memory(const int64_t trip_count) {
     }
 }
 
-void loop_inst::preprocess_input_memory(const int64_t trip_count) {
+void loop_inst::preprocess_input_memory(const int64_t num_iterations) {
     auto& engine = _network.get_engine();
     auto& iteration_mem = concatenated_input_mem_mappings;
     for (size_t memory_num = 0; memory_num < inputs_memory_count(); memory_num++) {
@@ -472,11 +467,11 @@ void loop_inst::preprocess_input_memory(const int64_t trip_count) {
                                                     _output_primitive_maps, input_external_id, true);
         if (input_map_ptrs.size() == 0) {
             OPENVINO_ASSERT((input_external_id == _trip_count_id
-                                || input_external_id == _num_iteration_id
+                                || input_external_id == _num_iterations_id
                                 || input_external_id == _initial_execution_id),
                                 id(), "loop primitive_map is incomplete "
                                 "input_external_id(", input_external_id, ") != _trip_count_id(", _trip_count_id, ")",
-                                "input_external_id(", input_external_id, ") != _num_iteration_id(", _num_iteration_id, ")",
+                                "input_external_id(", input_external_id, ") != _num_iterations_id(", _num_iterations_id, ")",
                                 " && input_external_id(", input_external_id, ") != _initial_execution_id(", _initial_execution_id, ")");
             continue;
         }
@@ -494,12 +489,12 @@ void loop_inst::preprocess_input_memory(const int64_t trip_count) {
                 layout sliced_layout
                     = body_network->get_primitive(internal_id.pid)->output_memory(internal_id.idx).get_layout();
                 std::vector<memory::ptr> sliced_mems;
-                if (trip_count < 0) {
+                if (num_iterations < 0) {
                     memory::ptr sliced_mem = engine.allocate_memory(sliced_layout, 0);
                     sliced_mems.push_back(sliced_mem);
                 } else {
-                    sliced_mems.reserve(trip_count);
-                    for (int j=0; j < trip_count; ++j) {
+                    sliced_mems.reserve(num_iterations);
+                    for (int j=0; j < num_iterations; ++j) {
                         memory::ptr sliced_mem = engine.allocate_memory(sliced_layout, 0);
                         sliced_mems.push_back(sliced_mem);
                     }
@@ -507,7 +502,7 @@ void loop_inst::preprocess_input_memory(const int64_t trip_count) {
                 const int64_t num_elements_batch = concatenated_memory_mapping::get_batch_size(
                     sliced_layout, input_map->axis);
                 const int64_t num_elements_iteration = sliced_layout.count() / num_elements_batch;
-                const int64_t start = input_map->start < 0? trip_count - 1: input_map->start;
+                const int64_t start = input_map->start < 0? num_iterations - 1: input_map->start;
                 // When max_iteration is -1, allocate first sliced_mem and allocate sliced memory if additional sliced mem is required
                 auto concatenated_input_mem_mapping_info = std::make_shared<concatenated_memory_mapping>(
                                                                 input_map->axis, memory, sliced_mems, _network.get_stream(),
@@ -648,9 +643,9 @@ loop_inst::typed_primitive_inst(network & network, loop_node const & node)
                                                 node.get_body_program(),
                                                 false,
                                                 network.is_primary_stream())) {
-    const primitive_id& num_iteration_id = node.get_num_iteration_id();
-    OPENVINO_ASSERT(node.get_program().get_node(num_iteration_id).is_type<mutable_data>(),
-                        node.id(), ": num_iteration is not mutable_data");
+    const primitive_id& num_iterations_id = node.get_num_iterations_id();
+    OPENVINO_ASSERT(node.get_program().get_node(num_iterations_id).is_type<mutable_data>(),
+                        node.id(), ": num_iterations is not mutable_data");
     OPENVINO_ASSERT(check_if_axis_is_set_properly(node), node.id(), ": axis is not set properly");
 
     set_inner_networks({body_network});
@@ -664,8 +659,7 @@ loop_inst::typed_primitive_inst(network & network, loop_node const & node)
     _initial_execution_id = node.get_initial_execution_id();
     _current_iteration_id = node.get_current_iteration_id();
     _condition_id = node.get_execution_condition_id();
-    _num_iteration_id = node.get_num_iteration_id();
-    _max_iteration = node.get_max_num_iteration();
+    _num_iterations_id = node.get_num_iterations_id();
 }
 
 void loop_inst::save(BinaryOutputBuffer& ob) const {
@@ -677,8 +671,7 @@ void loop_inst::save(BinaryOutputBuffer& ob) const {
     ob << _initial_execution_id;
     ob << _current_iteration_id;
     ob << _condition_id;
-    ob << _num_iteration_id;
-    ob << _max_iteration;
+    ob << _num_iterations_id;
     body_network->save(ob);
 }
 
@@ -692,8 +685,7 @@ void loop_inst::load(BinaryInputBuffer& ib) {
     ib >> _initial_execution_id;
     ib >> _current_iteration_id;
     ib >> _condition_id;
-    ib >> _num_iteration_id;
-    ib >> _max_iteration;
+    ib >> _num_iterations_id;
     body_network = std::make_shared<cldnn::network>(ib, get_network().get_stream_ptr(), get_network().get_engine(), get_network().is_primary_stream(), 0);
 }
 
@@ -705,6 +697,9 @@ void loop_inst::restore_output_memory() {
         if (output_mapping.axis < 0) {
             auto internalOutputPrim = get_body_network()->get_primitive(internal_id.pid);
             auto internal_mem = internalOutputPrim->output_memory_ptr(internal_id.idx);
+            if (internal_mem == nullptr) {
+                continue;
+            }
             auto externalOutputPrim = _network.get_primitive(external_id.pid);
             if (!externalOutputPrim->outputs_allocated()) {
                 externalOutputPrim->set_output_memory(internal_mem, external_id.idx);
