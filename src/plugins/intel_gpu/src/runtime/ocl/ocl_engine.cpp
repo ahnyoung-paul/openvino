@@ -129,6 +129,13 @@ bool ocl_engine::check_allocatable(const layout& layout, allocation_type type) c
     OPENVINO_ASSERT(supports_allocation(type) || type == allocation_type::cl_mem, "[GPU] Unsupported allocation type: ", type);
     auto used_mem = get_used_device_memory(allocation_type::usm_device) + get_used_device_memory(allocation_type::usm_host);
 #ifdef __unix__
+    if ((layout.bytes_count() + used_mem) > get_max_memory_size()) {
+        std::stringstream ss;
+        ss << "Fail to allocate memory ...." << "[GPU] Exceeded max size of memory allocation: Required "
+                    << layout.bytes_count() << " bytes, already occupied : " << used_mem <<  " bytes, "
+                    << "but available memory size is " << get_max_memory_size() <<  " bytes";
+        std::cout << ss.str() << std::endl;
+    }
     // Prevent from being killed by Ooo Killer of Linux
     OPENVINO_ASSERT(layout.bytes_count() + used_mem <= get_max_memory_size(),
             "[GPU] Exceeded max size of memory allocation: ",

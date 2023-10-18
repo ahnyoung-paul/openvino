@@ -722,6 +722,7 @@ void loop_inst::postprocess_output_memory(bool is_dynamic) {
             } else {
                 if (!output_allocated || shape_changed()) {
                     auto concat_layout = _impl_params->get_output_layout(external_id.idx);
+                    std::cout << id() << ">>>>>> post_processing : " << concat_layout << std::endl;
                     auto concat_mem = _network.get_engine().allocate_memory(concat_layout, 0);
                     external_outputs[external_id.idx] = concat_mem;
                     auto iter = std::find_if(concatenated_output_mem_mappings.begin(),

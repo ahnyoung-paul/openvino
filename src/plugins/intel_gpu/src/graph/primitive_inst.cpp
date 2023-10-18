@@ -990,6 +990,14 @@ primitive_inst::primitive_inst(network& network, program_node const& node, bool 
     , _can_share_buffer(node.can_share_buffer())
     , _is_constant(node.is_constant())
     , _needs_completion_event(is_any_user_cpu(node.get_users()) || node.is_output()) {
+    std::cout << "************************************************" << std::endl;
+    std::cout << "* net_id : " << _network.get_id() << std::endl;
+    std::cout << "* inst_id: " << _node->id() << std::endl;
+    std::cout << "* outputs : " << _outputs_memory_count << std::endl;
+    for (auto out_layout : _impl_params->output_layouts) {
+        std::cout << out_layout << std::endl;
+    }
+
     if (allocate_memory) {
         // In case when output is mutable_data primitive, and other users dependencies are only used for
         // synchronization, The output memory of such primitive will be fused with mutable_data
@@ -1012,6 +1020,7 @@ primitive_inst::primitive_inst(network& network, program_node const& node, bool 
                 if (user->is_type<mutable_data>())
                     _outputs[0] = user->as<mutable_data>().get_attached_memory_ptr();
         } else {
+            std::cout << "..... Run allocate_outputs()" << std::endl;
             _outputs = allocate_outputs();
         }
     }
@@ -1040,6 +1049,8 @@ primitive_inst::primitive_inst(network& network, program_node const& node, bool 
     _impl_params->strm = _network.get_stream_ptr();
     if (_outputs[0])
         max_output_layout_size = _outputs[0]->get_layout().get_tensor().count();
+
+    std::cout << "************************************************" << std::endl;
 }
 
 memory::ptr primitive_inst::allocate_internal_buffer(size_t idx, bool reset) {
@@ -1284,8 +1295,9 @@ memory::ptr primitive_inst::allocate_output(engine& _engine,
 
         return a;
     };
-
+    auto pshape = layout.get_partial_shape();
     layout = cldnn::layout(layout.get_partial_shape().get_max_shape(), layout.data_type, layout.format, layout.data_padding);
+
     bool usm_device_allocatable = true;
     const auto& total_device_input_mem_size = std::accumulate(impl_params.input_layouts.begin(), impl_params.input_layouts.end(), (uint64_t)0, device_mem_acc);
     if (total_device_input_mem_size > _engine.get_device_info().max_global_mem_size)
@@ -1311,6 +1323,19 @@ memory::ptr primitive_inst::allocate_output(engine& _engine,
 
     auto alloc_type = use_lockable_memory ? lockable_mem_type
                     : !usm_device_allocatable ? lockable_mem_type : allocation_type::usm_device;
+
+    if (_node.id() == "transpose:StatefulPartitionedCall/center_net_mobile_net_v2fpn_feature_extractor/model_1/model/Conv1/Conv2D__100") {
+        std::cout << "Try to allocate memory size : " << layout.bytes_count() << " for " << layout.to_short_string() << std::endl;
+    }
+
+    if (pshape.is_dynamic()
+        && (layout.bytes_count() > _engine.get_max_memory_size()
+        || layout.bytes_count() > _engine.get_max_used_device_memory(alloc_type))) {
+        std::cout << "Fail to allocate memory size : " << layout.bytes_count()
+                << " for " << layout.to_short_string() << " > "
+                << _engine.get_max_used_device_memory(alloc_type) << std::endl;
+        return nullptr;
+    }
 
     if (is_internal) {
         bool is_reorder_weights = _node.is_type<reorder>() && _node.as<reorder>().get_primitive()->weights_reorder_params;
