@@ -18,7 +18,9 @@
 namespace cldnn {
 
 memory::memory(engine* engine, const layout& layout, allocation_type type, bool reused)
-    : _engine(engine), _layout(layout), _bytes_count(_layout.bytes_count()), _type(type), _reused(reused) {
+    : _engine(engine), _layout(layout),
+        _bytes_count(_layout.bytes_count() > 0 ? _layout.bytes_count() : _layout.data_type_bytes()),
+        _type(type), _reused(reused) {
     if (!_reused && _engine) {
         _engine->add_memory_used(_bytes_count, type);
         GPU_DEBUG_LOG << "Allocate " << _bytes_count << " bytes of " << type << " allocation type"

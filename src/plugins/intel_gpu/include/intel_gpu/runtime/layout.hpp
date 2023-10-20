@@ -352,7 +352,9 @@ struct layout {
     padding data_padding;
 
     /// Number of bytes needed to store this layout
-    size_t bytes_count() const { return (ov::element::Type(data_type).bitwidth() * get_linear_size() + 7) >> 3; }
+    size_t bytes_count() const { return (data_type_bytes() * get_linear_size() + 7) >> 3; }
+
+    size_t data_type_bytes() const { return ov::element::Type(data_type).bitwidth(); }
 
     size_t get_rank() const;
 
