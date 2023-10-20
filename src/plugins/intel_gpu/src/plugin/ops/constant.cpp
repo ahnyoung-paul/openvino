@@ -100,21 +100,22 @@ static void create_data(ProgramBuilder& p, const ov::Shape& const_shape, const s
         p.primitive_ids[initialconstPrimID] = constPrimID;
         p.profiling_ids.push_back(initialconstPrimID);
     } else {
-        if (constLayout.count() == 0) {
+        auto allocatedLayout = constLayout;
+        if (allocatedLayout.count() == 0) {
             // Convert zero dimension constant layout to 1 dimension to fix the issue
             // that memory allocation is failed on windows when constant layout is zero dimension.
-            constLayout = cldnn::layout(ov::PartialShape({1}), constLayout.data_type, constLayout.format);
+            allocatedLayout = cldnn::layout(ov::PartialShape({1}), constLayout.data_type, constLayout.format);
         }
-        cldnn::memory::ptr mem = p.get_engine().allocate_memory(constLayout, false);
+        cldnn::memory::ptr mem = p.get_engine().allocate_memory(allocatedLayout, false);
         GPU_DEBUG_LOG << "[" << initialconstPrimID << ": constant] layout: "
-                        << constLayout.to_short_string() << ", mem_ptr(" << mem << ", " << mem->size() << " bytes)"<< std::endl;
+                        << allocatedLayout.to_short_string() << ", mem_ptr(" << mem << ", " << mem->size() << " bytes)"<< std::endl;
         auto& stream = p.get_engine().get_service_stream();
         cldnn::mem_lock<char> lock{mem, stream};
         auto buf = lock.data();
-        auto bufSize = constLayout.bytes_count();
+        auto bufSize = allocatedLayout.bytes_count();
 
         std::memcpy(&buf[0], &data[0], bufSize);
-        p.add_primitive(*op, cldnn::data(initialconstPrimID, mem));
+        p.add_primitive(*op, cldnn::data(initialconstPrimID, mem, constLayout));
         p.blobMemCache[cache_key] = initialconstPrimID;
         constPrimID = initialconstPrimID;
     }

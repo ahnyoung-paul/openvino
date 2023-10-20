@@ -23,6 +23,9 @@ struct typed_program_node<data> : public typed_program_node_base<data> {
 
 private:
     memory::ptr mem;
+
+public:
+    cldnn::layout output_layout;
 };
 
 using data_node = typed_program_node<data>;
@@ -34,7 +37,7 @@ class typed_primitive_inst<data> : public typed_primitive_inst_base<data> {
 
 public:
     static layout calc_output_layout(data_node const& node, kernel_impl_params const& impl_param) {
-        return node.get_attached_memory().get_layout();
+        return node.output_layout;
     }
 
     static std::string to_string(data_node const& node);

@@ -234,6 +234,9 @@ static const std::map<format::type, format_traits> format_traits_map {
 };
 
 const format_traits& format::traits(type fmt) {
+    if (format_traits_map.find(fmt) == format_traits_map.end()) {
+        std::cout << "[GPU] Format description is missing in fmt traits" << std::endl;
+    }
     OPENVINO_ASSERT(format_traits_map.find(fmt) != format_traits_map.end(), "[GPU] Format description is missing in fmt traits");
     return format_traits_map.at(fmt);
 }

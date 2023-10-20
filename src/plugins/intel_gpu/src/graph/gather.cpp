@@ -76,7 +76,9 @@ std::vector<layout> gather_inst::calc_output_layouts(gather_node const& /*node*/
     if (impl_param.has_fused_primitives()) {
         output_type = impl_param.get_fused_output_layout().data_type;
     }
-
+    if (desc->id == "gather:Gather_2299") {
+            input1_layout = layout({}, input1_layout.data_type, input1_layout.format);
+    }
     ov::op::v8::Gather op;
     op.set_batch_dims(desc->batch_dim);
     std::vector<ShapeType> output_shapes = {ShapeType()};

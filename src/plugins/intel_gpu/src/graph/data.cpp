@@ -28,13 +28,21 @@ memory::ptr attach_or_copy_data(network& network, memory::ptr mem) {
 }  // namespace
 
 data_node::typed_program_node(const std::shared_ptr<data> dprim, program& prog)
-    : parent(dprim, prog), mem(dprim->mem) {
+    : parent(dprim, prog), mem(dprim->mem), output_layout(dprim->out_layout) {
+    if (dprim->id == "convolutionbackpropdata:ConvolutionBackpropData_6420") {
+        std::cout << "Debug issue" << std::endl;
+    }
     constant = true;
     can_share_buffer(false);
     recalc_output_layout(false);
 }
 
 void data_node::attach_memory(memory::ptr new_mem, bool invalidate_users_if_changed) {
+    if (mem == nullptr ||
+        (output_layout.count() != 0
+            && mem->get_layout() == output_layout)) {
+            output_layout = new_mem->get_layout();
+    }
     mem = new_mem;
     recalc_output_layout(invalidate_users_if_changed);
 }
