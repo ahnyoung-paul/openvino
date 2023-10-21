@@ -27,8 +27,9 @@ namespace ov {
 namespace intel_gpu {
 
 template<class DATA_TYPE>
-static DATA_TYPE CreateScalarData(ProgramBuilder &p, const cldnn::primitive_id& id, ov::Shape& shape, cldnn::data_types dtype, int64_t num) {
-    auto mem = p.get_engine().allocate_memory({ shape, dtype, cldnn::format::bfyx });
+static DATA_TYPE CreateScalarData(ProgramBuilder &p, const cldnn::primitive_id& id, int64_t num) {
+    auto shape = is_dynamic? ngraph::Shape{} : ngraph::Shape{1, 1, 1, 1};
+    auto mem = p.get_engine().allocate_memory({ shape, ngraph::element::i64, cldnn::format::bfyx });
     cldnn::mem_lock<int64_t> ptr{mem, p.get_engine().get_service_stream()};
     *ptr.begin() = num;
     return {id, mem};
@@ -238,12 +239,10 @@ static void CreateCommonLoopOp(ProgramBuilder& p, const std::shared_ptr<ov::op::
 
     SetLoopInputOutputMap(p, op, inputs, input_primitive_maps, output_primitive_maps, back_edges);
 
-    auto shape = is_dynamic? ngraph::Shape{1} : ngraph::Shape{1, 1, 1, 1};
-    auto prec = ngraph::element::i64;
+
     if (current_iteration_input_op) {
-        current_iteration_input_op->set_output_type(0, prec, shape);
-        current_iteration_input_op->set_partial_shape(shape);
-        current_iteration_input_op->set_element_type(prec);
+        auto prec = current_iteration_input_op->get_element_type();
+        auto shape = current_iteration_input_op->get_partial_shape();
 
         auto increment_value_id = current_iteration_input_op->get_friendly_name() + "_inc";
         auto increment_value_op = std::make_shared<op::v0::Constant>(prec, shape, 1);
@@ -258,10 +257,10 @@ static void CreateCommonLoopOp(ProgramBuilder& p, const std::shared_ptr<ov::op::
         ov_model->add_results({result});
     }
 
-    // set trip count, num iteration primitives
-    // they should be mutable_data to prevent from being optimized out
+    // set num iteration primitives
+    // it should be mutable_data to prevent from being optimized out
     const cldnn::primitive_id num_iteration_id = layerName + "_numIteration";
-    cldnn::mutable_data num_iteration_data = CreateScalarData<cldnn::mutable_data>(p, num_iteration_id, shape, prec, 0);
+    cldnn::mutable_data num_iteration_data = CreateScalarData<cldnn::mutable_data>(p, num_iteration_id, 0);
 
     p.add_primitive(*op, std::move(num_iteration_data));
     inputs.insert(inputs.begin(), cldnn::input_info(num_iteration_id, 0));
