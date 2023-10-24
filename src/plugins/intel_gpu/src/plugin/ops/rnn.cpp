@@ -110,6 +110,7 @@ static void CreateLSTMCellOp(ProgramBuilder& p, const std::shared_ptr<ov::op::v4
     p.add_primitive(*op, cldnn::reorder(permuteID, inReshapeID, inputLayout));
 
 
+
     std::string hiddenInResh = inHiddenReshapeID + "_1";
     std::string hiddenInStr = inHiddenReorderID + "_1";
     std::string cellInResh = inHiddenReshapeID + "_2";
@@ -126,12 +127,27 @@ static void CreateLSTMCellOp(ProgramBuilder& p, const std::shared_ptr<ov::op::v4
     cldnn::layout gemmLayout = cldnn::layout(lstm_dtype, cldnn::format::bfyx, gemmSz);
     cldnn::tensor hiddenSz = cldnn::tensor{ lstm_batch_size, 1, lstm_hidden_size, 1 };
     cldnn::tensor cellCropSz = cldnn::tensor{0, 1, 0, 0};
-
+    if (layerName == "lstmcell:LSTMCell_3254")
+        std::cout << "x" << std::endl;
     std::string lstm_fc_id = layerName + "_fully_connected";
     std::string lstm_elt_id = layerName + "_lstm_elt";
 
+    std::string weightReshapeID = inputs[3].pid + "_Reshape";
+    std::string recurrentReshapeID = inputs[4].pid + "_Reshape";
+
+    //=======================================================
+    int weight_b = op->get_input_shape(3).at(0);
+    int weight_f = op->get_input_shape(3).at(1);
+    int rec_b = op->get_input_shape(4).at(0);
+    int rec_f = op->get_input_shape(4).at(1);
+    cldnn::tensor weightSz = cldnn::tensor{weight_b, weight_f, 1, 1};
+    cldnn::tensor recurSz = cldnn::tensor{rec_b, rec_f, 1, 1};
+
+    p.add_primitive(*op, cldnn::reshape(weightReshapeID, inputs[3], weightSz));
+    p.add_primitive(*op, cldnn::reshape(recurrentReshapeID, inputs[4], recurSz));
+    //=======================================================
     cldnn::primitive_id WRconcatID = layerName + "_WRconcat";
-    p.add_primitive(*op, cldnn::concatenation(WRconcatID, { weight, recurrent }, 1));
+    p.add_primitive(*op, cldnn::concatenation(WRconcatID, { weightReshapeID, recurrentReshapeID }, 1));
 
     cldnn::primitive_id FCInputReshapeID = "Reshape_bf_" + lstm_fc_id + "_for_input";
     cldnn::tensor FCInputReshapeSz = { lstm_batch_size, inputShape.spatial[0] + inStateShape.spatial[0], 1, 1 };
@@ -144,16 +160,26 @@ static void CreateLSTMCellOp(ProgramBuilder& p, const std::shared_ptr<ov::op::v4
                                          activation_params, cldnn::lstm_weights_order::fizo, 0));
 
 
-    cldnn::tensor outSz = cldnn::tensor{ lstm_batch_size, lstm_hidden_size, 1, 1 };
+//    cldnn::tensor outSz = cldnn::tensor{ lstm_batch_size, lstm_hidden_size, 1, 1 };
+    auto outSz = op->get_output_partial_shape(0).to_shape();
+    std::vector<int64_t> outSzPt;
+    for (auto i : outSz) {
+        outSzPt.push_back(i);
+    }
     cldnn::primitive_id outputHiddenCropID = layerName + "_hc";
-    cldnn::primitive_id outputHiddenID = layerName + ".out0";
+//    cldnn::primitive_id outputHiddenID = layerName + ".out0";
+    cldnn::primitive_id outputHiddenID = layerName + ".0";
     p.add_primitive(*op, cldnn::crop(outputHiddenCropID, cldnn::input_info(lstm_elt_id), hiddenSz, cldnn::tensor{0, 0, 0, 0}));
-    p.add_primitive(*op, cldnn::reshape(outputHiddenID, cldnn::input_info(outputHiddenCropID), outSz), {layerName});
+//    p.add_primitive(*op, cldnn::reshape(outputHiddenID, cldnn::input_info(outputHiddenCropID), outSz), {layerName});
+    p.add_primitive(*op, cldnn::reshape(outputHiddenID, cldnn::input_info(outputHiddenCropID), false, outSzPt, op->get_output_partial_shape(0)), {layerName});
 
     cldnn::primitive_id outputCellCropID = layerName + "_cc";
-    cldnn::primitive_id outputCellID = layerName + ".out1";
+//    cldnn::primitive_id outputCellID = layerName + ".out1";
+    cldnn::primitive_id outputCellID = layerName + ".1";
     p.add_primitive(*op, cldnn::crop(outputCellCropID, cldnn::input_info(lstm_elt_id), hiddenSz, cellCropSz));
-    p.add_primitive(*op, cldnn::reshape(outputCellID, cldnn::input_info(outputCellCropID), outSz));
+//    p.add_primitive(*op, cldnn::reshape(outputCellID, cldnn::input_info(outputCellCropID), outSz));
+    p.add_primitive(*op, cldnn::reshape(outputCellID, cldnn::input_info(outputCellCropID), false, outSzPt, op->get_output_partial_shape(1)));
+
 }
 
 static void CreateLSTMSequenceOp(ProgramBuilder& p, const std::shared_ptr<ov::op::v5::LSTMSequence>& op) {

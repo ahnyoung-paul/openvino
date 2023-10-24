@@ -92,7 +92,8 @@ format::type get_preferred_format(fully_connected_node const& node, const kernel
 
 layout fully_connected_inst::calc_output_layout(fully_connected_node const& node, kernel_impl_params const& impl_param) {
     auto desc = impl_param.typed_desc<fully_connected>();
-
+    if (node.id() == "lstmcell:LSTMCell_3254_fully_connected")
+        std::cout << "x" << std::endl;
     auto input_layout = impl_param.get_input_layout();
     auto input_pshape = input_layout.get_partial_shape();
     auto weights_layout = *impl_param.weights_layout;
@@ -138,6 +139,8 @@ std::vector<layout> fully_connected_inst::calc_output_layouts(fully_connected_no
     auto desc = impl_param.typed_desc<fully_connected>();
     auto input_layout = impl_param.get_input_layout();
     auto weights_layout = *impl_param.weights_layout;
+    if (node.id() == "lstmcell:LSTMCell_3254_fully_connected")
+        std::cout << "x" << std::endl;
 
     auto output_type = input_layout.data_type;
     if (data_type_traits::is_i8_u8(output_type) && desc->output_data_types[0])
@@ -153,6 +156,12 @@ std::vector<layout> fully_connected_inst::calc_output_layouts(fully_connected_no
         input_layout.get<ShapeType>(),
         weights_layout.get<ShapeType>()
     };
+    // FIX : This is not the final solution (W/A)
+    // Need to fix rnn cell to process partial shape
+    auto weights_shape = weights_layout.get<ShapeType>();
+    if (weights_shape.size() == 4) {
+        return {calc_output_layout(node, impl_param)};
+    }
 
     std::vector<ShapeType> output_shapes = ov::op::v0::shape_infer(&op, input_shapes);
 
