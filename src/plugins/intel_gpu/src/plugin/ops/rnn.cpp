@@ -167,19 +167,16 @@ static void CreateLSTMCellOp(ProgramBuilder& p, const std::shared_ptr<ov::op::v4
         outSzPt.push_back(i);
     }
     cldnn::primitive_id outputHiddenCropID = layerName + "_hc";
-//    cldnn::primitive_id outputHiddenID = layerName + ".out0";
-    cldnn::primitive_id outputHiddenID = layerName + ".0";
+    cldnn::primitive_id outputHiddenID = layerName + ".out0";
     p.add_primitive(*op, cldnn::crop(outputHiddenCropID, cldnn::input_info(lstm_elt_id), hiddenSz, cldnn::tensor{0, 0, 0, 0}));
 //    p.add_primitive(*op, cldnn::reshape(outputHiddenID, cldnn::input_info(outputHiddenCropID), outSz), {layerName});
     p.add_primitive(*op, cldnn::reshape(outputHiddenID, cldnn::input_info(outputHiddenCropID), false, outSzPt, op->get_output_partial_shape(0)), {layerName});
 
     cldnn::primitive_id outputCellCropID = layerName + "_cc";
-//    cldnn::primitive_id outputCellID = layerName + ".out1";
-    cldnn::primitive_id outputCellID = layerName + ".1";
+    cldnn::primitive_id outputCellID = layerName + ".out1";
     p.add_primitive(*op, cldnn::crop(outputCellCropID, cldnn::input_info(lstm_elt_id), hiddenSz, cellCropSz));
 //    p.add_primitive(*op, cldnn::reshape(outputCellID, cldnn::input_info(outputCellCropID), outSz));
     p.add_primitive(*op, cldnn::reshape(outputCellID, cldnn::input_info(outputCellCropID), false, outSzPt, op->get_output_partial_shape(1)));
-
 }
 
 static void CreateLSTMSequenceOp(ProgramBuilder& p, const std::shared_ptr<ov::op::v5::LSTMSequence>& op) {

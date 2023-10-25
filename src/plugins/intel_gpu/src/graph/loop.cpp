@@ -597,6 +597,7 @@ loop_inst::typed_primitive_inst(network & network, loop_node const & node)
     OPENVINO_ASSERT(node.get_program().get_node(num_iterations_id).is_type<mutable_data>(),
                         node.id(), ": num_iterations is not mutable_data");
 
+
     set_inner_networks({body_network});
     validate_backedges(node);
     validate_mappings(node);
