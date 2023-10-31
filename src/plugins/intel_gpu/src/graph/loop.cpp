@@ -139,11 +139,25 @@ static std::vector<layout> get_output_layouts(kernel_impl_params const& impl_par
 
         // set body output layout
         layout loop_output_layout = (*target)->get_output_layout();
-        const int64_t axis_to_iterate_through = output_mapping.axis;
-        if (axis_to_iterate_through != -1) {
-            auto shape = loop_output_layout.get_partial_shape();
-            shape[axis_to_iterate_through] = static_cast<int32_t>(num_iterations);
-            loop_output_layout.set_partial_shape(shape);
+        if (loop_output_layout.is_static()) {
+            const int64_t axis_to_iterate_through = output_mapping.axis;
+            if (axis_to_iterate_through != -1) {
+                auto shape = loop_output_layout.get_partial_shape();
+                shape[axis_to_iterate_through] = static_cast<int32_t>(num_iterations);
+                loop_output_layout.set_partial_shape(shape);
+            }
+        } else {
+            // if loop does not execute body network, we cannot get the output layout of output node with dynamic shape,
+            // thus, set to zero dim for dynamic dimension of output layout.
+            if (num_iterations == 0) {
+                auto shape = loop_output_layout.get_partial_shape();
+                for (size_t idx = 0; idx < shape.size(); idx++) {
+                    if (shape[idx].is_dynamic()) {
+                        shape[idx] = 0;
+                    }
+                }
+                loop_output_layout.set_partial_shape(shape);
+            }
         }
         output_layouts.push_back(loop_output_layout);
     }
