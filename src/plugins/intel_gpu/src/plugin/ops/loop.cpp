@@ -66,19 +66,23 @@ static void SetLoopInputOutputMap(ProgramBuilder& p,
         auto& body_input = body_inputs.at(loop_input_desc->m_body_parameter_index);
         cldnn::primitive_id internal_id = layer_type_name_ID(body_input);
 
-        GPU_DEBUG_LOG << "loop_input_descs[" << layerName << "] = {m_input_index:" << loop_input_desc->m_input_index << "(external_id: "
-                    << external_id << "), m_body_parameter_index:" << loop_input_desc->m_body_parameter_index
-                    << "(internal_id: " << internal_id << ")}" << std::endl;
-
         // set input mapping
         if (const auto& sliceInfo =
             std::dynamic_pointer_cast<ov::op::util::MultiSubGraphOp::SliceInputDescription>(loop_input_desc)) {
             // sliced input
             input_primitive_maps.emplace_back(external_id, internal_id, sliceInfo->m_axis,
                 sliceInfo->m_start, sliceInfo->m_end, sliceInfo->m_stride);
+            GPU_DEBUG_LOG << "loop_input_descs[" << layerName << "][SliceInputDescription] = {m_input_index:"
+                        << loop_input_desc->m_input_index << "(external_id: "
+                        << external_id << "), m_body_parameter_index:" << loop_input_desc->m_body_parameter_index
+                        << "(internal_id: " << internal_id << ")}" << std::endl;
         } else {
             // input without slicing
             input_primitive_maps.emplace_back(external_id, internal_id);
+            GPU_DEBUG_LOG << "loop_input_descs[" << layerName << "][InputDescription] = {m_input_index:"
+                        << loop_input_desc->m_input_index << "(external_id: "
+                        << external_id << "), m_body_parameter_index:" << loop_input_desc->m_body_parameter_index
+                        << "(internal_id: " << internal_id << ")}" << std::endl;
         }
 
         // set back edges
@@ -92,6 +96,7 @@ static void SetLoopInputOutputMap(ProgramBuilder& p,
             cldnn::primitive_id from_id = layer_type_name_ID(from);
 
             back_edges_maps.emplace_back(from_id, to_id);
+            GPU_DEBUG_LOG << "back_edge = {" << from_id << " => " << to_id << "}" << std::endl;
         }
     }
 

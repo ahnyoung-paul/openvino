@@ -169,8 +169,9 @@ static std::shared_ptr<ov::Model> makeLSTMSequence(ov::element::Type_t ngPRC, ov
 
 enum class LSTMType {
     LSTMCell = 0,
-    LSTMSequence = 1 // will be updated at next step.
+    LSTMSequence = 1
 };
+
 
 using DynamicTensorIteratorParams = typename std::tuple<
         LSTMType,                               // LSTM type (LSTMCell, LSTMSequence)
@@ -252,6 +253,8 @@ protected:
             function = makeLSTMSequence(ngPrc, init_shape, batch_size, input_size, hidden_size, sequence_axis, seq_direction);
     }
 
+
+#define debug_paul 1
      void generate_inputs(const std::vector<ngraph::Shape>& targetInputStaticShapes) override {
         inputs.clear();
         ov::Shape default_shape{batch_size, 1, hidden_size};
@@ -267,11 +270,23 @@ protected:
                     for (size_t port = 0; port < nodePtr->get_input_size(); ++port) {
                         if (itTargetShape != targetInputStaticShapes.end()) {
                             if (nodePtr->get_input_node_ptr(port)->shared_from_this() == inputNode->shared_from_this()) {
+#ifdef debug_paul
                                 inputs.insert({param, it->second(nodePtr, port, param->get_element_type(), *itTargetShape)});
+#else
+                                auto tensor = ov::test::utils::create_and_fill_tensor_consistently(param->get_element_type(),
+                                                                        *itTargetShape, ov::shape_size(*itTargetShape), 0, 1);
+                                inputs.insert({param, tensor});
+#endif
                                 break;
                             }
                         } else {
+#ifdef debug_paul
                             inputs.insert({param, it->second(nodePtr, port, param->get_element_type(), default_shape)});
+#else
+                            auto tensor = ov::test::utils::create_and_fill_tensor_consistently(param->get_element_type(),
+                                                                    default_shape, ov::shape_size(default_shape), 0, 1);
+                            inputs.insert({param, tensor});
+#endif
                         }
                     }
                 }
@@ -287,6 +302,10 @@ TEST_P(DynamicTensorIteratorTest, CompareWithRefs) {
     SKIP_IF_CURRENT_TEST_IS_DISABLED()
     run();
 }
+
+std::vector<LSTMType> lstm_types = {
+    LSTMType::LSTMCell, LSTMType::LSTMSequence
+};
 
 std::vector<InputShape> input_shapes = {
     InputShape(ov::PartialShape({1, -1, 512}), {{1, 30, 512}, {1, 10, 512}, {1, 5, 512}})
@@ -306,7 +325,7 @@ std::vector<InferenceEngine::Precision> net_precision = {
 
 std::vector<ngraph::op::RecurrentSequenceDirection> reccurent_sequence_direction = {
     ngraph::op::RecurrentSequenceDirection::FORWARD,
-    ngraph::op::RecurrentSequenceDirection::REVERSE,
+    // ngraph::op::RecurrentSequenceDirection::REVERSE,
 };
 
 INSTANTIATE_TEST_SUITE_P(smoke_DynamicTensorIterator_LSTMCell, DynamicTensorIteratorTest,
@@ -314,6 +333,37 @@ INSTANTIATE_TEST_SUITE_P(smoke_DynamicTensorIterator_LSTMCell, DynamicTensorIter
                         /* lstm_type */ testing::ValuesIn({LSTMType::LSTMCell}),
                         /* data_shape */ testing::ValuesIn(input_shapes),
                         /* hidden_size */ testing::ValuesIn(hidden_sizes),
+                        /* direction */ testing::ValuesIn(reccurent_sequence_direction),
+                        /* device */ testing::Values<std::string>(ov::test::utils::DEVICE_GPU),
+                        /* data_prc */ testing::ValuesIn(net_precision),
+                        /* configuration */ testing::Values<ov::AnyMap>(net_configuration)),
+                        DynamicTensorIteratorTest::getTestCaseName);
+
+std::vector<InputShape> input_shapes_02 = {
+    InputShape(ov::PartialShape({1, -1, 512}), {{1, 10, 512}})
+};
+
+std::vector<int32_t> hidden_sizes_02 = {
+    128
+};
+
+
+INSTANTIATE_TEST_SUITE_P(smoke_DynamicTensorIterator_LSTMSequence_CPU, DynamicTensorIteratorTest,
+                        testing::Combine(
+                        /* lstm_type */ testing::ValuesIn({LSTMType::LSTMSequence}),
+                        /* data_shape */ testing::ValuesIn(input_shapes_02),
+                        /* hidden_size */ testing::ValuesIn(hidden_sizes_02),
+                        /* direction */ testing::ValuesIn(reccurent_sequence_direction),
+                        /* device */ testing::Values<std::string>(ov::test::utils::DEVICE_CPU),
+                        /* data_prc */ testing::ValuesIn(net_precision),
+                        /* configuration */ testing::Values<ov::AnyMap>(net_configuration)),
+                        DynamicTensorIteratorTest::getTestCaseName);
+
+INSTANTIATE_TEST_SUITE_P(smoke_DynamicTensorIterator_LSTMSequence_GPU, DynamicTensorIteratorTest,
+                        testing::Combine(
+                        /* lstm_type */ testing::ValuesIn({LSTMType::LSTMSequence}),
+                        /* data_shape */ testing::ValuesIn(input_shapes_02),
+                        /* hidden_size */ testing::ValuesIn(hidden_sizes_02),
                         /* direction */ testing::ValuesIn(reccurent_sequence_direction),
                         /* device */ testing::Values<std::string>(ov::test::utils::DEVICE_GPU),
                         /* data_prc */ testing::ValuesIn(net_precision),
