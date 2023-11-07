@@ -109,7 +109,6 @@ static void CreateLSTMCellOp(ProgramBuilder& p, const std::shared_ptr<ov::op::v4
         }
 
         cldnn::tensor hiddenSz = cldnn::tensor{ lstm_batch_size, 1, lstm_hidden_size, 1 };
-        cldnn::tensor cellCropSz = cldnn::tensor{0, 1, 0, 0};
 
         cldnn::primitive_id outputHiddenCropID = layerName + "_hc";
         cldnn::primitive_id outputHiddenID = layerName + ".out0";
@@ -119,9 +118,11 @@ static void CreateLSTMCellOp(ProgramBuilder& p, const std::shared_ptr<ov::op::v4
 
         cldnn::primitive_id outputCellCropID = layerName + "_cc";
         cldnn::primitive_id outputCellID = layerName + ".out1";
-        p.add_primitive(*op, cldnn::crop(outputCellCropID, cldnn::input_info(lstm_elt_id), hiddenSz, cellCropSz));
+        p.add_primitive(*op, cldnn::crop(outputCellCropID, cldnn::input_info(lstm_elt_id), hiddenSz, cldnn::tensor{0, 1, 0, 0}));
         p.add_primitive(*op, cldnn::reshape(outputCellID, cldnn::input_info(outputCellCropID),
                         false, outSzPt, op->get_output_partial_shape(1)));
+        std::cout << "[op->get_output_partial_shape(0)][" << op->get_friendly_name() << "] : " << op->get_output_partial_shape(0) << std::endl;
+        std::cout << "[op->get_output_partial_shape(1)][" << op->get_friendly_name() << "] : " << op->get_output_partial_shape(1) << std::endl;
     } else {
         //  LSTM primitive works with single precision for all in/out/weights tensors
         auto lstm_dtype = cldnn::element_type_to_data_type(op->get_output_element_type(0));
