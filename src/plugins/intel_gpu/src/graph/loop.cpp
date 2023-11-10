@@ -398,6 +398,11 @@ void loop_inst::preprocess_output_memory(const int64_t num_iterations) {
             // In dynamic model, Don't get output memory of loop node because body network's output layouts are not calculated
             if (memory != nullptr) {
                 body_network->get_primitive(internal_id.pid)->set_output_memory(memory, true, internal_id.idx);
+                GPU_DEBUG_LOG << i << ") Set memory(" << reinterpret_cast<void*>(memory.get()) << ") from "
+                                << external_id.to_string() << " to " << internal_id.to_string() << std::endl;
+            }
+            GPU_DEBUG_IF(memory == nullptr) {
+                GPU_DEBUG_LOG << i << ") Do not set external memory into internal memory because external memory is nullptr" << std::endl;
             }
         } else {
             auto iter = std::find_if(concatenated_output_mem_mappings.begin(), concatenated_output_mem_mappings.end(),
@@ -655,17 +660,26 @@ void loop_inst::postprocess_output_memory(bool is_dynamic, int64_t current_itera
                 OPENVINO_ASSERT(internal_mem != nullptr, "internal_mem should not be nullptr");
                 if (!output_allocated) {
                     external_outputs[external_id.idx] = internal_mem;
+                    GPU_DEBUG_LOG << "[Internal: " << internal_id.to_string() << ", External: " << external_id.to_string() << " ] "
+                                    << "Set internal memory(" << internal_mem << ") to external output because external output memory is nullptr." << std::endl;
                 } else {
                     auto external_mem = _outputs[external_id.idx];
                     if (external_mem != internal_mem) {
                         if (external_mem->get_layout() != internal_mem->get_layout()) {
                             external_outputs[external_id.idx] = internal_mem;
+                            GPU_DEBUG_LOG << "[Internal: " << internal_id.to_string() << ", External: " << external_id.to_string() << " ] "
+                                            << "Set internal memory(" << internal_mem
+                                            << ") to external output for different layout between external_mem and internal_mem." << std::endl;
                         } else {
                             external_mem->copy_from(get_network().get_stream(), *internal_mem);
                             external_outputs[external_id.idx] = external_mem;
+                            GPU_DEBUG_LOG << "[Internal: " << internal_id.to_string() << ", External: " << external_id.to_string() << " ] "
+                                            << "Copy internal memory data to external memory data." << std::endl;
                         }
                     } else {
                         external_outputs[external_id.idx] = external_mem;
+                        GPU_DEBUG_LOG << "[Internal: " << internal_id.to_string() << ", External: " << external_id.to_string() << " ] "
+                                        << " Have same memory pointer." << std::endl;
                     }
                 }
             } else {
@@ -680,9 +694,17 @@ void loop_inst::postprocess_output_memory(bool is_dynamic, int64_t current_itera
                                                 });
                     if (iter != concatenated_output_mem_mappings.end()) {
                         (*iter)->update_concatenated_mem(concat_mem);
+                        GPU_DEBUG_LOG << "[Internal: " << internal_id.to_string() << ", External: " << external_id.to_string() << " ]"
+                                        << " Update concat_mem" << std::endl;
+                    }
+                    GPU_DEBUG_IF(iter == concatenated_output_mem_mappings.end()) {
+                        GPU_DEBUG_LOG << "[Internal: " << internal_id.to_string() << ", External: " << external_id.to_string() << " ]"
+                                        << " Can't find concatenated_memory_mapping" << std::endl;
                     }
                 } else {
                     external_outputs[external_id.idx] = _outputs[external_id.idx];
+                    GPU_DEBUG_LOG << "[Internal: " << internal_id.to_string() << ", External: " << external_id.to_string() << " ]"
+                                    << " No update concat_mem" << std::endl;
                 }
             }
         }
@@ -696,6 +718,7 @@ void loop_inst::postprocess_output_memory(bool is_dynamic, int64_t current_itera
 }
 
 void loop_inst::reset_memory() {
+    GPU_DEBUG_LOG << "Reset memory" << std::endl;
     backedge_memory_mappings.clear();
     concatenated_input_mem_mappings.clear();
     for (auto concat_mem_map : concatenated_output_mem_mappings) {
@@ -928,6 +951,7 @@ std::vector<event::ptr> loop_inst::handle_buffers_for_next_iteration(const loop_
             if (mapping.from_mem != nullptr) {
                 auto ev = mapping.from_mem->copy_from(body_network->get_stream(), *(mapping.initial_mem));
                 if (ev) event_vec = {ev};
+                GPU_DEBUG_LOG << iter << ") Copy data from inintal_mem(" << mapping.initial_mem << ")" << std::endl;
             }
         } else {
             // In dynamic model, output memory is not defined before execution.
@@ -936,6 +960,7 @@ std::vector<event::ptr> loop_inst::handle_buffers_for_next_iteration(const loop_
                 mapping.from_mem = mapping.from_primitive->output_memory_ptr();
                 OPENVINO_ASSERT(mapping.from_mem != nullptr, "from_mem should not be null");
                 set_memory_in_body_network(body_network, mapping.to_primitive, mapping.from_mem);
+                GPU_DEBUG_LOG << iter << ") Set memory from from_mem(" << mapping.from_mem << ") to " << mapping.to_primitive->id() << ")" << std::endl;
             }
         }
     } else if (mapping.type ==  loop_inst::backedge_memory_mapping::SINGLE) {
