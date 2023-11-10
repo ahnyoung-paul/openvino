@@ -175,18 +175,40 @@ reshape_inst::typed_primitive_inst(network& network, reshape_node const& node) :
                               input_layout.count(),
                               "Output layout of reshape primitive changes size of input buffer");
 
+    bool debug = false;
+    if (node.id() == "squeeze:Squeeze_1953") {
+        std::cout << node.id() << " inst is created .... " << std::endl;
+        debug = true;
+    }
+
     // if reshape operated in-place, postpone creation of the output until network run,
     // then create new memory object as the reinterpreted output of the previous primitive
     if (input_layout.is_static() && output_layout.is_static()) {
         if (!node.can_be_optimized()) {
             _outputs = allocate_outputs();
             _mem_allocated = true;
+            if (debug)
+                std::cout << "[reshape_inst::typed_primitive_inst] _outputs = allocate_outputs() : input/output are static"
+                    << ", node.can_be_optimized() is false" << std::endl;
         } else {
+            if (debug)
+                std::cout << "[reshape_inst::typed_primitive_inst] reuse_input() : input/output are static"
+                    << ", node.can_be_optimized() is true" << std::endl;
             reuse_input();
         }
     } else {
-        if (_exec_deps.size() > 0 && input_memory_ptr())
+        if (_exec_deps.size() > 0 && input_memory_ptr()) {
+            if (debug) {
+                std::cout << "[reshape_inst::typed_primitive_inst] reuse_input() : some input or output may are dynamic"
+                    << ",_exec_deps.size: " << _exec_deps.size() << ", input_memory_ptr: " << input_memory_ptr() << std::endl;
+            }
             reuse_input();
+        } else {
+            if (debug) {
+                std::cout << "[reshape_inst::typed_primitive_inst] do nothing :  some input or output may are dynamic"
+                    << ",_exec_deps.size: " << _exec_deps.size() << ", input_memory_ptr: " << input_memory_ptr() << std::endl;
+            }
+        }
     }
 }
 
