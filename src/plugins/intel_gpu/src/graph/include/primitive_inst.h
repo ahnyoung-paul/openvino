@@ -127,6 +127,8 @@ public:
     }
 
     memory& dep_memory(size_t index) const {
+        OPENVINO_ASSERT(dependencies().size() >= index, "invalid deps(", dependencies().size(),
+            "), index(", index, ")");
         auto dep = dependencies().at(index);
         return dep.first->output_memory(dep.second);
     }
