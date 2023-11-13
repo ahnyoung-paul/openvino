@@ -119,6 +119,7 @@ void remove_redundant_reorders::run(program& p) {
 
             node.can_be_optimized(true);
             LOG_NODE_REMOVAL(node.id());
+            std::cout << "**************************************" << node.id() << " is removed .." << std::endl;
             p.extract_and_remove(node);
 
             for (auto rl : recalc_list) {
@@ -176,6 +177,7 @@ void remove_redundant_reorders::run(program& p) {
             LOG_NODE_REMOVAL(r_dep_node.id());
             r_dep_node.can_be_optimized(true);
             p.add_optimized_primitive_info(r_dep_node.id());
+            std::cout << "**************************************" << r_dep_node.id() << " (step02) is removed .." << std::endl;
             p.extract_and_remove(r_dep_node);
             update_implementation(r_node);
         } else if (remove_current) {
@@ -187,6 +189,7 @@ void remove_redundant_reorders::run(program& p) {
             LOG_NODE_REMOVAL(r_node.id());
             r_node.can_be_optimized(true);
             p.add_optimized_primitive_info(r_node.id());
+            std::cout << "**************************************" << r_node.id() << " (step03) is removed .." << std::endl;
             p.extract_and_remove(r_node);
 
             r_dep_node.recalc_output_layout(false);
@@ -321,6 +324,7 @@ void remove_redundant_reorders::run(program& p) {
             }
 
             LOG_NODE_REMOVAL(r_node.id());
+            std::cout << "**************************************" << r_node.id() << " (step04) is removed .." << std::endl;
             p.extract_and_remove(
                 r_node);  // try to remove if possible (with respect to r_node not being marked as output)
         }
@@ -350,8 +354,10 @@ void remove_redundant_reorders::run(program& p) {
                 !user->has_fused_primitives()) {
                 auto l1 = node->get_output_layout();
                 auto l2 = user->get_output_layout();
+                auto l1_port_idx = node->get_dependency_with_port(0).second;
+                auto l2_port_idx = user->get_dependency_with_port(0).second;
 
-                if (l1.identical(l2))
+                if (l1.identical(l2) && (l1_port_idx == l2_port_idx))
                     r_nodes_to_remove.push_back(user);
             }
         }
@@ -371,6 +377,8 @@ void remove_redundant_reorders::run(program& p) {
                 itr++;
 
             LOG_NODE_REMOVAL(remove_reorder_node->id());
+            std::cout << "**************************************" << remove_reorder_node->id()
+                        << " (step05) is removed .." << std::endl;
             p.replace_all_usages(*remove_reorder_node, *node);
             p.add_optimized_primitive_info(remove_reorder_node->id());
             p.remove_all_connections(*remove_reorder_node);
@@ -423,6 +431,7 @@ void remove_redundant_reorders::run(program& p) {
                 p.add_optimized_primitive_info(node.id());
 
                 LOG_NODE_REMOVAL(node.id());
+                std::cout << "**************************************" << node.id() << " (step06) is removed .." << std::endl;
                 p.extract_and_remove(node);
             } else {
                 input.set_output_layout(old_output_layout_of_input, false);
@@ -460,6 +469,7 @@ void remove_redundant_reorders::run(program& p) {
         dep.merge_output_padding(node.get_output_layout().data_padding);
 
         LOG_NODE_REMOVAL(node.id());
+        std::cout << "**************************************" << node.id() << " (step07) is removed .." << std::endl;
         p.replace_all_usages(node, dep);
         p.add_optimized_primitive_info(node.id());
         p.remove_all_connections(node);
@@ -512,6 +522,7 @@ void remove_redundant_reorders::run(program& p) {
 
         dep.merge_output_padding(node->get_output_layout().data_padding);
         LOG_NODE_REMOVAL(node->id());
+        std::cout << "**************************************" << node->id() << " (step08) is removed .." << std::endl;
         p.replace_all_usages(*node, dep);
         p.get_processing_order().erase(node);
         p.add_optimized_primitive_info(node->id());
@@ -574,6 +585,7 @@ void remove_redundant_reorders::run(program& p) {
 
             // remove reorder node
             LOG_NODE_REMOVAL(node->id());
+            std::cout << "**************************************" << node->id() << " (step09) is removed .." << std::endl;
             node->can_be_optimized(true);
             p.add_optimized_primitive_info(node->id());
             p.extract_and_remove(*node);
@@ -648,6 +660,7 @@ void remove_redundant_reorders::run(program& p) {
 
         if (remove_dep) {
             LOG_NODE_REMOVAL(reshape_input_node.id());
+            std::cout << "**************************************" << reshape_input_node.id() << " (step10) is removed .." << std::endl;
             reshape_input_node.can_be_optimized(true);
             p.add_optimized_primitive_info(reshape_input_node.id());
             p.extract_and_remove(reshape_input_node);
@@ -655,6 +668,7 @@ void remove_redundant_reorders::run(program& p) {
 
         if (remove_current) {
             LOG_NODE_REMOVAL(reshape_node.id());
+            std::cout << "**************************************" << reshape_node.id() << " (step11) is removed .." << std::endl;
             reshape_node.can_be_optimized(true);
             p.add_optimized_primitive_info(reshape_node.id());
             p.extract_and_remove(reshape_node);
@@ -673,6 +687,7 @@ void remove_redundant_reorders::run(program& p) {
         auto& dep = node->get_dependency(0);
 
         LOG_NODE_REMOVAL(node->id());
+        std::cout << "**************************************" << node->id() << " (step12) is removed .." << std::endl;
         p.replace_all_usages(*node, dep);
         p.add_optimized_primitive_info(node->id());
         p.remove_all_connections(*node);

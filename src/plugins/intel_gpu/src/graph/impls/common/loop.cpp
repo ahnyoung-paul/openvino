@@ -165,6 +165,20 @@ struct loop_impl : typed_primitive_impl<loop> {
             return ev;
         }
 
+        for (size_t idx = 0; idx < instance.outputs_memory_count(); idx++) {
+            if (instance.output_mem_size() <= idx) {
+                continue;
+            }
+            auto mem_ptr = instance.output_memory_ptr(idx);
+            if (mem_ptr == nullptr) {
+                std::cout << "IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII loop_impl[" << instance.id()
+                    << "] out[" << idx << "][before] nullptr" << std::endl;
+            } else {
+                std::cout << "IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII loop_impl[" << instance.id()
+                    << "] out[" << idx << "][before] " << mem_ptr->buffer_ptr() << std::endl;
+            }
+        }
+
         //////////////////////////////////////////
         // memory pointers for body network
         //////////////////////////////////////////
@@ -286,6 +300,20 @@ struct loop_impl : typed_primitive_impl<loop> {
         if (is_dynamic)
             instance.update_output_layout();
         instance.postprocess_output_memory(is_dynamic, current_iteration_idx);
+
+        for (size_t idx = 0; idx < instance.outputs_memory_count(); idx++) {
+            if (instance.output_mem_size() <= idx) {
+                continue;
+            }
+            auto mem_ptr = instance.output_memory_ptr(idx);
+            if (mem_ptr == nullptr) {
+                std::cout << "IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII loop_impl[" << instance.id()
+                    << "] out[" << idx << "][after_] nullptr" << std::endl;
+            } else {
+                std::cout << "IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII loop_impl[" << instance.id()
+                    << "] out[" << idx << "][after_] " << mem_ptr->buffer_ptr() << std::endl;
+            }
+        }
 
         ev->set();
         return ev;

@@ -927,10 +927,6 @@ void primitive_inst::set_arguments() {
 }
 
 void primitive_inst::build_deps() {
-    if (id() == "squeeze:Squeeze_1960" || id() == "squeeze:Squeeze_1963") {
-        std::cout << id() << " run build_deps ........ " << std::endl;
-    }
-
     if (!_deps.empty())
         return;
 
@@ -1079,6 +1075,18 @@ primitive_inst::primitive_inst(network& network, program_node const& node, bool 
     _impl_params->strm = _network.get_stream_ptr();
     if (_outputs[0])
         max_output_layout_size = _outputs[0]->get_layout().get_tensor().count();
+    if (id() == "tensoriterator:LSTMSequence_69") {
+        std::cout << "cldnn.adl00" << std::endl;
+        std::cout << "EEEEEEEEEEEEEEE " << id() << " has " << _outputs.size() << " outputs .." << std::endl;
+        for (size_t i = 0; i < _outputs.size(); i++) {
+            if (_outputs[i] != nullptr)
+                std::cout << "EEEEEEEEE " << id() << " - out_layout " << get_output_layout(i).to_short_string()
+                            << " - " << _outputs[i]->buffer_ptr() << std::endl;
+            else
+                std::cout << "EEEEEEEEE " << id() << " - out_layout " << get_output_layout(i).to_short_string()
+                            << " - nullptr" << std::endl;
+        }
+    }
 }
 
 memory::ptr primitive_inst::allocate_internal_buffer(size_t idx, bool reset) {
@@ -1416,6 +1424,16 @@ std::vector<memory::ptr> primitive_inst::allocate_outputs(kernel_impl_params* up
                                             is_output,
                                             current_memory_ptr,
                                             runtime_alloc));
+        }
+    }
+    if (outputs.size() > 1) {
+        for (size_t i = 0; i < outputs.size(); i++) {
+            if (outputs[i] != nullptr) {
+                std::cout << "====== prim_inst[" << id() << "] - outputs[" << i << "]: "
+                    << outputs[i]->buffer_ptr() << std::endl;
+            } else {
+                std::cout << "====== prim_inst[" << id() << "] - outputs[" << i << "]: nullptr" << std::endl;
+            }
         }
     }
     return outputs;

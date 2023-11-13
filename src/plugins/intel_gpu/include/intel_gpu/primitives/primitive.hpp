@@ -129,7 +129,15 @@ public:
     std::vector<input_info> dependencies() const {
         auto result = input;
         auto deps = get_dependencies();
-        for (auto& pid : deps) result.push_back({pid, 0});
+        for (const auto& pid : deps) {
+            const primitive_id key = pid.get();
+            auto iter = std::find_if(result.begin(), result.end(), [&](input_info& in) {
+                return (in.pid == key);
+            });
+            // Do not add duplicated pid
+            if (iter == result.end())
+                result.push_back({pid, 0});
+        }
         return result;
     }
 

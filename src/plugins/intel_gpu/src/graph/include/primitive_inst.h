@@ -136,6 +136,7 @@ public:
         auto dep = dependencies().at(index);
         return dep.first->output_memory_ptr(dep.second);
     }
+    size_t output_mem_size() { return _outputs.size(); }
     memory& output_memory(size_t index = 0) const { return *_outputs[index]; }
     memory::ptr output_memory_ptr(size_t index = 0) const { return _outputs[index]; }
     size_t inputs_memory_count() const { return _inputs_memory_count; }

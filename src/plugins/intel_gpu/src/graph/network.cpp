@@ -1230,6 +1230,29 @@ void network::execute_impl(const std::vector<event::ptr>& events) {
     const size_t flush_frequency = needs_flushing ? 16 : 0;
     size_t executed_prims = 0;
 
+    std::vector<primitive_id> target_ids = {
+        // "result:Result_1965", "result:Result_1964", "result:Result_1967",
+        // "lstmcell:LSTMCell_1962_lstm_elt", "lstmcell:LSTMCell_1962_hc", "lstmcell:LSTMCell_1962_cc",
+        // "lstmcell:LSTMCell_1962.out1", "lstmcell:LSTMCell_1962.out0", "unsqueeze:Unsqueeze_1966",
+        // "parameter:Parameter_1954", "parameter:Parameter_1951", "parameter:Parameter_1949",
+        "tensoriterator:LSTMSequence_69",
+        "reorder:_reshape_input_result:Y_out_unsqueeze:LSTMSequence_69.0",
+        "reorder:_reshape_input_result:Ho_unsqueeze:LSTMSequence_69.1",
+        "reorder:_reshape_input_result:Co_unsqueeze:LSTMSequence_69.2",
+        "unsqueeze:LSTMSequence_69.2",
+        "unsqueeze:LSTMSequence_69.1",
+        "unsqueeze:LSTMSequence_69.0",
+        // "result:Y_out", "result:Ho", "result:Co"
+    };
+
+    auto matched_id = [&](primitive_id target) -> bool {
+        for (auto id : target_ids) {
+            if (id == target)
+                return true;
+        }
+        return false;
+    };
+
     for (auto& inst : _exec_order) {
         // Load binary dump for input layers
         GPU_DEBUG_IF(!debug_config->load_layers_raw_dump.empty()) {
@@ -1338,6 +1361,43 @@ void network::execute_impl(const std::vector<event::ptr>& events) {
 
         if (needs_flushing && executed_prims % flush_frequency == 0)
             get_stream().flush();
+
+        if (matched_id(inst->id())) {
+            std::stringstream ss;
+            ss << "********************************************************************************" << std::endl;
+            ss << curr_iter << "] Execute " << inst->id() << ", mem {";
+            for (size_t i = 0; i < inst->outputs_memory_count(); i++) {
+                auto mem_ptr = inst->output_memory_ptr(i);
+                if (mem_ptr != nullptr) {
+                    ss << "(" << mem_ptr << ", buffer: " << mem_ptr->buffer_ptr()
+                            << ", " << mem_ptr->get_layout().to_short_string() << "),";
+                } else {
+                    ss << "nullptr,";
+                }
+            }
+            ss << "}, optimized: " << (inst->can_be_optimized()? "True" : "False") << std::endl;
+            auto input_info_array = inst->get_impl_params()->desc->dependencies();
+            ss << "* inst->get_impl_params()->desc->dependencies(): " << input_info_array.size() << std::endl;
+            for (auto in : input_info_array) {
+                ss << "*** " << in.to_string() << std::endl;
+            }
+            ss << "* inst->dependencies() / mem_ptr = inst->dep_memory_ptr(i): " << std::endl;
+            auto& inst_deps = inst->dependencies();
+            for (size_t i = 0; i < inst_deps.size(); i++) {
+                auto& dep = inst_deps[i];
+                auto mem_ptr = inst->dep_memory_ptr(i);
+                ss << "*** " << dep.first->id() << ", port: " << dep.second << ", mem_ptr("
+                        << mem_ptr << ", buffer_ptr: " << mem_ptr->buffer_ptr() << ") " << std::endl;
+            }
+
+            ss << "* output layouts:" << std::endl;
+            auto& output_layouts = inst->get_impl_params()->output_layouts;
+            for (size_t i = 0; i < output_layouts.size(); i++) {
+                ss << output_layouts[i].to_string() << std::endl;
+            }
+            ss << "********************************************************************************" << std::endl;
+            std::cout << ss.str() << std::endl;
+        }
 
         // Dump output buffers of 'inst'
         GPU_DEBUG_IF(debug_config->dump_layers_path.length() > 0) {
