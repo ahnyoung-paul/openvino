@@ -70,8 +70,8 @@ void program_node::replace_dependency(size_t idx, std::pair<program_node*, int32
     new_dep.first->users.push_back(this);
 }
 
-void program_node::replace_dependency(size_t idx, program_node& new_dep, bool remove_if_dangling) {
-    return replace_dependency(idx, std::make_pair(&new_dep, 0), remove_if_dangling);
+void program_node::replace_dependency(size_t idx, program_node& new_dep, bool remove_if_dangling, int32_t new_port_idx) {
+    return replace_dependency(idx, std::make_pair(&new_dep, new_port_idx), remove_if_dangling);
 }
 
 void program_node::replace_dependency(program_node const& old_dep, std::pair<program_node*, int32_t> new_dep, bool remove_if_dangling) {
@@ -80,8 +80,8 @@ void program_node::replace_dependency(program_node const& old_dep, std::pair<pro
             return replace_dependency(i, new_dep, remove_if_dangling);
 }
 
-void program_node::replace_dependency(program_node const& old_dep, program_node& new_dep, bool remove_if_dangling) {
-    return replace_dependency(old_dep, std::make_pair(&new_dep, 0), remove_if_dangling);
+void program_node::replace_dependency(program_node const& old_dep, program_node& new_dep, bool remove_if_dangling, int32_t new_port_idx) {
+    return replace_dependency(old_dep, std::make_pair(&new_dep, new_port_idx), remove_if_dangling);
 }
 
 std::vector<primitive_id> program_node::get_dependencies_ids() const {
