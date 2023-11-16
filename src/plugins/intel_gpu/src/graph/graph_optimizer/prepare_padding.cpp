@@ -37,6 +37,7 @@ void prepare_padding::run(program& p) {
                 if ((input.get_preferred_impl_type() == impl_types::onednn || is_usr_onednn) &&
                     node.get_preferred_impl_type() == impl_types::ocl &&
                     static_cast<bool>(needed_padding)) {
+                        // PaulDEBUG
                     auto new_reorder = std::make_shared<reorder>(node.id() + "_padding_reorder_for_" + input.id(), input.id(), input.get_output_layout());
                     auto& new_reorder_node = p.get_or_create(new_reorder);
                     p.add_intermediate(new_reorder_node, node, input);

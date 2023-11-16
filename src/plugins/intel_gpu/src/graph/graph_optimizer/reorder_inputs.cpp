@@ -564,6 +564,7 @@ void insert_reorders_in_dir(program& p, const std::map<program_node*, format::ty
         if (in_layout.format == format::any || out_layout.format == format::any)
             continue;
 
+        // PaulDEBUG 인풋의 몇번째 아웃풋?
         auto reorder_pair = rf.get_reorder(travel_direction_wrapper<dir>::first(node, next)->id(),
                                            in_layout,
                                            out_layout);
@@ -980,6 +981,7 @@ void reorder_inputs::run(program& p, layout_optimizer& lo, reorder_factory& rf) 
 
                     static size_t idx = 0;
                     const auto prim_id = "broadcast:" + data.id() + "_broadcasted" + std::to_string(idx++);
+                    // PaulDEBUG 몇번째 아웃풋?
                     auto broadcast_prim = std::make_shared<cldnn::broadcast>(prim_id, cldnn::input_info(data.id()), gemm_layout.get_shape(), ov::AxisSet{});
 
                     auto& broadcast_node = p.get_or_create(broadcast_prim);
@@ -1024,6 +1026,7 @@ void reorder_inputs::run(program& p, layout_optimizer& lo, reorder_factory& rf) 
 
                     static size_t idx = 0;
                     const auto prim_id = "broadcast:" + data.id() + "_broadcasted" + std::to_string(idx++);
+                    // PaulDEBUG 몇번째 아웃풋?
                     auto broadcast_prim = std::make_shared<cldnn::broadcast>(prim_id, cldnn::input_info(data.id()), fc_layout.get_shape(), ov::AxisSet{});
 
                     auto& broadcast_node = p.get_or_create(broadcast_prim);

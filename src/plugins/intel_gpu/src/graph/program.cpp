@@ -804,8 +804,12 @@ void program::add_intermediate(program_node& node,
         while (itr != prev.get_users().end()) {
             auto usr = *itr;
             itr++;
-            if (usr->id() != node.id())
+            // apply for same output port between usr and next
+            auto usr_dep_port_idx = usr->get_port_from_deps(prev.id());
+            auto next_dep_port_idx = next.get_port_from_deps(prev.id());
+            if (usr->id() != node.id() && usr_dep_port_idx == next_dep_port_idx) {
                 usr->replace_dependency(prev, node);
+            }
         }
         mark_if_constant(prev);
         mark_if_constant(node);
@@ -903,6 +907,7 @@ void program::swap_names(program_node& node1, program_node& node2) {
     std::swap(_extract_id(node1), _extract_id(node2));
 }
 
+// TODO:
 void program::replace_all_usages(program_node& old_node, program_node& new_node, bool remove_if_dangling) {
     return replace_all_usages(old_node, std::make_pair(&new_node, 0), remove_if_dangling);
 }
@@ -913,6 +918,7 @@ void program::replace_all_usages(program_node& old_node, std::pair<program_node*
     auto itr = users.begin();
     while (itr != users.end()) {
         auto user = *(itr++);
+        auto port_idx = user->get_port_from_deps(old_node.id());
         user->replace_dependency(old_node, new_node, remove_if_dangling);
     }
 }

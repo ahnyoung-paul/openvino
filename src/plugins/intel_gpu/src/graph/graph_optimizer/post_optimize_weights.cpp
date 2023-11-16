@@ -102,6 +102,7 @@ void post_optimize_weights::optimize_weights(T& node, program& p) {
                     set_implementation(weights_reorder_node);
                 }
             } else {
+                // PaulDEBUG get_weights_reorder 에 prev_node_port_idx도 들어갸아함.
                 auto weights_reorder = _rf.get_weights_reorder(prev_node.id(), weights_reorder_params);
                 // insert new weights reorder node to topology
                 p.add_intermediate(weights_reorder.first, node, i, !weights_reorder.second);

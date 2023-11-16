@@ -35,6 +35,7 @@ void add_required_reorders::add_reorder(program& p, program_node* node, program_
     if (keep_original_dt)
         reorder_layout.data_type = node->get_output_layout().data_type;
 
+    // PaulDEBUG node의 몇번째 아웃풋?
     auto new_reorder = std::make_shared<reorder>(node->id() + "_reorder_" + usr->id(), node->id(), reorder_layout);
     auto& new_reorder_node = p.get_or_create(new_reorder);
     new_reorder_node.set_output_layout(reorder_layout, false);
@@ -72,6 +73,7 @@ void add_required_reorders::run(program& p) {
             auto out_layout = usr->get_output_layout();
             bool required_reorder = out_layout.data_type != dep_layout.data_type;
             if (required_reorder) {
+                // PaulDEBUG
                 auto new_reorder = std::make_shared<reorder>(dep.id() + "_reorder_" + usr->id(), dep.id(), out_layout.format, out_layout.data_type);
                 auto& new_reorder_node = p.get_or_create(new_reorder);
                 p.add_intermediate(new_reorder_node, *usr, dep);
@@ -89,6 +91,7 @@ void add_required_reorders::run(program& p) {
                 bool required_reorder = (format::dimension(out_layout.format) != format::dimension(dep_layout.format)) ||
                                         (usr->is_in_shape_of_subgraph() && (out_layout.data_type != dep_layout.data_type));
                 if (required_reorder) {
+                    // PaulDEBUG
                     auto new_reorder = std::make_shared<reorder>(dep.id() + "_reorder_" + usr->id(), dep.id(), out_layout.format, out_layout.data_type);
                     auto& new_reorder_node = p.get_or_create(new_reorder);
                     p.add_intermediate(new_reorder_node, *usr, dep);
@@ -127,6 +130,7 @@ void add_required_reorders::run(program& p) {
 
                 bool requires_reorder = out_layout.format != dep_layout.format && !valid_broadcast_case;
                 if (requires_reorder) {
+                    // PaulDEBUG
                     auto new_reorder = std::make_shared<reorder>(dep.id() + "_reorder_" + usr->id(), dep.id(), out_layout.format, dep_layout.data_type);
                     auto& new_reorder_node = p.get_or_create(new_reorder);
                     p.add_intermediate(new_reorder_node, *usr, dep);
@@ -144,6 +148,7 @@ void add_required_reorders::run(program& p) {
                 auto& dep = usr->as<mvn>().input();
                 cldnn::layout layout_wo_padding = dep.get_output_layout();
                 layout_wo_padding.data_padding = cldnn::padding{};
+                // PaulDEBUG
                 auto new_reorder = std::make_shared<reorder>(dep.id() + "_no_pad_reorder", dep.id(), layout_wo_padding);
                 auto& new_reorder_node = p.get_or_create(new_reorder);
                 p.add_intermediate(new_reorder_node, *usr, dep);
@@ -157,6 +162,7 @@ void add_required_reorders::run(program& p) {
             } else {
                 // oneDNN doesn't support padded memory, so add reorder directly if needed
                 for (size_t idx = 0; idx < usr->get_dependencies().size(); idx++) {
+                    // 여기에서 이미 idx를 찾아서 가지고 있어야 함.
                     auto& input = usr->get_dependency(idx);
                     if (!input.is_in_data_flow() || input.is_constant())
                         continue;
@@ -197,6 +203,7 @@ void add_required_reorders::run(program& p) {
                             layout_wo_padding.data_padding = cldnn::padding{};
                             layout_wo_padding.data_padding.lower_size().feature = layout_padding.data_padding.lower_size().feature;
                             layout_wo_padding.data_padding.upper_size().feature = layout_padding.data_padding.upper_size().feature;
+                            // PaulDEBUG 이때 input.id() 만이 아니라 idx도 같이 들어가야함.
                             auto new_reorder = std::make_shared<reorder>(input.id() + "_padding_reorder_" + usr->id(), input.id(), layout_wo_padding);
                             auto& new_reorder_node = p.get_or_create(new_reorder);
                             p.add_intermediate(new_reorder_node, *usr, idx);

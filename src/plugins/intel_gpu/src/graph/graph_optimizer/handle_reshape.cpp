@@ -174,6 +174,7 @@ void handle_reshape::run(program& p) {
                         new_reshape->mode = prim->mode;
                         new_reshape->input = prim->input;
                         auto& new_reshape_node = p.get_or_create(new_reshape);
+                        // PaulDEBUG input_port가 들어가야함.
                         user->replace_dependency(0, input_node);
                         p.add_intermediate(new_reshape_node, *user, 0);
                         if (new_reshape->input_size() == 2) {
@@ -232,6 +233,7 @@ void handle_reshape::run(program& p) {
 
                     auto reshape_users = node->get_users();
                     for (const auto& user : reshape_users) {
+                        // PaulDEBUG
                         auto reshape_output = std::make_shared<reorder>("reorder:_reshape_output_" + node->id(),
                                                                         user->id(),
                                                                         reshape_layout.format,

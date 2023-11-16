@@ -23,6 +23,7 @@ program_node& post_input_reorder::add_reorder(program& p,
                                               program_node* node,
                                               program_node* usr,
                                               const layout& reorder_layout) {
+    //PaulDEBUG node의 몇번째 아웃풋 버퍼인지가 들어가야 함.
     auto new_reorder = std::make_shared<reorder>(node->id() + "_reorder_" + usr->id(), node->id(), reorder_layout);
     auto& new_reorder_node = p.get_or_create(new_reorder);
 

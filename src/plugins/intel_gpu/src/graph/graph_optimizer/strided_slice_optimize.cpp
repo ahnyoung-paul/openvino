@@ -69,6 +69,7 @@ void strided_slice_optimize::run(program& p) {
                 }
             }
 
+            // PaulDEBUG 몇번째 아웃풋?
             auto reshape_prim = std::make_shared<reshape>(
                 "reshape_" + node->id(),
                 node->get_dependency(0).get_primitive()->id,
