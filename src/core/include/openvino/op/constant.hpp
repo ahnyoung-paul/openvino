@@ -465,7 +465,20 @@ private:
         auto output_size = std::min(num_elements, shape_size(m_shape));
         output_vector.reserve(output_size);
 
-        std::transform(first, first + output_size, std::back_inserter(output_vector), [](IN_T c) {
+        if (std::numeric_limits<IN_T>::has_infinity && std::numeric_limits<OUT_T>::has_infinity) {
+            IN_T inf_in = std::numeric_limits<IN_T>::infinity();
+            OUT_T inf_out = std::numeric_limits<OUT_T>::infinity();
+            for (size_t i = 0; i < output_size; i++) {
+                IN_T val_in = first[i];
+                if (val_in == -inf_in)
+                    output_vector.push_back(-inf_out);
+                else if (val_in == inf_in)
+                    output_vector.push_back(inf_out);
+                else
+                    output_vector.push_back(static_cast<OUT_T>(val_in));
+            }
+        } else {
+            std::transform(first, first + output_size, std::back_inserter(output_vector), [](IN_T c) {
 #ifdef __clang__
 #    pragma clang diagnostic push
 #    ifdef __has_warning
@@ -484,22 +497,30 @@ private:
 #    pragma warning(disable : 4018)
 #    pragma warning(disable : 4804)
 #endif
-            if (!std::is_same<OUT_T, IN_T>::value) {
-                OPENVINO_ASSERT(!std::numeric_limits<IN_T>::is_signed || std::numeric_limits<OUT_T>::lowest() <= c,
-                                "Cannot cast vector from ",
-                                Type,
-                                " constant to ",
-                                element::from<OUT_T>(),
-                                ". Some values are outside the range. Example: ",
-                                c);
-                OPENVINO_ASSERT(std::numeric_limits<OUT_T>::max() >= c,
-                                "Cannot cast vector from ",
-                                Type,
-                                " constant to ",
-                                element::from<OUT_T>(),
-                                ". Some values are outside the range. Example: ",
-                                c);
-            }
+                if (!std::is_same<OUT_T, IN_T>::value) {
+                    if (std::numeric_limits<IN_T>::is_signed && std::numeric_limits<OUT_T>::lowest() > c) {
+                        std::cout << "element::from<IN_T>() : " << element::from<IN_T>() << std::endl;
+                        std::cout << "std::numeric_limits<IN_T>::is_signed : " << std::numeric_limits<IN_T>::is_signed << std::endl;
+                        std::cout << "std::numeric_limits<OUT_T>::lowest() : " << std::numeric_limits<OUT_T>::lowest() << std::endl;
+                        std::cout << "Cannot cast vector from " << Type << " constant to "
+                                    << element::from<OUT_T>() << ". Some values are outside the range. Example: " << c << std::endl;
+                        std::cout << "issue ..." << std::endl;
+                    }
+                    OPENVINO_ASSERT(!std::numeric_limits<IN_T>::is_signed || std::numeric_limits<OUT_T>::lowest() <= c,
+                                    "Cannot cast vector from ",
+                                    Type,
+                                    " constant to ",
+                                    element::from<OUT_T>(),
+                                    ". Some values are outside the range. Example: ",
+                                    c);
+                    OPENVINO_ASSERT(std::numeric_limits<OUT_T>::max() >= c,
+                                    "Cannot cast vector from ",
+                                    Type,
+                                    " constant to ",
+                                    element::from<OUT_T>(),
+                                    ". Some values are outside the range. Example: ",
+                                    c);
+                }
 #if defined(__clang__)
 #    pragma clang diagnostic pop
 #elif defined(__GNUC__)
@@ -507,8 +528,9 @@ private:
 #elif defined(_MSC_VER)
 #    pragma warning(pop)
 #endif
-            return static_cast<OUT_T>(c);
-        });
+                return static_cast<OUT_T>(c);
+            });
+        }
     }
 
     template <element::Type_t Type,
