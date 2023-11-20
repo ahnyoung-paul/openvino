@@ -111,6 +111,7 @@ struct loop_impl : typed_primitive_impl<loop> {
     }
 
     event::ptr execute_impl(const std::vector<event::ptr>& events, loop_inst& instance) override {
+        auto step01 = std::chrono::high_resolution_clock::now();
         const auto& impl_params = instance.get_impl_params();
         const auto& primitive = impl_params->typed_desc<loop>();
         auto& outer_network = instance.get_network();
@@ -121,6 +122,7 @@ struct loop_impl : typed_primitive_impl<loop> {
         auto ev = stream.create_user_event(false);
         const auto is_dynamic = instance.is_dynamic();
 
+        auto step02 = std::chrono::high_resolution_clock::now();
         if (is_dynamic) {
             instance.update_shape();
             if (instance.shape_changed()) {
@@ -131,6 +133,7 @@ struct loop_impl : typed_primitive_impl<loop> {
 
         body_network->set_shape_predictor(outer_network.get_shape_predictor());
         OPENVINO_ASSERT(!primitive->num_iteration_id.empty(), "loop operation should have num_iteration_id");
+        auto step03 = std::chrono::high_resolution_clock::now();
 
         // shortcut of execution_condition memory in body network
         memory::ptr body_execution_condition_mem = nullptr;
@@ -144,9 +147,11 @@ struct loop_impl : typed_primitive_impl<loop> {
             write_scalar_value(body_current_iteration_mem, body_network->get_stream(), 0);
         }
 
+        auto step04 = std::chrono::high_resolution_clock::now();
         auto num_iterations = instance.get_num_iterations();
         GPU_DEBUG_LOG << "num_iterations : " << num_iterations << std::endl;
 
+        auto step05 = std::chrono::high_resolution_clock::now();
         // read trip_count from outer network
         int64_t trip_count = -1;
         if (!primitive->trip_count_id.empty()) {
@@ -163,7 +168,7 @@ struct loop_impl : typed_primitive_impl<loop> {
             trip_count = num_iterations > 0 ? num_iterations : primitive->max_num_iterations;
         }
         GPU_DEBUG_LOG << "trip_count : " << trip_count << std::endl;
-
+        auto step06 = std::chrono::high_resolution_clock::now();
         // read initial execution condition from outer network
         int64_t execution_condition = 1;
         if (!primitive->first_execution_condition_id.empty()) {
@@ -171,7 +176,7 @@ struct loop_impl : typed_primitive_impl<loop> {
             execution_condition = read_scalar_value(first_execution_condition_mem, stream);
         }
         GPU_DEBUG_LOG << "execution_condition: " << execution_condition << std::endl;
-
+        auto step07 = std::chrono::high_resolution_clock::now();
         // When execution_condition is false or trip_count is zero, return execute_impl without any body_network execution.
         if (!execution_condition || trip_count == 0) {
             // Update num_iterations (actual number of iterations)
@@ -182,14 +187,14 @@ struct loop_impl : typed_primitive_impl<loop> {
             ev->set();
             return ev;
         }
-
+        auto step08 = std::chrono::high_resolution_clock::now();
         if (!instance.preproc_memories_done) {
             instance.preprocess_output_memory(num_iterations);
             instance.preprocess_input_memory(num_iterations);
             instance.preprocess_backedge_memory();
             instance.preproc_memories_done = true;
         }
-
+        auto step09 = std::chrono::high_resolution_clock::now();
         const auto& concatenated_input_mem_mappings = instance.concatenated_input_mem_mappings;
         const auto& backedge_memory_mappings = instance.backedge_memory_mappings;
 
@@ -200,7 +205,7 @@ struct loop_impl : typed_primitive_impl<loop> {
                 e->wait();
             }
         }
-
+        auto step10 = std::chrono::high_resolution_clock::now();
         // Set sliced input data
         for (size_t i = 0; i < concatenated_input_mem_mappings.size(); ++i) {
             const auto& concatenated_input = concatenated_input_mem_mappings.at(i);
@@ -209,18 +214,25 @@ struct loop_impl : typed_primitive_impl<loop> {
             OPENVINO_ASSERT(mem != nullptr, instance.id(), "sliced input memory of loop is not allocated properly");
             body_network->set_input_data(concatenated_input->get_sliced_data_prim_id(), mem);
         }
-
+        auto step11 = std::chrono::high_resolution_clock::now();
         std::vector<event::ptr> all_events;
         std::vector<event::ptr> loop_carried_dep(events.begin(), events.end());
+        long in_step0201 = 0;
+        long in_step0302 = 0;
+        long in_step0403 = 0;
+        long in_step0504 = 0;
+        long in_step0605 = 0;
+        long in_step0601 = 0;
         while (((trip_count < 0) || (current_iteration_idx < trip_count)) && execution_condition) {
+            auto in_step01 = std::chrono::high_resolution_clock::now();
             auto prev_events = instance.preprocess_memory_for_body_network(current_iteration_idx);
             for (auto& ev : prev_events) {
                 loop_carried_dep.push_back(ev);
             }
-
+            auto in_step02 = std::chrono::high_resolution_clock::now();
             // execute body network
             body_network->execute(loop_carried_dep);
-
+            auto in_step03 = std::chrono::high_resolution_clock::now();
             loop_carried_dep.clear();
             for (const auto& backedge : _back_edges) {
                 event::ptr body_event;
@@ -239,6 +251,7 @@ struct loop_impl : typed_primitive_impl<loop> {
                 }
             }
 
+            auto in_step04 = std::chrono::high_resolution_clock::now();
             // Store output of sliced_data_prim to sliced mems vector
             // After execution of body network, sliced_data_prim will has output memory buffer
             // current memory buffer move to sliced_mems and new memory buffer will be allocated in sliced_data_prim
@@ -250,6 +263,7 @@ struct loop_impl : typed_primitive_impl<loop> {
                 }
             }
 
+            auto in_step05 = std::chrono::high_resolution_clock::now();
             // execution condition is the result of body network execution
             if (body_execution_condition_mem != nullptr) {
                 auto execution_id = primitive->body_execution_condition_id;
@@ -262,13 +276,22 @@ struct loop_impl : typed_primitive_impl<loop> {
             GPU_DEBUG_IF(!execution_condition) {
                 GPU_DEBUG_LOG << "body_exec_condition is false at "<< current_iteration_idx << " iteration idx" << std::endl;
             }
-
+            auto in_step06 = std::chrono::high_resolution_clock::now();
+            {
+                in_step0201 += std::chrono::duration_cast<std::chrono::microseconds>(in_step02 - in_step01).count();
+                in_step0302 += std::chrono::duration_cast<std::chrono::microseconds>(in_step03 - in_step02).count();
+                in_step0403 += std::chrono::duration_cast<std::chrono::microseconds>(in_step04 - in_step03).count();
+                in_step0504 += std::chrono::duration_cast<std::chrono::microseconds>(in_step05 - in_step04).count();
+                in_step0605 += std::chrono::duration_cast<std::chrono::microseconds>(in_step06 - in_step05).count();
+                in_step0601 += std::chrono::duration_cast<std::chrono::microseconds>(in_step06 - in_step01).count();
+            }
             current_iteration_idx++;
         }
 
         // Reset network and wait for all collected events
         body_network->reset_execution(false);
         stream.wait_for_events(all_events);
+        auto step12 = std::chrono::high_resolution_clock::now();
 
         // Update actual num iteration
         // update num_iterations (actual number of iterations)
@@ -276,10 +299,50 @@ struct loop_impl : typed_primitive_impl<loop> {
         write_scalar_value(num_actual_iterations_mem, stream, current_iteration_idx);
         GPU_DEBUG_LOG << "current_iteration_idx(" << primitive->num_iteration_id << ", "
                         << num_actual_iterations_mem << ")  : " << current_iteration_idx << std::endl;
-
+        auto step13 = std::chrono::high_resolution_clock::now();
         if (is_dynamic)
             instance.update_output_layout();
+        auto step14 = std::chrono::high_resolution_clock::now();
         instance.postprocess_output_memory(is_dynamic, current_iteration_idx);
+        auto step15 = std::chrono::high_resolution_clock::now();
+#ifdef GPU_DEBUG_CONFIG
+        {
+            const auto current_iter = instance.get_network().get_current_iteration_num();
+            auto print_time = [&](std::chrono::_V2::system_clock::time_point& before,
+                                    std::chrono::_V2::system_clock::time_point& after, std::string msg) {
+                auto time_diff_ms = static_cast<float>(std::chrono::duration_cast<std::chrono::microseconds>(after - before).count()) / 1000;
+                std::cout << "*" << std::setfill(' ') << std::setw(10) << "Time[" << instance.id()
+                        << "][" << current_iter << "][" << msg << "] "
+                        << ": " << time_diff_ms << " ms" << std::endl;
+            };
+            auto print_time_in = [&](int64_t curr_iters, long times, std::string msg) {
+                auto time_diff_ms = static_cast<float>(times) / curr_iters / 1000;
+                std::cout << "**" << std::setfill(' ') << std::setw(10) << "Time[" << instance.id() << "]["
+                        << current_iter << "][" << msg << "] "
+                        << ": " << time_diff_ms << " ms , sum : " << (time_diff_ms * curr_iters) << " ms " << std::endl;
+            };
+            print_time(step01, step02, "0102_init_execution");
+            print_time(step02, step03, "0203_update_shape");
+            print_time(step03, step04, "0304_set_exec_cond_&_curr_iter");
+            print_time(step04, step05, "0405_get_num_iterations");
+            print_time(step05, step06, "0506_get_trip_count");
+            print_time(step06, step07, "0607_first_exec_cond");
+            print_time(step07, step08, "0708_check_exec_cond");
+            print_time(step08, step09, "0809_preprocess_memories");
+            print_time(step09, step10, "0910_wait_concate_mems");
+            print_time(step10, step11, "1011_set_slice_mems");
+            print_time(step11, step12, "1112_execute_inner_body(" + std::to_string(current_iteration_idx) + ")");
+            print_time_in(current_iteration_idx, in_step0201, "inner_pre_execute");
+            print_time_in(current_iteration_idx, in_step0302, "inner_execute");
+            print_time_in(current_iteration_idx, in_step0403, "inner_post_execute_collect_evetns");
+            print_time_in(current_iteration_idx, in_step0504, "inner_post_execute_post_process_output_mem");
+            print_time_in(current_iteration_idx, in_step0605, "inner_post_execute_get_body_execution_cond");
+            print_time(step12, step13, "1213_write_current_iterations");
+            print_time(step13, step14, "1314_udpate_output_layouts");
+            print_time(step14, step15, "1415_postprocess_output_memory");
+            print_time(step01, step15, "Total latency");
+        }
+#endif
 
         ev->set();
         return ev;
