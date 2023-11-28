@@ -46,12 +46,22 @@ std::vector<layout> strided_slice_inst::calc_output_layouts(strided_slice_node c
         || (strides_data.empty() && !constant_mem.count(3))) {
         auto input0_pshape = input0_layout.get_partial_shape();
         auto input0_len = input0_pshape.size();
-        auto out_shape = ov::PartialShape::dynamic(input0_len);
+
+        size_t shrink_count = 0;
+        for (size_t i = 0; i < desc->shrink_axis_mask.size(); i++) {
+            if (desc->shrink_axis_mask[i])
+                shrink_count++;
+        }
+        auto out_shape = ov::PartialShape::dynamic(input0_len - shrink_count);
+
         if (input0_layout.is_dynamic()) {
             // fill with static shape until it finds dynamic
+            size_t idx = 0;
             for (size_t i = 0; i < input0_len; i++) {
+                if (desc->shrink_axis_mask[i])
+                    continue;
                 if (input0_pshape[i].is_static())
-                    out_shape[i] = input0_pshape[i];
+                    out_shape[idx++] = input0_pshape[i];
                 else
                     break;
             }
@@ -73,6 +83,7 @@ std::vector<layout> strided_slice_inst::calc_output_layouts(strided_slice_node c
         strides_shape
     };
 
+    op.set_friendly_name(desc->id);
     op.set_begin_mask(desc->begin_mask);
     op.set_end_mask(desc->end_mask);
     op.set_new_axis_mask(desc->new_axis_mask);
