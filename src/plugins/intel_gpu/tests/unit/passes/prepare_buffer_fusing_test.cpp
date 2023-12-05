@@ -954,10 +954,14 @@ TEST(prepare_buffer_fusing, in_place_concat_dynamic__static_dim_dyn_pad__reshape
     auto& engine = get_test_engine();
     auto in_dynamic_layout1 = layout{ ov::PartialShape{1, 32, -1, 128}, data_types::f32, format::bfyx };
     auto in_static_layout1  = layout{ ov::PartialShape{1, 32, 3, 128}, data_types::f32, format::bfyx };
-    auto in_layout2 = layout{ ov::PartialShape{ }, data_types::i32, format::bfyx };
+    auto in_dynamic_layout2 = layout{ ov::PartialShape{ -1, 1 }, data_types::i32, format::bfyx };
+    auto in_static_layout2 = layout{ ov::PartialShape{ 1, 1 }, data_types::i32, format::bfyx };
     auto in_layout3 = layout{ ov::PartialShape{ 2 }, data_types::i32, format::bfyx};
     auto const_mem = engine.allocate_memory(layout{ ov::PartialShape{ 1 }, data_types::i32, format::bfyx });
     set_values(const_mem, {1});
+    auto input1_mem = engine.allocate_memory(in_static_layout1);
+    auto input2_mem = engine.allocate_memory(in_static_layout2);
+    set_values(input2_mem, {1});
     auto input3_mem = engine.allocate_memory(in_layout3);
     set_values(input3_mem, {1, 1});
 
@@ -966,31 +970,25 @@ TEST(prepare_buffer_fusing, in_place_concat_dynamic__static_dim_dyn_pad__reshape
     topology.add(input_layout("input1", in_dynamic_layout1));
     topology.add(shape_of("shape_of", input_info("input1"), data_types::i32));
     topology.add(gather("gather", input_info("shape_of"), input_info("data_0"), 0, 0, {}, 0, true));
-    topology.add(input_layout("input2", in_layout2));
+    topology.add(input_layout("input2", in_dynamic_layout2));
     topology.add(reshape("reshape2", input_info("input2"), false, {},
                          ov::PartialShape{1}, reshape::reshape_mode::unsqueeze));
-    topology.add(concatenation("concat", { input_info("reshape2"), input_info("gather") }, 0));
+    topology.add(activation("relu2", input_info("reshape2"), activation_func::relu));
+    topology.add(concatenation("concat", { input_info("relu2"), input_info("gather") }, 0));
     topology.add(input_layout("input3", in_layout3));
     topology.add(eltwise("output", { input_info("concat"), input_info("input3") }, eltwise_mode::sum));
 
     ExecutionConfig config = get_test_default_config(engine);
     config.set_property(ov::intel_gpu::optimize_data(true));
     config.set_property(ov::intel_gpu::allow_new_shape_infer(true));
-    config.set_property(ov::intel_gpu::custom_outputs(std::vector<std::string>{"output", "reshape2"}));
     network net(engine, topology, config);
-
-    auto input1_mem = engine.allocate_memory(in_static_layout1);
-    auto input2_mem = engine.allocate_memory(layout{ ov::PartialShape{ 1 }, data_types::i32, format::bfyx });
-    set_values(input2_mem, {1});
-    // create scalar memory with empty shape by reinterpret_buffer for 1d layout memory.
-    input2_mem = engine.reinterpret_buffer(*input2_mem, in_layout2);
 
     net.set_input_data("input1", input1_mem);
     net.set_input_data("input2", input2_mem);
     net.set_input_data("input3", input3_mem);
 
     auto outputs = net.execute();
-    ASSERT_EQ(outputs.size(), 2);
+    ASSERT_EQ(outputs.size(), 1);
 
     const auto& reshape_node = net.get_primitive("reshape2")->get_node();
     const auto& concat_node = net.get_primitive("concat")->get_node();
@@ -1002,10 +1000,16 @@ TEST(prepare_buffer_fusing, in_place_concat_dynamic__static_dim_dyn_pad__reshape
     ASSERT_FALSE(reshape_node.can_be_optimized());
     ASSERT_TRUE(concat_node.can_be_optimized());
 
+    auto concat_mem = net.get_primitive("concat")->output_memory_ptr();
+    auto reshape_mem = net.get_primitive("reshape2")->output_memory_ptr();
+    auto gather_mem = net.get_primitive("gather")->output_memory_ptr();
+    ASSERT_EQ(concat_mem, reshape_mem);
+    ASSERT_EQ(concat_mem, gather_mem);
+
     auto out_l = net.get_output_layout("output");
     auto out_mem = outputs.at("output").get_memory();
     cldnn::mem_lock<int32_t> output_ptr(out_mem, get_test_stream());
-    std::vector<int32_t> ref_output = { 2, 33 };
+    std::vector<int32_t> ref_output = { 2, 2 };
     for (size_t x = 0; x < out_l.count(); ++x) {
         ASSERT_EQ(ref_output[x], output_ptr[x]);
     }

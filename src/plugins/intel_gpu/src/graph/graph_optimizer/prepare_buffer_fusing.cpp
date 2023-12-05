@@ -13,6 +13,7 @@
 #include "depth_to_space_inst.h"
 #include "resample_inst.h"
 #include "loop_inst.h"
+#include "gather_inst.h"
 #include "strided_slice_inst.h"
 #include "non_max_suppression_inst.h"
 #include "experimental_detectron_roi_feature_extractor_inst.hpp"
@@ -56,12 +57,12 @@ bool concat_in_place_optimization::match(concatenation_node& node) {
 // reverted condition - if any of this node's inputs is used by more than one primitive
 // and is not optimized concatenation then do not fuse buffers
 // TODO: we need add padding support for all optimized kernels to remove this condition
-auto available_pred = [](const program_node& input) {
+auto available_pred = [](const program_node& input, bool is_allow_new_shape_infer) {
     if (!input.is_type<pooling>() && !input.is_type<convolution>() && !input.is_type<quantize>() &&
         !input.is_type<activation>() && !input.is_type<deconvolution>() && !input.is_type<concatenation>() &&
         !input.is_type<crop>() && !input.is_type<eltwise>() && !input.is_type<resample>() &&
         !input.is_type<reorder>() && !(input.is_type<permute>() && !input.as<permute>().is_rotating_except_batch()) &&
-        !input.is_type<strided_slice>())
+        !input.is_type<strided_slice>() && (is_allow_new_shape_infer ? (!input.is_type<reshape>() && !input.is_type<gather>()) : true))
         return false;
     return true;
 };
@@ -109,21 +110,23 @@ bool concat_in_place_optimization::match(const program_node& concat_node,
     lower_padd_in_axis = std::max(lower_padd_in_axis,
                                   pred_params[0].get_output_layout().data_padding.lower_size().sizes(def_fmt)[concat_axis]);
 
+    bool is_allow_new_shape_infer = concat_node.get_program().get_config().get_property(ov::intel_gpu::allow_new_shape_infer);
     size_t idx = 0;
     for (auto pred : pred_nodes) {
-        if (!available_pred(*pred.first))
+        if (!available_pred(*pred.first, is_allow_new_shape_infer))
             return false;
         if (pred.first->is_output())
             return false;
         // if an input is marked as network output, prevent optimizations
         // which would affect a form of its output (unless debug flag is set),
         // we also need to restrict input types to those which support padding on all axis
-        if (!pred.first->is_dynamic() || is_runtime) {
-            if (!pred.first->is_padding_supported(concat_axis, lower_padd_in_axis))
+        if ((is_allow_new_shape_infer? pred.first->is_dynamic() : !pred.first->is_dynamic()) || is_runtime) {
+            if (!pred.first->is_padding_supported(concat_axis, lower_padd_in_axis)) {
                 return false;
+            }
         }
         // TODO: handle optimized reshape
-        if (pred.first->is_type<reshape>() && pred.first->can_be_optimized())
+        if (!is_allow_new_shape_infer && pred.first->is_type<reshape>() && pred.first->can_be_optimized())
             return false;
         // TODO: Investigate if this condition is needed
         if (pred.first->get_users().size() > 2)
