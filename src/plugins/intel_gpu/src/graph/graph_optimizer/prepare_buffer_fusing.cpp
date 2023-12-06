@@ -62,7 +62,7 @@ auto available_pred = [](const program_node& input, bool is_allow_new_shape_infe
         !input.is_type<activation>() && !input.is_type<deconvolution>() && !input.is_type<concatenation>() &&
         !input.is_type<crop>() && !input.is_type<eltwise>() && !input.is_type<resample>() &&
         !input.is_type<reorder>() && !(input.is_type<permute>() && !input.as<permute>().is_rotating_except_batch()) &&
-        !input.is_type<strided_slice>() && (is_allow_new_shape_infer ? (!input.is_type<reshape>() && !input.is_type<gather>()) : true))
+        !input.is_type<strided_slice>() && (!is_allow_new_shape_infer || !input.is_type<reshape>()))
         return false;
     return true;
 };
@@ -126,6 +126,7 @@ bool concat_in_place_optimization::match(const program_node& concat_node,
             }
         }
         // TODO: handle optimized reshape
+        // In dynamic shape, do not check input reshape.
         if (!is_allow_new_shape_infer && pred.first->is_type<reshape>() && pred.first->can_be_optimized())
             return false;
         // TODO: Investigate if this condition is needed

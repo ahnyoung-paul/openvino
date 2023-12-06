@@ -957,6 +957,7 @@ TEST(prepare_buffer_fusing, in_place_concat_dynamic__static_dim_dyn_pad__reshape
     auto in_dynamic_layout2 = layout{ ov::PartialShape{ -1, 1 }, data_types::i32, format::bfyx };
     auto in_static_layout2 = layout{ ov::PartialShape{ 1, 1 }, data_types::i32, format::bfyx };
     auto in_layout3 = layout{ ov::PartialShape{ 2 }, data_types::i32, format::bfyx};
+    auto in_layout4 = layout{ ov::PartialShape{ 1 }, data_types::i32, format::bfyx};
     auto const_mem = engine.allocate_memory(layout{ ov::PartialShape{ 1 }, data_types::i32, format::bfyx });
     set_values(const_mem, {1});
     auto input1_mem = engine.allocate_memory(in_static_layout1);
@@ -964,18 +965,22 @@ TEST(prepare_buffer_fusing, in_place_concat_dynamic__static_dim_dyn_pad__reshape
     set_values(input2_mem, {1});
     auto input3_mem = engine.allocate_memory(in_layout3);
     set_values(input3_mem, {1, 1});
+    auto input4_mem = engine.allocate_memory(in_layout4);
+    set_values(input2_mem, {1});
 
     topology topology;
     topology.add(data("data_0", const_mem));
     topology.add(input_layout("input1", in_dynamic_layout1));
+    topology.add(input_layout("input2", in_dynamic_layout2));
+    topology.add(input_layout("input3", in_layout3));
+    topology.add(input_layout("input4", in_layout4));
     topology.add(shape_of("shape_of", input_info("input1"), data_types::i32));
     topology.add(gather("gather", input_info("shape_of"), input_info("data_0"), 0, 0, {}, 0, true));
-    topology.add(input_layout("input2", in_dynamic_layout2));
+    topology.add(eltwise("sum", { input_info("gather"), input_info("input4") }, eltwise_mode::sum));
     topology.add(reshape("reshape2", input_info("input2"), false, {},
                          ov::PartialShape{1}, reshape::reshape_mode::unsqueeze));
     topology.add(activation("relu2", input_info("reshape2"), activation_func::relu));
-    topology.add(concatenation("concat", { input_info("relu2"), input_info("gather") }, 0));
-    topology.add(input_layout("input3", in_layout3));
+    topology.add(concatenation("concat", { input_info("relu2"), input_info("sum") }, 0));
     topology.add(eltwise("output", { input_info("concat"), input_info("input3") }, eltwise_mode::sum));
 
     ExecutionConfig config = get_test_default_config(engine);
@@ -986,6 +991,7 @@ TEST(prepare_buffer_fusing, in_place_concat_dynamic__static_dim_dyn_pad__reshape
     net.set_input_data("input1", input1_mem);
     net.set_input_data("input2", input2_mem);
     net.set_input_data("input3", input3_mem);
+    net.set_input_data("input4", input4_mem);
 
     auto outputs = net.execute();
     ASSERT_EQ(outputs.size(), 1);
@@ -1002,14 +1008,111 @@ TEST(prepare_buffer_fusing, in_place_concat_dynamic__static_dim_dyn_pad__reshape
 
     auto concat_mem = net.get_primitive("concat")->output_memory_ptr();
     auto reshape_mem = net.get_primitive("reshape2")->output_memory_ptr();
-    auto gather_mem = net.get_primitive("gather")->output_memory_ptr();
+    auto sum_mem = net.get_primitive("sum")->output_memory_ptr();
+
+    std::cout << "concat_inst.can_be_optimized : " << net.get_primitive("concat")->can_be_optimized() << std::endl;
+    std::cout << "concat_mem    : " << concat_mem << ", " << net.get_primitive("concat")->get_output_layout().to_string() << std::endl;
+    std::cout << "reshape_mem   : " << reshape_mem << ", " << net.get_primitive("reshape2")->get_output_layout().to_string() << std::endl;
+    std::cout << "sum_mem       : " << sum_mem << ", " << net.get_primitive("sum")->get_output_layout().to_string() << std::endl;
+
     ASSERT_EQ(concat_mem, reshape_mem);
-    ASSERT_EQ(concat_mem, gather_mem);
+    ASSERT_EQ(concat_mem, sum_mem);
 
     auto out_l = net.get_output_layout("output");
     auto out_mem = outputs.at("output").get_memory();
     cldnn::mem_lock<int32_t> output_ptr(out_mem, get_test_stream());
     std::vector<int32_t> ref_output = { 2, 2 };
+    for (size_t x = 0; x < out_l.count(); ++x) {
+        ASSERT_EQ(ref_output[x], output_ptr[x]);
+    }
+}
+
+TEST(prepare_buffer_fusing, in_place_concat_dynamic__static_dim_dyn_pad__reshape_case01_01) {
+    auto& engine = get_test_engine();
+    auto input1_mem = engine.allocate_memory(layout{ov::PartialShape{2, 3, 2, 1}, data_types::f32, format::bfyx});
+    auto input2_mem = engine.allocate_memory(layout{ov::PartialShape{4, 3}, data_types::f32, format::bfyx});
+    auto input3_mem = engine.allocate_memory(layout{ov::PartialShape{4, 3}, data_types::f32, format::bfyx});
+    auto input4_mem = engine.allocate_memory(layout{ov::PartialShape{8, 3}, data_types::f32, format::bfyx});
+
+    auto const_shape = engine.allocate_memory({ov::PartialShape{2}, data_types::i32, format::bfyx});
+    set_values<int32_t>(const_shape, {-1, 3});
+
+    topology topology;
+    topology.add(input_layout("input1", layout{ov::PartialShape::dynamic(4), data_types::f32, format::bfyx}));
+    topology.add(input_layout("input2", layout{ov::PartialShape{-1, 3}, data_types::f32, format::bfyx}));
+    topology.add(input_layout("input3", layout{ov::PartialShape{-1, 3}, data_types::f32, format::bfyx}));
+    topology.add(input_layout("input4", layout{ov::PartialShape{-1, 3}, data_types::f32, format::bfyx}));
+    topology.add(data("const", const_shape));
+    topology.add(reshape("reshape", input_info("input1"), input_info("const"), false, ov::PartialShape::dynamic(2))); // {4,3}
+    topology.add(activation("relu", input_info("reshape"), activation_func::relu));
+    topology.add(eltwise("sum", { input_info("input2"), input_info("input3") }, eltwise_mode::sum));
+    topology.add(concatenation("concat", { input_info("relu"), input_info("sum") }, 0));
+    topology.add(eltwise("output", { input_info("concat"), input_info("input4") }, eltwise_mode::sum));
+
+    ExecutionConfig config = get_test_default_config(engine);
+    config.set_property(ov::intel_gpu::optimize_data(true));
+    config.set_property(ov::intel_gpu::allow_new_shape_infer(true));
+    network net(engine, topology, config);
+
+    set_values<float>(input1_mem, {1.f, 2.f, 3.f,
+                                    1.f, 2.f, 3.f,
+                                    1.f, 2.f, 3.f,
+                                    1.f, 2.f, 3.f});
+
+    set_values<float>(input2_mem, {5.f, 6.f, 7.f,
+                                    5.f, 6.f, 7.f,
+                                    5.f, 6.f, 7.f,
+                                    5.f, 6.f, 7.f});
+
+    set_values<float>(input3_mem, {10.f, 10.f, 10.f,
+                                    20.f, 20.f, 20.f,
+                                    30.f, 30.f, 30.f,
+                                    40.f, 40.f, 40.f});
+
+    set_values<float>(input4_mem, {1.f, 1.f, 1.f, 1.f, 1.f, 1.f,
+                                    1.f, 1.f, 1.f, 1.f, 1.f, 1.f,
+                                    1.f, 1.f, 1.f, 1.f, 1.f, 1.f,
+                                    1.f, 1.f, 1.f, 1.f, 1.f, 1.f});
+
+    std::vector<float> ref_output = {2.f, 3.f, 4.f,
+                                        2.f, 3.f, 4.f,
+                                        2.f, 3.f, 4.f,
+                                        2.f, 3.f, 4.f,
+                                        16.f, 17.f, 18.f,
+                                        26.f, 27.f, 28.f,
+                                        36.f, 37.f, 38.f,
+                                        46.f, 47.f, 48.f };
+
+    net.set_input_data("input1", input1_mem);
+    net.set_input_data("input2", input2_mem);
+    net.set_input_data("input3", input3_mem);
+    net.set_input_data("input4", input4_mem);
+
+    auto outputs = net.execute();
+    ASSERT_EQ(outputs.size(), 1);
+
+    const auto& reshape_node = net.get_primitive("reshape")->get_node();
+    const auto& concat_node = net.get_primitive("concat")->get_node();
+
+    ASSERT_FALSE(reshape_node.can_be_optimized());
+    ASSERT_TRUE(concat_node.can_be_optimized());
+
+    auto concat_mem = net.get_primitive("concat")->output_memory_ptr();
+    auto reshape_mem = net.get_primitive("reshape")->output_memory_ptr();
+    auto sum_mem = net.get_primitive("sum")->output_memory_ptr();
+
+    std::cout << "concat_inst.can_be_optimized : " << net.get_primitive("concat")->can_be_optimized() << std::endl;
+    std::cout << "concat_mem    : " << concat_mem << ", " << net.get_primitive("concat")->get_output_layout().to_string() << std::endl;
+    std::cout << "reshape_mem   : " << reshape_mem << ", " << net.get_primitive("reshape")->get_output_layout().to_string() << std::endl;
+    std::cout << "sum_mem       : " << sum_mem << ", " << net.get_primitive("sum")->get_output_layout().to_string() << std::endl;
+
+    ASSERT_EQ(concat_mem, reshape_mem);
+    ASSERT_EQ(concat_mem, sum_mem);
+
+    auto out_l = net.get_output_layout("output");
+    auto out_mem = outputs.at("output").get_memory();
+    cldnn::mem_lock<float> output_ptr(out_mem, get_test_stream());
+
     for (size_t x = 0; x < out_l.count(); ++x) {
         ASSERT_EQ(ref_output[x], output_ptr[x]);
     }
@@ -1065,6 +1168,15 @@ TEST(prepare_buffer_fusing, in_place_concat_dynamic__static_dim_dyn_pad__opt_res
     }
     ASSERT_TRUE(reshape_node.can_be_optimized());
     ASSERT_TRUE(concat_node.can_be_optimized());
+
+    auto concat_mem = net.get_primitive("concat")->output_memory_ptr();
+    auto reshape_mem = net.get_primitive("reshape2")->output_memory_ptr();
+    auto gather_mem = net.get_primitive("gather")->output_memory_ptr();
+
+    std::cout << "concat_inst.can_be_optimized : " << net.get_primitive("concat")->can_be_optimized() << std::endl;
+    std::cout << "concat_mem    : " << concat_mem << ", " << net.get_primitive("concat")->get_output_layout().to_string() << std::endl;
+    std::cout << "reshape_mem   : " << reshape_mem << ", " << net.get_primitive("reshape2")->get_output_layout().to_string() << std::endl;
+    std::cout << "gather_mem    : " << gather_mem << ", " << net.get_primitive("gather")->get_output_layout().to_string() << std::endl;
 
     auto out_l = net.get_output_layout("output");
     auto out_mem = outputs.at("output").get_memory();
