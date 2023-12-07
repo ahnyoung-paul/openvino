@@ -127,8 +127,13 @@ bool concat_in_place_optimization::match(const program_node& concat_node,
         }
         // TODO: handle optimized reshape
         // In dynamic shape, do not check input reshape.
-        if (!is_allow_new_shape_infer && pred.first->is_type<reshape>() && pred.first->can_be_optimized())
-            return false;
+        if (is_allow_new_shape_infer) {
+            if (pred.first->is_type<reshape>() && pred.first->can_be_optimized() && pred.first->get_dependency(0).is_type<input_layout>())
+                return false;
+        } else {
+            if (pred.first->is_type<reshape>() && pred.first->can_be_optimized())
+                return false;
+        }
         // TODO: Investigate if this condition is needed
         if (pred.first->get_users().size() > 2)
             return false;
