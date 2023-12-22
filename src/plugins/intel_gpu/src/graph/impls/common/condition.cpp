@@ -100,7 +100,9 @@ struct condition_impl : typed_primitive_impl<condition> {
                 instance.set_output_layout(output_layout, out_idx);
                 instance.set_output_memory(output_mem_ptr, out_idx);
             }
-            return stream.group_events(output_events);
+            // return stream.group_events(output_events);
+            ev->set();
+            return ev;
         } else {
             // Set input memory of inner network before its execution
             for (size_t mem_idx = 0; mem_idx < instance.inputs_memory_count(); mem_idx++) {

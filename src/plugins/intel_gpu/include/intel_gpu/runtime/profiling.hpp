@@ -130,19 +130,13 @@ struct perf_counter_hash {
         seed = hash_combine(seed, static_cast<int>(k.cache_hit));
         seed = hash_combine(seed, k.iteration_num);
         for (auto& layout : k.network_input_layouts) {
-            for (auto& d : layout.get_shape()) {
-                seed = hash_combine(seed, d);
-            }
+            seed = hash_combine(seed, layout.hash());
         }
         for (auto& layout : k.input_layouts) {
-            for (auto& d : layout.get_shape()) {
-                seed = hash_combine(seed, d);
-            }
+            seed = hash_combine(seed, layout.hash());
         }
         for (auto& layout : k.output_layouts) {
-            for (auto& d : layout.get_shape()) {
-                seed = hash_combine(seed, d);
-            }
+            seed = hash_combine(seed, layout.hash());
         }
         return seed;
     }

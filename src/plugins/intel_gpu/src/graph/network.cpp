@@ -107,10 +107,12 @@ void dump_perf_data_raw(std::string dump_path, const std::list<std::shared_ptr<p
                 size_t total_out_size_a = 0;
                 size_t total_out_size_b = 0;
                 for (auto& ol : a_info.output_layouts) {
-                    total_out_size_a += ol.count();
+                    if (ol.is_static())
+                        total_out_size_a += ol.count();
                 }
                 for (auto& ol : b_info.output_layouts) {
-                    total_out_size_b += ol.count();
+                    if (ol.is_static())
+                        total_out_size_b += ol.count();
                 }
                 return total_out_size_a < total_out_size_b;
             });

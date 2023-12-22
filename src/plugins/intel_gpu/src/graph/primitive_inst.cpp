@@ -1108,6 +1108,18 @@ event::ptr primitive_inst::execute(const std::vector<event::ptr>& events) {
 
         OPENVINO_ASSERT(_impl_params->get_output_layout().is_static(),
                         "[GPU] Can't execute ", primitive_id, " primitive as output layout is dynamic in runtime");
+    } else {
+        {
+            if (_node->is_type<condition>() || _node->is_type<loop>()) {
+                for (size_t i = 0; i < _deps.size(); i++) {
+                    auto idx = _deps[i].second;
+                    auto new_shape = _deps[i].first->_impl_params->get_output_layout(idx);
+                    if (_impl_params->get_input_layout(i) != new_shape) {
+                        _impl_params->input_layouts[i] = new_shape;
+                    }
+                }
+            }
+        }
     }
     update_shape_done_by_other = false; // reset
     OPENVINO_ASSERT(_impl != nullptr, "[GPU] Implementation is nullptr for ", primitive_id,  " primitive");
@@ -1151,6 +1163,17 @@ event::ptr primitive_inst::execute(const std::vector<event::ptr>& events) {
     }
 
     {
+        // {
+        //     if (_node->is_type<condition>() || _node->is_type<loop>()) {
+        //         for (size_t i = 0; i < _deps.size(); i++) {
+        //             auto idx = _deps[i].second;
+        //             auto new_shape = _deps[i].first->_impl_params->get_output_layout(idx);
+        //             if (_impl_params->get_input_layout(i) != new_shape) {
+        //                 _impl_params->input_layouts[i] = new_shape;
+        //             }
+        //         }
+        //     }
+        // }
         GPU_DEBUG_PROFILED_STAGE(instrumentation::pipeline_stage::inference);
         auto ev = _impl->execute(dependencies, *this);
 
