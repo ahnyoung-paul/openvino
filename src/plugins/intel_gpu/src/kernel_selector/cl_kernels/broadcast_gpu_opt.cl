@@ -129,8 +129,7 @@ const uint blockND[] = {INPUT0_BLOCK_ND};
     #endif
 
     const uint idx_pos = GET_UPDATES_INDEX(INPUT0, IDX_ORDER);
-    MAKE_VECTOR_TYPE(INPUT0_TYPE, 16) inputs = vload16(0, &input[idx_pos]);
-    vstore16(inputs, 0, &output[out_pos]);
+    vstore16(vload16(0, &input[idx_pos]), 0, &output[out_pos]);
 }
 
 #ifdef IDX_ORDER
