@@ -87,7 +87,7 @@ BroadcastKernelBase::DispatchData BroadcastKernelOpt::SetDefault(const broadcast
                                                                      { Tensor::DataChannelName::Y, Tensor::DataChannelName::Z, Tensor::DataChannelName::W },
                                                                      { Tensor::DataChannelName::FEATURE, Tensor::DataChannelName::BATCH }};
 
-    dispatchData.gws = { output.X().v / 16, output.Y().v * output.Z().v * output.W().v , output.Batch().v * output.Feature().v };
+    dispatchData.gws = { output.X().v / 4, output.Y().v * output.Z().v * output.W().v , output.Batch().v * output.Feature().v };
     dispatchData.lws = GetOptimalLocalWorkGroupSizes(dispatchData.gws, params.engineInfo, in_layout, out_layout, dims_by_gws);
 
     return dispatchData;
@@ -103,7 +103,7 @@ bool BroadcastKernelOpt::Validate(const Params& p, const optional_params& o) con
     if (params.outputs[0].GetDims().size() != 5)
         return false;
 
-    if (params.outputs[0].X().v % 16 != 0)
+    if (params.outputs[0].X().v % 4 != 0)
         return false;
 
     if (!(params.outputs[0].Batch().v == params.inputs[0].Batch().v

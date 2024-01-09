@@ -60,7 +60,7 @@ const uint blockND[] = {INPUT0_BLOCK_ND};
     const uint in_sf = input_indices[BROADCAST_ORDER[1]];
     const uint in_sb = input_indices[BROADCAST_ORDER[0]];
 
-    const uint out_x  = (uint) (get_global_id(0) * 16);
+    const uint out_x  = (uint) (get_global_id(0) * 4);
 #if OUTPUT_DIMS == 6
     const uint out_wzy = (uint) get_global_id(1);
     const uint out_y  = out_wzy % OUTPUT_SIZE_Y;
@@ -129,7 +129,7 @@ const uint blockND[] = {INPUT0_BLOCK_ND};
     #endif
 
     const uint idx_pos = GET_UPDATES_INDEX(INPUT0, IDX_ORDER);
-    vstore16(vload16(0, &input[idx_pos]), 0, &output[out_pos]);
+    vstore4(vload4(0, &input[idx_pos]), 0, &output[out_pos]);
 }
 
 #ifdef IDX_ORDER
