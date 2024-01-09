@@ -2426,7 +2426,7 @@ TEST(broadcast_gpu_opt_fp16, measure_performance) {
         auto avg = static_cast<float>(sum - max - min) / 8;
         std::cout << "latency[kernel : " << network.get_primitive(broadcast_id)->get_implementation_name() << "]"
                     << "[input: " << input_static_layout.to_short_string() << "]: "
-                    << (use_ref? "ref kernel : " : "opt kernel : ") << avg << std::endl;
+                    << (use_ref? "ref kernel : " : "opt kernel : ") << avg << " ms " << std::endl;
     };
 
     run_unit_test(false, 21);
