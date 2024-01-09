@@ -2319,8 +2319,8 @@ TEST(broadcast_gpu_opt_fp16, bfzyx_21x1x2x1x128_to_21x1x2x16x128_no_axes) {
     }
 }
 
-TEST(broadcast_gpu_opt_fp16, measure_performance) {
-    auto run_unit_test = [this](bool use_ref, ov::Dimension::value_type batch_size ) {
+
+static void run_broadcast_perf(bool use_ref, ov::Dimension::value_type batch_size ) {
         primitive_id broadcast_id = "broadcast";
         auto& engine = get_test_engine();
         auto config = get_test_default_config(engine);
@@ -2423,21 +2423,20 @@ TEST(broadcast_gpu_opt_fp16, measure_performance) {
         auto sum = std::accumulate(time_records.begin(), time_records.end(), 0);
         auto max = *std::max_element(time_records.begin(), time_records.end());
         auto min = *std::min_element(time_records.begin(), time_records.end());
-        auto avg = static_cast<float>(sum - max - min) / 8;
+        auto avg = (static_cast<float>(sum - max - min) / 8.f) / 1000.f;
         std::cout << "latency[kernel : " << network.get_primitive(broadcast_id)->get_implementation_name() << "]"
-                    << "[input: " << input_static_layout.to_short_string() << "]: "
-                    << (use_ref? "ref kernel : " : "opt kernel : ") << avg << " ms " << std::endl;
-    };
+                    << "[input: " << input_static_layout.to_short_string() << "]: " << avg << " ms " << std::endl;
+    }
 
-    run_unit_test(false, 21);
-    run_unit_test(true, 21);
 
-    run_unit_test(false, 224);
-    run_unit_test(true, 224);
+TEST(broadcast_gpu_opt_fp16, perf_opt) {
+    run_broadcast_perf(false, 1024);
+    run_broadcast_perf(false, 1536);
+    run_broadcast_perf(false, 2048);
+}
 
-    run_unit_test(false, 512);
-    run_unit_test(true, 512);
-
-    run_unit_test(false, 1024);
-    run_unit_test(true, 1024);
+TEST(broadcast_gpu_opt_fp16, perf_ref) {
+    run_broadcast_perf(true, 1024);
+    run_broadcast_perf(true, 1536);
+    run_broadcast_perf(true, 2048);
 }
