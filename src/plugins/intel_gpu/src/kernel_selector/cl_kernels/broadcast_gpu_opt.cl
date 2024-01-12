@@ -60,33 +60,26 @@ const uint blockND[] = {INPUT0_BLOCK_ND};
     const uint in_sf = input_indices[BROADCAST_ORDER[1]];
     const uint in_sb = input_indices[BROADCAST_ORDER[0]];
 
-    const uint out_x  = (uint) (get_global_id(0) * 4);
+    const uint out_x  = (uint) (get_global_id(1) * 4);
+    const uint out_y  = (uint) (get_global_id(0) * 4);
 #if OUTPUT_DIMS == 6
-    const uint out_wzy = (uint) get_global_id(1);
-    const uint out_y  = out_wzy % OUTPUT_SIZE_Y;
-    const uint out_z  = (out_wzy / OUTPUT_SIZE_Y) % OUTPUT_SIZE_Z;
-    const uint out_w  = (out_wzy / OUTPUT_SIZE_Y) / OUTPUT_SIZE_Z;
+    const uint out_bfwz = (uint) get_global_id(2);
+    const uint out_z  = (out_bfwz % OUTPUT_SIZE_Z);
+    const uint out_w  = (out_bfwz / OUTPUT_SIZE_Z) % OUTPUT_SIZE_W;
+    const uint out_f  = (out_bfwz / OUTPUT_SIZE_Z / OUTPUT_SIZE_W) % OUTPUT_FEATURE_NUM;
+    const uint out_b  = (out_bfwz / OUTPUT_SIZE_Z / OUTPUT_SIZE_W / OUTPUT_FEATURE_NUM);
 #elif OUTPUT_DIMS == 5
-    const uint out_zy = (uint) get_global_id(1);
-    const uint out_y  = out_zy % OUTPUT_SIZE_Y;
-    const uint out_z  = out_zy / OUTPUT_SIZE_Y;
+    const uint out_bfwz = (uint) get_global_id(2);
+    const uint out_z  = (out_bfwz % OUTPUT_SIZE_Z);
     const uint out_w  = 0;
+    const uint out_f  = (out_bfwz / OUTPUT_SIZE_Z) % OUTPUT_FEATURE_NUM;
+    const uint out_b  = (out_bfwz / OUTPUT_SIZE_Z / OUTPUT_FEATURE_NUM);
 #else
-    const uint out_y = (uint) get_global_id(1);
-    const uint out_z = 0;
-    const uint out_w = 0;
-#endif
-
-    const uint out_fb = (uint) get_global_id(2);
-    const uint out_f  = out_fb % OUTPUT_FEATURE_NUM;
-    const uint out_b  = out_fb / OUTPUT_FEATURE_NUM;
-
-#if OUTPUT_DIMS == 6
-    const uint out_pos = OUTPUT_GET_INDEX(out_b, out_f, out_w, out_z, out_y, out_x);
-#elif OUTPUT_DIMS == 5
-    const uint out_pos = OUTPUT_GET_INDEX(out_b, out_f, out_z, out_y, out_x);
-#else
-    const uint out_pos = OUTPUT_GET_INDEX(out_b, out_f, out_y, out_x);
+    const uint out_bfwz = (uint) get_global_id(2);
+    const uint out_z  = 0;
+    const uint out_w  = 0;
+    const uint out_f  = (out_bfwz % OUTPUT_FEATURE_NUM);
+    const uint out_b  = (out_bfwz / OUTPUT_FEATURE_NUM);
 #endif
 
     const uint in_x = out_x % in_sx;
@@ -129,7 +122,48 @@ const uint blockND[] = {INPUT0_BLOCK_ND};
     #endif
 
     const uint idx_pos = GET_UPDATES_INDEX(INPUT0, IDX_ORDER);
-    vstore4(vload4(0, &input[idx_pos]), 0, &output[out_pos]);
+
+    MAKE_VECTOR_TYPE(INPUT0_TYPE, 4) inputs = vload4(0, &input[idx_pos]);
+
+#if OUTPUT_DIMS == 6
+    const uint out_pos0 = OUTPUT_GET_INDEX(out_b, out_f, out_w, out_z, out_y, out_x);
+#elif OUTPUT_DIMS == 5
+    const uint out_pos0 = OUTPUT_GET_INDEX(out_b, out_f, out_z, out_y, out_x);
+#else
+    const uint out_pos0 = OUTPUT_GET_INDEX(out_b, out_f, out_y, out_x);
+#endif
+
+    vstore4(inputs, 0, &output[out_pos0]);
+
+#if OUTPUT_DIMS == 6
+    const uint out_pos1 = OUTPUT_GET_INDEX(out_b, out_f, out_w, out_z, out_y+1, out_x);
+#elif OUTPUT_DIMS == 5
+    const uint out_pos1 = OUTPUT_GET_INDEX(out_b, out_f, out_z, out_y+1, out_x);
+#else
+    const uint out_pos1 = OUTPUT_GET_INDEX(out_b, out_f, out_y+1, out_x);
+#endif
+
+    vstore4(inputs, 0, &output[out_pos1]);
+
+#if OUTPUT_DIMS == 6
+    const uint out_pos2 = OUTPUT_GET_INDEX(out_b, out_f, out_w, out_z, out_y+2, out_x);
+#elif OUTPUT_DIMS == 5
+    const uint out_pos2 = OUTPUT_GET_INDEX(out_b, out_f, out_z, out_y+2, out_x);
+#else
+    const uint out_pos2 = OUTPUT_GET_INDEX(out_b, out_f, out_y+2, out_x);
+#endif
+
+    vstore4(inputs, 0, &output[out_pos2]);
+
+#if OUTPUT_DIMS == 6
+    const uint out_pos3 = OUTPUT_GET_INDEX(out_b, out_f, out_w, out_z, out_y+3, out_x);
+#elif OUTPUT_DIMS == 5
+    const uint out_pos3 = OUTPUT_GET_INDEX(out_b, out_f, out_z, out_y+3, out_x);
+#else
+    const uint out_pos3 = OUTPUT_GET_INDEX(out_b, out_f, out_y+3, out_x);
+#endif
+
+    vstore4(inputs, 0, &output[out_pos3]);
 }
 
 #ifdef IDX_ORDER

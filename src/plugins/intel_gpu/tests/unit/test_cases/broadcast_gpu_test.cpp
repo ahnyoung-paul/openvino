@@ -2383,8 +2383,8 @@ static void run_broadcast_perf(bool use_ref, ov::Dimension::value_type batch_siz
         cldnn::memory::ptr output = nullptr;
 
         std::vector<int64_t> time_records;
-
-        for (size_t i = 0; i < 10; i++) {
+        const size_t num_tests = 10;
+        for (size_t i = 0; i < num_tests; i++) {
             network.set_input_data(input_id, input_mem);
             network.set_input_data(target_shape_id, target_shape_mem);
             outputs = network.execute();
@@ -2419,13 +2419,19 @@ static void run_broadcast_perf(bool use_ref, ov::Dimension::value_type batch_siz
                 }
             }
         }
-
-        auto sum = std::accumulate(time_records.begin(), time_records.end(), 0);
-        auto max = *std::max_element(time_records.begin(), time_records.end());
-        auto min = *std::min_element(time_records.begin(), time_records.end());
-        auto avg = (static_cast<float>(sum - max - min) / 8.f) / 1000.f;
-        std::cout << "latency[kernel : " << network.get_primitive(broadcast_id)->get_implementation_name() << "]"
-                    << "[input: " << input_static_layout.to_short_string() << "]: " << avg << " ms " << std::endl;
+        if (num_tests > 1) {
+            auto sum = std::accumulate(time_records.begin(), time_records.end(), 0);
+            auto max = *std::max_element(time_records.begin(), time_records.end());
+            auto min = *std::min_element(time_records.begin(), time_records.end());
+            auto avg = (static_cast<float>(sum - max - min) / 8.f) / 1000.f;
+            std::cout << "latency[kernel : " << network.get_primitive(broadcast_id)->get_implementation_name() << "]"
+                        << "[input: " << input_static_layout.to_short_string() << "] avg: "
+                        << avg << " ms, max: " << (static_cast<float>(max) / 1000.f)
+                        << " ms, min: " << (static_cast<float>(min) / 1000.f) << std::endl;
+        } else {
+            std::cout << "latency[kernel : " << network.get_primitive(broadcast_id)->get_implementation_name() << "] "
+                        << (static_cast<float>(time_records.front()) / 1000.f) << " ms " << std::endl;
+        }
     }
 
 
