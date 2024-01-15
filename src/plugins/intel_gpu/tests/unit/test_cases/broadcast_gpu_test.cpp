@@ -2388,7 +2388,7 @@ static void run_broadcast_perf(bool use_ref, ov::Dimension::value_type batch_siz
             network.set_input_data(input_id, input_mem);
             network.set_input_data(target_shape_id, target_shape_mem);
             outputs = network.execute();
-            auto output = outputs.at("output").get_memory();
+            output = outputs.at("output").get_memory();
             ASSERT_NE(output, nullptr);
 
             auto executed_primitives = network.get_executed_primitives();
@@ -2404,21 +2404,8 @@ static void run_broadcast_perf(bool use_ref, ov::Dimension::value_type batch_siz
                     }
                 }
             }
-
-            cldnn::mem_lock<ov::float16> output_ptr(output, network.get_stream());
-            for (tensor::value_type b = 0; b < output_shape.at(0); ++b) {
-                for (tensor::value_type f = 0; f < output_shape.at(1); ++f) {
-                    for (tensor::value_type z = 0; z < output_shape.at(2); ++z) {
-                        for (tensor::value_type y = 0; y < output_shape.at(3); ++y) {
-                            for (tensor::value_type x = 0; x < output_shape.at(4); ++x) {
-                                auto output_off = (((b * output_shape.at(1) + f) * output_shape.at(2) + z) * output_shape.at(3) + y) * output_shape.at(4) + x;
-                                ASSERT_EQ(output_ptr[output_off], output_data[output_off]);
-                            }
-                        }
-                    }
-                }
-            }
         }
+
         if (num_tests > 1) {
             auto sum = std::accumulate(time_records.begin(), time_records.end(), 0);
             auto max = *std::max_element(time_records.begin(), time_records.end());
@@ -2432,6 +2419,20 @@ static void run_broadcast_perf(bool use_ref, ov::Dimension::value_type batch_siz
             std::cout << "latency[kernel : " << network.get_primitive(broadcast_id)->get_implementation_name() << "] "
                         << (static_cast<float>(time_records.front()) / 1000.f) << " ms " << std::endl;
         }
+
+        cldnn::mem_lock<ov::float16> output_ptr(output, network.get_stream());
+        for (tensor::value_type b = 0; b < output_shape.at(0); ++b) {
+            for (tensor::value_type f = 0; f < output_shape.at(1); ++f) {
+                for (tensor::value_type z = 0; z < output_shape.at(2); ++z) {
+                    for (tensor::value_type y = 0; y < output_shape.at(3); ++y) {
+                        for (tensor::value_type x = 0; x < output_shape.at(4); ++x) {
+                            auto output_off = (((b * output_shape.at(1) + f) * output_shape.at(2) + z) * output_shape.at(3) + y) * output_shape.at(4) + x;
+                            ASSERT_EQ(output_ptr[output_off], output_data[output_off]);
+                        }
+                    }
+                }
+            }
+        }
     }
 
 
@@ -2439,10 +2440,16 @@ TEST(broadcast_gpu_opt_fp16, perf_opt) {
     run_broadcast_perf(false, 1024);
     run_broadcast_perf(false, 1536);
     run_broadcast_perf(false, 2048);
+    run_broadcast_perf(false, 2049);
+    run_broadcast_perf(false, 2050);
+    run_broadcast_perf(false, 2051);
 }
 
 TEST(broadcast_gpu_opt_fp16, perf_ref) {
     run_broadcast_perf(true, 1024);
     run_broadcast_perf(true, 1536);
     run_broadcast_perf(true, 2048);
+    run_broadcast_perf(true, 2049);
+    run_broadcast_perf(true, 2050);
+    run_broadcast_perf(true, 2051);
 }

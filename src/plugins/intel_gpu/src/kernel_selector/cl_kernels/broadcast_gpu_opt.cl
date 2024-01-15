@@ -42,7 +42,9 @@ KERNEL(broadcast_gpu_opt)(
     input_indices[3] = INPUT0_SIZE_X;
 #endif
 
-const uint blockND[] = {INPUT0_BLOCK_ND};
+    const uint leftovers = INPUT0_SIZE_X % VEC_SIZE;
+
+    const uint blockND[] = {INPUT0_BLOCK_ND};
 
 #if OUTPUT_DIMS == 6
     const uint in_sx = input_indices[BROADCAST_ORDER[5]];
@@ -60,8 +62,14 @@ const uint blockND[] = {INPUT0_BLOCK_ND};
     const uint in_sf = input_indices[BROADCAST_ORDER[1]];
     const uint in_sb = input_indices[BROADCAST_ORDER[0]];
 
-    const uint out_x  = (uint) (get_global_id(1) * 4);
-    const uint out_y  = (uint) (get_global_id(0) * 4);
+    const uint gdim0 = (uint) get_global_id(0);
+    uint offset = leftovers;
+    if (gdim0 < leftovers) {
+        offset = gdim0;
+    }
+
+    const uint out_x  = (uint) (get_global_id(0) * VEC_SIZE + offset);
+    const uint out_y  = (uint) (get_global_id(1) * 4);
 #if OUTPUT_DIMS == 6
     const uint out_bfwz = (uint) get_global_id(2);
     const uint out_z  = (out_bfwz % OUTPUT_SIZE_Z);
@@ -164,6 +172,14 @@ const uint blockND[] = {INPUT0_BLOCK_ND};
 #endif
 
     vstore4(inputs, 0, &output[out_pos3]);
+
+    if (gdim0 < leftovers) {
+        INPUT0_TYPE val = input[idx_pos + offset];
+        output[out_pos0 + offset] = val;
+        output[out_pos1 + offset] = val;
+        output[out_pos2 + offset] = val;
+        output[out_pos3 + offset] = val;
+    }
 }
 
 #ifdef IDX_ORDER

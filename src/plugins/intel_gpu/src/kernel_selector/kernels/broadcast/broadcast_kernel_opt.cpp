@@ -73,6 +73,7 @@ JitConstants BroadcastKernelOpt::GetJitConstants(const broadcast_params& params)
     JitConstants jit = MakeBaseParamsJitConstants(params);
 
     jit.AddConstants({MakeJitConstant("BROADCAST_ORDER", params.input_order)});
+    jit.AddConstants({MakeJitConstant("VEC_SIZE", vec_size)});
 
     return jit;
 }
@@ -84,11 +85,23 @@ BroadcastKernelBase::DispatchData BroadcastKernelOpt::SetDefault(const broadcast
     auto in_layout = params.inputs[0].GetLayout();
     auto out_layout = params.outputs[0].GetLayout();
     std::vector<std::vector<Tensor::DataChannelName>> dims_by_gws = {{ Tensor::DataChannelName::X },
-                                                                     { Tensor::DataChannelName::Y, Tensor::DataChannelName::Z, Tensor::DataChannelName::W },
-                                                                     { Tensor::DataChannelName::FEATURE, Tensor::DataChannelName::BATCH }};
+                                                                     { Tensor::DataChannelName::Y },
+                                                                     { Tensor::DataChannelName::Z, Tensor::DataChannelName::W,
+                                                                       Tensor::DataChannelName::FEATURE, Tensor::DataChannelName::BATCH }};
 
-    dispatchData.gws = { output.Y().v / 4, output.X().v / 4,  output.Z().v * output.W().v * output.Feature().v * output.Batch().v };
+    dispatchData.gws = { output.X().v / vec_size, output.Y().v / y_block_size,  output.Z().v * output.W().v * output.Feature().v * output.Batch().v };
     dispatchData.lws = GetOptimalLocalWorkGroupSizes(dispatchData.gws, params.engineInfo, in_layout, out_layout, dims_by_gws);
+
+    // std::cout << "dispatchData.gws={";
+    // for (auto& v : dispatchData.gws) {
+    //     std::cout << v << ",";
+    // }
+    // std::cout << "}" << std::endl;
+    // std::cout << "dispatchData.lws={";
+    // for (auto& v : dispatchData.lws) {
+    //     std::cout << v << ",";
+    // }
+    // std::cout << "}" << std::endl;
 
     return dispatchData;
 }
@@ -103,7 +116,7 @@ bool BroadcastKernelOpt::Validate(const Params& p, const optional_params& o) con
     if (params.outputs[0].GetDims().size() != 5)
         return false;
 
-    if (params.outputs[0].X().v % 4 != 0)
+    if (params.outputs[0].Y().v % 4 != 0)
         return false;
 
     if (!(params.outputs[0].Batch().v == params.inputs[0].Batch().v
