@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2023 Intel Corporation
+// Copyright (C) 2-24 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
 //
 
@@ -74,6 +74,7 @@ JitConstants BroadcastKernelOpt::GetJitConstants(const broadcast_params& params)
 
     jit.AddConstants({MakeJitConstant("BROADCAST_ORDER", params.input_order)});
     jit.AddConstants({MakeJitConstant("VEC_SIZE", vec_size)});
+    jit.AddConstants({MakeJitConstant("Y_BLOCK_SIZE", y_block_size)});
 
     return jit;
 }
@@ -92,16 +93,20 @@ BroadcastKernelBase::DispatchData BroadcastKernelOpt::SetDefault(const broadcast
     dispatchData.gws = { output.X().v / vec_size, output.Y().v / y_block_size,  output.Z().v * output.W().v * output.Feature().v * output.Batch().v };
     dispatchData.lws = GetOptimalLocalWorkGroupSizes(dispatchData.gws, params.engineInfo, in_layout, out_layout, dims_by_gws);
 
-    // std::cout << "dispatchData.gws={";
-    // for (auto& v : dispatchData.gws) {
-    //     std::cout << v << ",";
-    // }
-    // std::cout << "}" << std::endl;
-    // std::cout << "dispatchData.lws={";
-    // for (auto& v : dispatchData.lws) {
-    //     std::cout << v << ",";
-    // }
-    // std::cout << "}" << std::endl;
+    if (dispatchData.gws[2] != 0) {
+        std::cout << "* y_block_size : " << y_block_size << std::endl;
+        std::cout << "* vec_size     : " << vec_size << std::endl;
+        std::cout << "* dispatchData.gws={";
+        for (auto& v : dispatchData.gws) {
+            std::cout << v << ",";
+        }
+        std::cout << "}" << std::endl;
+        std::cout << "* dispatchData.lws={";
+        for (auto& v : dispatchData.lws) {
+            std::cout << v << ",";
+        }
+        std::cout << "}" << std::endl;
+    }
 
     return dispatchData;
 }

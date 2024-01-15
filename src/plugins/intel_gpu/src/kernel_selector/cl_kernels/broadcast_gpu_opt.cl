@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2023 Intel Corporation
+// Copyright (C) 2024 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
 //
 
@@ -13,6 +13,11 @@
 #elif INPUT0_DIMS == 6
     #define IDX_ORDER idx_b,idx_f,idx_w,idx_z,idx_y,idx_x
 #endif
+
+
+#define VLOAD CAT(vload, VEC_SIZE)
+#define VSTORE CAT(vstore,VEC_SIZE)
+#define INPUT0_VTYPE MAKE_VECTOR_TYPE(INPUT0_TYPE, VEC_SIZE)
 
 KERNEL(broadcast_gpu_opt)(
     OPTIONAL_SHAPE_INFO_ARG
@@ -69,7 +74,7 @@ KERNEL(broadcast_gpu_opt)(
     }
 
     const uint out_x  = (uint) (get_global_id(0) * VEC_SIZE + offset);
-    const uint out_y  = (uint) (get_global_id(1) * 4);
+    const uint out_y  = (uint) (get_global_id(1) * Y_BLOCK_SIZE);
 #if OUTPUT_DIMS == 6
     const uint out_bfwz = (uint) get_global_id(2);
     const uint out_z  = (out_bfwz % OUTPUT_SIZE_Z);
@@ -108,7 +113,7 @@ KERNEL(broadcast_gpu_opt)(
 
     uint idx[INPUT0_DIMS] = {0};
     uint rmd = in_pos;
-    for(int i = 0; i < INPUT0_DIMS; ++i)
+    unroll_for (int i = 0; i < INPUT0_DIMS; ++i)
     {
         idx[i] = rmd / blockND[i + 1];
         rmd %= blockND[i + 1];
@@ -130,55 +135,20 @@ KERNEL(broadcast_gpu_opt)(
     #endif
 
     const uint idx_pos = GET_UPDATES_INDEX(INPUT0, IDX_ORDER);
-
-    MAKE_VECTOR_TYPE(INPUT0_TYPE, 4) inputs = vload4(0, &input[idx_pos]);
-
 #if OUTPUT_DIMS == 6
-    const uint out_pos0 = OUTPUT_GET_INDEX(out_b, out_f, out_w, out_z, out_y, out_x);
+        const uint out_pos = OUTPUT_GET_INDEX(out_b, out_f, out_w, out_z, out_y, out_x);
 #elif OUTPUT_DIMS == 5
-    const uint out_pos0 = OUTPUT_GET_INDEX(out_b, out_f, out_z, out_y, out_x);
+        const uint out_pos = OUTPUT_GET_INDEX(out_b, out_f, out_z, out_y, out_x);
 #else
-    const uint out_pos0 = OUTPUT_GET_INDEX(out_b, out_f, out_y, out_x);
+        const uint out_pos = OUTPUT_GET_INDEX(out_b, out_f, out_y, out_x);
 #endif
 
-    vstore4(inputs, 0, &output[out_pos0]);
-
-#if OUTPUT_DIMS == 6
-    const uint out_pos1 = OUTPUT_GET_INDEX(out_b, out_f, out_w, out_z, out_y+1, out_x);
-#elif OUTPUT_DIMS == 5
-    const uint out_pos1 = OUTPUT_GET_INDEX(out_b, out_f, out_z, out_y+1, out_x);
-#else
-    const uint out_pos1 = OUTPUT_GET_INDEX(out_b, out_f, out_y+1, out_x);
-#endif
-
-    vstore4(inputs, 0, &output[out_pos1]);
-
-#if OUTPUT_DIMS == 6
-    const uint out_pos2 = OUTPUT_GET_INDEX(out_b, out_f, out_w, out_z, out_y+2, out_x);
-#elif OUTPUT_DIMS == 5
-    const uint out_pos2 = OUTPUT_GET_INDEX(out_b, out_f, out_z, out_y+2, out_x);
-#else
-    const uint out_pos2 = OUTPUT_GET_INDEX(out_b, out_f, out_y+2, out_x);
-#endif
-
-    vstore4(inputs, 0, &output[out_pos2]);
-
-#if OUTPUT_DIMS == 6
-    const uint out_pos3 = OUTPUT_GET_INDEX(out_b, out_f, out_w, out_z, out_y+3, out_x);
-#elif OUTPUT_DIMS == 5
-    const uint out_pos3 = OUTPUT_GET_INDEX(out_b, out_f, out_z, out_y+3, out_x);
-#else
-    const uint out_pos3 = OUTPUT_GET_INDEX(out_b, out_f, out_y+3, out_x);
-#endif
-
-    vstore4(inputs, 0, &output[out_pos3]);
-
+    INPUT0_VTYPE input_vec = VLOAD(0, &input[idx_pos]);
+    unroll_for(uint i = 0; i < Y_BLOCK_SIZE; i++) {
+        VSTORE(input_vec, 0, &output[out_pos + i * OUTPUT_SIZE_X]);
+    }
     if (gdim0 < leftovers) {
-        INPUT0_TYPE val = input[idx_pos + offset];
-        output[out_pos0 + offset] = val;
-        output[out_pos1 + offset] = val;
-        output[out_pos2 + offset] = val;
-        output[out_pos3 + offset] = val;
+        output[out_pos + offset] = input[idx_pos + offset];
     }
 }
 
