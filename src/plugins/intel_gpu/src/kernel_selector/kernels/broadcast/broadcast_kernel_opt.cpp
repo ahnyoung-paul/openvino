@@ -1,4 +1,4 @@
-// Copyright (C) 2-24 Intel Corporation
+// Copyright (C) 2024 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
 //
 
@@ -75,6 +75,7 @@ JitConstants BroadcastKernelOpt::GetJitConstants(const broadcast_params& params)
     jit.AddConstants({MakeJitConstant("BROADCAST_ORDER", params.input_order)});
     jit.AddConstants({MakeJitConstant("VEC_SIZE", vec_size)});
     jit.AddConstants({MakeJitConstant("Y_BLOCK_SIZE", y_block_size)});
+    jit.AddConstants({MakeJitConstant("USE_VEC", use_vec)});
 
     return jit;
 }
@@ -94,6 +95,7 @@ BroadcastKernelBase::DispatchData BroadcastKernelOpt::SetDefault(const broadcast
     dispatchData.lws = GetOptimalLocalWorkGroupSizes(dispatchData.gws, params.engineInfo, in_layout, out_layout, dims_by_gws);
 
     if (dispatchData.gws[2] != 0) {
+        std::cout << "* use vec function : " << (use_vec != 0? "True" : "False") << std::endl;
         std::cout << "* y_block_size : " << y_block_size << std::endl;
         std::cout << "* vec_size     : " << vec_size << std::endl;
         std::cout << "* dispatchData.gws={";

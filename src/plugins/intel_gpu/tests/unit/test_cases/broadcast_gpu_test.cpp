@@ -2453,3 +2453,21 @@ TEST(broadcast_gpu_opt_fp16, perf_ref) {
     run_broadcast_perf(true, 2050);
     run_broadcast_perf(true, 2051);
 }
+
+TEST(broadcast_gpu_opt_fp16, perf_opt1) {
+    run_broadcast_perf(false, 1024);
+    run_broadcast_perf(false, 1536);
+    run_broadcast_perf(false, 2048);
+    // run_broadcast_perf(false, 2049);
+    // run_broadcast_perf(false, 2050);
+    // run_broadcast_perf(false, 2051);
+}
+
+TEST(broadcast_gpu_opt_fp16, perf_ref1) {
+    run_broadcast_perf(true, 1024);
+    run_broadcast_perf(true, 1536);
+    run_broadcast_perf(true, 2048);
+    // run_broadcast_perf(true, 2049);
+    // run_broadcast_perf(true, 2050);
+    // run_broadcast_perf(true, 2051);
+}
