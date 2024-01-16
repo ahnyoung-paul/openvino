@@ -86,15 +86,7 @@ BroadcastKernelBase::DispatchData BroadcastKernelOpt::SetDefault(const broadcast
     DispatchData dispatchData;
     auto in_layout = params.inputs[0].GetLayout();
     auto out_layout = params.outputs[0].GetLayout();
-#if 1
-    std::vector<std::vector<Tensor::DataChannelName>> dims_by_gws = {{ Tensor::DataChannelName::Y },
-                                                                     { Tensor::DataChannelName::X },
-                                                                     { Tensor::DataChannelName::Z, Tensor::DataChannelName::W,
-                                                                       Tensor::DataChannelName::FEATURE, Tensor::DataChannelName::BATCH }};
 
-    dispatchData.gws = { output.Y().v / y_block_size, output.X().v / vec_size, output.Z().v * output.W().v * output.Feature().v * output.Batch().v };
-    dispatchData.lws = GetOptimalLocalWorkGroupSizes(dispatchData.gws, params.engineInfo, in_layout, out_layout, dims_by_gws);
-#else
     std::vector<std::vector<Tensor::DataChannelName>> dims_by_gws = {{ Tensor::DataChannelName::X },
                                                                      { Tensor::DataChannelName::Y },
                                                                      { Tensor::DataChannelName::Z, Tensor::DataChannelName::W,
@@ -102,8 +94,6 @@ BroadcastKernelBase::DispatchData BroadcastKernelOpt::SetDefault(const broadcast
 
     dispatchData.gws = { output.X().v / vec_size, output.Y().v / y_block_size,  output.Z().v * output.W().v * output.Feature().v * output.Batch().v };
     dispatchData.lws = GetOptimalLocalWorkGroupSizes(dispatchData.gws, params.engineInfo, in_layout, out_layout, dims_by_gws);
-
-#endif
 
     if (dispatchData.gws[2] != 0) {
         std::cout << "* use vec function : " << (use_vec != 0? "True" : "False") << std::endl;

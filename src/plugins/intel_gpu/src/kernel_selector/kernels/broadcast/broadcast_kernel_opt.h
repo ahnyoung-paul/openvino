@@ -19,8 +19,8 @@ public:
     bool Validate(const Params& p, const optional_params& o) const override;
     JitConstants GetJitConstants(const broadcast_params& params) const override;
 
-    const size_t vec_size = 16;
-    const size_t y_block_size = 1;
+    const size_t vec_size = 4;
+    const size_t y_block_size = 4;
     const size_t use_vec = 1;
 };
 }  // namespace kernel_selector

@@ -2414,7 +2414,7 @@ static void run_broadcast_perf(bool use_ref, ov::Dimension::value_type batch_siz
             auto avg = (static_cast<float>(sum - max - min) / (time_records.size() - 2)) / 1000.f;
             std::cout << "latency[kernel : " << network.get_primitive(broadcast_id)->get_implementation_name() << "]"
                         << "[num:" << std::setfill('0') << std::setw(3) << time_records.size() << "]"
-                        << "[input: " << output_layout.to_short_string() << "] avg: "
+                        << "[output: " << output_layout.to_short_string() << "] avg: "
                         << std::setfill(' ') << std::setw(8) << avg << " ms, max: " << (static_cast<float>(max) / 1000.f)
                         << " ms, min: " << (static_cast<float>(min) / 1000.f) << " ms, min io throuphput : "
                         << (static_cast<float>(output_layout.count() * 2) / (1024 * 1024 * (static_cast<float>(min) / 1000.f))) << std::endl;
