@@ -2418,7 +2418,6 @@ static void run_broadcast_perf(bool use_ref, ov::Dimension::value_type batch_siz
                         << std::setfill(' ') << std::setw(8) << avg << " ms, max: " << (static_cast<float>(max) / 1000.f)
                         << " ms, min: " << (static_cast<float>(min) / 1000.f) << " ms, min io throuphput : "
                         << (static_cast<float>(output_layout.count() * 2) / (1024 * 1024 * (static_cast<float>(min) / 1000.f))) << std::endl;
-            std::cout << "outptu count " << output_layout.count() << std::endl;
         } else {
             std::cout << "latency[kernel : " << network.get_primitive(broadcast_id)->get_implementation_name() << "] "
                         << (static_cast<float>(time_records.front()) / 1000.f) << " ms " << std::endl;
