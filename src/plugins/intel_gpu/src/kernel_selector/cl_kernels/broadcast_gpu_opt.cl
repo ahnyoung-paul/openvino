@@ -73,8 +73,8 @@ KERNEL(broadcast_gpu_opt)(
         offset = gdim0;
     }
 
-    const uint out_x  = (uint) (get_global_id(0) * VEC_SIZE + offset);
-    const uint out_y  = (uint) (get_global_id(1) * Y_BLOCK_SIZE);
+    const uint out_x  = (uint) (get_global_id(1) * VEC_SIZE + offset);
+    const uint out_y  = (uint) (get_global_id(0) * Y_BLOCK_SIZE);
 #if OUTPUT_DIMS == 6
     const uint out_bfwz = (uint) get_global_id(2);
     const uint out_z  = (out_bfwz % OUTPUT_SIZE_Z);

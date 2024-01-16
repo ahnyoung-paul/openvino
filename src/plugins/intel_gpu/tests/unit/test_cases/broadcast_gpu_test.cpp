@@ -2383,7 +2383,7 @@ static void run_broadcast_perf(bool use_ref, ov::Dimension::value_type batch_siz
         cldnn::memory::ptr output = nullptr;
 
         std::vector<int64_t> time_records;
-        const size_t num_tests = 10;
+        const size_t num_tests = 100;
         for (size_t i = 0; i < num_tests; i++) {
             network.set_input_data(input_id, input_mem);
             network.set_input_data(target_shape_id, target_shape_mem);
@@ -2407,14 +2407,18 @@ static void run_broadcast_perf(bool use_ref, ov::Dimension::value_type batch_siz
         }
 
         if (num_tests > 1) {
+            auto output_layout = output->get_layout();
             auto sum = std::accumulate(time_records.begin(), time_records.end(), 0);
             auto max = *std::max_element(time_records.begin(), time_records.end());
             auto min = *std::min_element(time_records.begin(), time_records.end());
-            auto avg = (static_cast<float>(sum - max - min) / 8.f) / 1000.f;
+            auto avg = (static_cast<float>(sum - max - min) / (time_records.size() - 2)) / 1000.f;
             std::cout << "latency[kernel : " << network.get_primitive(broadcast_id)->get_implementation_name() << "]"
-                        << "[input: " << input_static_layout.to_short_string() << "] avg: "
-                        << avg << " ms, max: " << (static_cast<float>(max) / 1000.f)
-                        << " ms, min: " << (static_cast<float>(min) / 1000.f) << std::endl;
+                        << "[num:" << std::setfill('0') << std::setw(3) << time_records.size() << "]"
+                        << "[input: " << output_layout.to_short_string() << "] avg: "
+                        << std::setfill(' ') << std::setw(8) << avg << " ms, max: " << (static_cast<float>(max) / 1000.f)
+                        << " ms, min: " << (static_cast<float>(min) / 1000.f) << " ms, min io throuphput : "
+                        << (static_cast<float>(output_layout.count() * 2) / (1024 * 1024 * (static_cast<float>(min) / 1000.f))) << std::endl;
+            std::cout << "outptu count " << output_layout.count() << std::endl;
         } else {
             std::cout << "latency[kernel : " << network.get_primitive(broadcast_id)->get_implementation_name() << "] "
                         << (static_cast<float>(time_records.front()) / 1000.f) << " ms " << std::endl;
