@@ -19,7 +19,7 @@ public:
     bool Validate(const Params& p, const optional_params& o) const override;
     JitConstants GetJitConstants(const broadcast_params& params) const override;
 
-    const size_t vec_size = 4;
+    const size_t vec_size = 2;
     const size_t y_block_size = 4;
     const size_t use_vec = 1;
 };

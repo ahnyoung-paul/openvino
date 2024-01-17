@@ -67,13 +67,13 @@ KERNEL(broadcast_gpu_opt)(
     const uint in_sf = input_indices[BROADCAST_ORDER[1]];
     const uint in_sb = input_indices[BROADCAST_ORDER[0]];
 
-    // const uint gdim0 = (uint) get_global_id(0);
-    // uint offset = leftovers;
-    // if (gdim0 < leftovers) {
-    //     offset = gdim0;
-    // }
+    const uint gdim0 = (uint) get_global_id(0);
+    uint offset = leftovers;
+    if (gdim0 < leftovers) {
+        offset = gdim0;
+    }
 
-    const uint out_x  = (uint) (get_global_id(0) * VEC_SIZE);
+    const uint out_x  = (uint) (get_global_id(0) * VEC_SIZE + offset);
     const uint out_y  = (uint) (get_global_id(1) * Y_BLOCK_SIZE);
 #if OUTPUT_DIMS == 6
     const uint out_bfwz = (uint) get_global_id(2);
@@ -154,9 +154,9 @@ KERNEL(broadcast_gpu_opt)(
         }
     }
 #endif
-    // if (gdim0 < leftovers) {
-    //     output[out_pos + offset] = input[idx_pos + offset];
-    // }
+    if (gdim0 < leftovers) {
+        output[out_pos + offset] = input[idx_pos + offset];
+    }
 }
 
 #ifdef IDX_ORDER
