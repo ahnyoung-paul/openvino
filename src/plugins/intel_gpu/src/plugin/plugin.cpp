@@ -12,6 +12,7 @@
 #include <tuple>
 #include <cctype>
 #include <memory>
+#include <ctime>
 
 #include "openvino/core/deprecated.hpp"
 #include "openvino/pass/visualize_tree.hpp"
@@ -100,6 +101,9 @@ std::shared_ptr<ov::Model> Plugin::clone_and_transform_model(const std::shared_p
     OV_ITT_SCOPED_TASK(itt::domains::intel_gpu_plugin, "Plugin::clone_and_transform_model");
     GPU_DEBUG_GET_INSTANCE(debug_config);
     GPU_DEBUG_DEFINE_MEM_LOGGER("Plugin::clone_and_transform_model");
+    auto curr_time = std::chrono::system_clock::now();
+    std::time_t end_time = std::chrono::system_clock::to_time_t(curr_time);
+    std::cout << "Start Plugin::clone_and_transform_model at " << std::ctime(&end_time);
 
     auto cloned_model = model->clone();
     OPENVINO_ASSERT(cloned_model != nullptr, "[GPU] Failed to clone model!");
@@ -110,7 +114,11 @@ std::shared_ptr<ov::Model> Plugin::clone_and_transform_model(const std::shared_p
         ov::pass::VisualizeTree(path_base + ".svg").run_on_model(cloned_model);
     }
 
+    auto transform_start = std::chrono::high_resolution_clock::now();
     transform_model(cloned_model, config);
+    auto transform_end = std::chrono::high_resolution_clock::now();
+    auto transform_time = static_cast<double>(std::chrono::duration_cast<std::chrono::microseconds>(transform_end - transform_start).count()) / 1000;
+    std::cout << "Plugin::transform_model elapsed time : " << transform_time << " ms " << std::endl;
 
     // Transformations for some reason may drop output tensor names, so here we copy those from the original model
     auto new_results = cloned_model->get_results();

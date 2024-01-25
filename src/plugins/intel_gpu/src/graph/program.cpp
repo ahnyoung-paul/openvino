@@ -161,7 +161,19 @@ program::program(engine& engine_ref,
     if (no_optimizations) {
         init_graph();
     } else {
+        if (!is_internal) {
+            auto curr_time = std::chrono::system_clock::now();
+            std::time_t end_time = std::chrono::system_clock::to_time_t(curr_time);
+            std::cout << "Start cldnn::build_program at " << std::ctime(&end_time);
+        }
+        auto start_build = std::chrono::high_resolution_clock::now();
         build_program(is_internal);
+        auto end_build = std::chrono::high_resolution_clock::now();
+        if (!is_internal) {
+            auto build_time = static_cast<double>(std::chrono::duration_cast<std::chrono::microseconds>(end_build - start_build).count()) / 1000;
+            std::cout << "End cldnn::build_program elapsed time : " << build_time << " ms " << std::endl;
+        }
+
         if (_is_body_program) {
             // To skip empty if (condition) subgraph
             bool can_be_optimized = true;
@@ -631,7 +643,11 @@ void program::post_optimize_graph(bool is_internal) {
     if (!is_internal && !partial_build) {
 #endif
         // ToDo remove hidden dependencies from propagate_constants pass
+        auto start = std::chrono::high_resolution_clock::now();
         apply_opt_pass<propagate_constants>();
+        auto end = std::chrono::high_resolution_clock::now();
+        auto time_propagate_constants = static_cast<double>(std::chrono::duration_cast<std::chrono::microseconds>(end - start).count()) / 1000;
+        std::cout << "** propagate_constants elapsed time : " << time_propagate_constants << " ms " << std::endl;
     }
 
     if (optimize_data)

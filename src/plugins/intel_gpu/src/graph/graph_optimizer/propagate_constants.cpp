@@ -24,7 +24,12 @@ void propagate_constants::run(program& p) {
             handle_constant(p, *node);
     }
 
+    auto inner_execution_start = std::chrono::high_resolution_clock::now();
     auto&& to_replace = calculate(p.get_engine(), p.get_config(), p.get_task_executor());
+    auto inner_execution_end = std::chrono::high_resolution_clock::now();
+    auto inner_execution_time
+        = static_cast<double>(std::chrono::duration_cast<std::chrono::microseconds>(inner_execution_end - inner_execution_start).count()) / 1000;
+    std::cout << "*** propagate_constants::calculate elapsed time : " << inner_execution_time << " ms " << std::endl;
 
     // remove all nodes which are no longer relevant, i.e. nodes which:
     // 1. are constants, and

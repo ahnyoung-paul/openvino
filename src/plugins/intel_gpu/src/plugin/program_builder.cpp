@@ -104,6 +104,12 @@ ProgramBuilder::ProgramBuilder(std::shared_ptr<ov::Model> model, cldnn::engine& 
 
     auto ops = model->get_ordered_ops();
 
+    {
+        auto curr_time = std::chrono::system_clock::now();
+        std::time_t end_time = std::chrono::system_clock::to_time_t(curr_time);
+        std::cout << "ProgramBuilder::ProgramBuilder before build at " << std::ctime(&end_time);
+    }
+
     m_program = build(ops, create_topology_only, partial_build, is_inner_program);
 }
 
@@ -156,9 +162,37 @@ std::shared_ptr<cldnn::program> ProgramBuilder::build(const std::vector<std::sha
 
     prepare_build();
     {
+        std::map<std::string, std::vector<double>> ops_profiling;
+
+        auto start = std::chrono::high_resolution_clock::now();
         GPU_DEBUG_DEFINE_MEM_LOGGER("CreateSingleLayerPrimitives");
         for (const auto& op : ops) {
+            auto start = std::chrono::high_resolution_clock::now();
             CreateSingleLayerPrimitive(*m_topology, op);
+            auto end = std::chrono::high_resolution_clock::now();
+            auto elapsed_time = static_cast<double>(std::chrono::duration_cast<std::chrono::microseconds>(end - start).count()) / 1000;
+            auto type_name  = op->get_type_name();
+            if (ops_profiling.find(type_name) != ops_profiling.end()) {
+                ops_profiling[type_name].push_back(elapsed_time);
+            } else {
+                ops_profiling.insert({type_name, {elapsed_time}});
+            }
+        }
+        auto end = std::chrono::high_resolution_clock::now();
+        auto time_propagate_constants = static_cast<double>(std::chrono::duration_cast<std::chrono::microseconds>(end - start).count()) / 1000;
+        std::cout << "** ProgramBuilder::build::CreateSingleLayerPrimitive[" << ops.size() << "] elapsed time : " << time_propagate_constants << " ms " << std::endl;
+
+        std::cout << "type,count,total(ms),avg(ms),max(ms),min(ms)" << std::endl;
+        for (auto iter : ops_profiling) {
+            auto& op_type = iter.first;
+            auto& time_vec = iter.second;
+            auto max_time = *std::max_element(time_vec.begin(), time_vec.end());
+            auto min_time = *std::min_element(time_vec.begin(), time_vec.end());
+            double sum = std::accumulate(time_vec.begin(), time_vec.end(), 0.f);
+            auto avg = sum / time_vec.size();
+            if (time_vec.size() > 2) 
+                avg = (sum - max_time - min_time) / (time_vec.size() - 2);
+            std::cout << op_type << "," << time_vec.size() << "," << sum << "," << avg << "," << max_time << "," << min_time << std::endl;
         }
     }
     if (create_topology_only) {
@@ -167,6 +201,7 @@ std::shared_ptr<cldnn::program> ProgramBuilder::build(const std::vector<std::sha
         OV_ITT_SCOPED_TASK(itt::domains::intel_gpu_plugin, "ProgramBuilder::CreateProgram");
         cldnn::program::ptr program;
         try {
+
             program = cldnn::program::build_program(m_engine,
                                                     *m_topology,
                                                     m_config,
