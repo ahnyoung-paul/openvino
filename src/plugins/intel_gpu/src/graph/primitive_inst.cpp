@@ -150,6 +150,7 @@ static memory::ptr get_memory_from_pool(engine& _engine,
                                 allocation_type type,
                                 bool reusable_across_network,
                                 const std::set<std::string>& memory_dependencies,
+                                std::string& tags,
                                 bool reset = true,
                                 memory* curr_memory = nullptr) {
     OPENVINO_ASSERT(!layout.is_dynamic() || layout.has_upper_bound(),
@@ -158,8 +159,9 @@ static memory::ptr get_memory_from_pool(engine& _engine,
     if (_node.get_program().get_config().get_property(ov::intel_gpu::enable_memory_pool)) {
         if (curr_memory != nullptr)
             pool.release_memory(curr_memory, _node.id(), net_id);
-        return pool.get_memory(layout, _node.id(), net_id, memory_dependencies, type, reusable_across_network, reset);
+        return pool.get_memory_with_tags(layout, _node.id(), net_id, memory_dependencies, type, tags, reusable_across_network, reset);
     }
+    tags = "alloc";
     return pool.get_memory(layout, type, reset);
 }
 
@@ -534,34 +536,14 @@ event::ptr primitive_inst::realloc_if_needed() {
     bool can_reuse_buffer = _outputs[0] && updated_layout.count() <= _max_output_layout_count;
 
     // If we allocated too large memory, reclaim the memory.
-#if 1
+    bool dump_output_layout = false;
     if (updated_layout.count() * 10 < _max_output_layout_count) {
         if (can_reuse_buffer) {
-            std::string dump_file = "C:\\dev\\ahnyoung\\cldnn.01\\dump_reuse_buffer_usage.csv";
-            bool is_empty_file = !is_opened_already;
-            if (!is_opened_already) {
-                is_opened_already = true;
-                std::ifstream r_dump(dump_file.c_str());
-                if (!r_dump) {
-                    is_empty_file = true;
-                } else {
-                    is_empty_file = (r_dump.peek() == std::ifstream::traits_type::eof());
-                }
-            }
-            std::ofstream f_dump(dump_file.c_str(), std::ios_base::out | std::ios::app);
-            if (f_dump.is_open()) {
-                if (is_empty_file) {
-                    f_dump << "net,prim_id,origin_max_layout,origin_max_layout_count,updated_layout,updated_layout_count" << std::endl;
-                }
-                f_dump << get_network().tags << ","
-                    << id() << ","
-                    << _max_output_layout.to_short_string() << "," << _max_output_layout_count << ","
-                    << updated_layout.to_short_string() << "," << updated_layout.count() << std::endl;
-            }
+            dump_output_layout = true;
         }
         can_reuse_buffer = false;
     }
-#endif
+
     // Handle runtime dynamic concat optimization
     if (_node->is_type<concatenation>() && can_be_optimized() && allocation_done_by_other) {
         allocation_done_by_other = false;
@@ -596,6 +578,35 @@ event::ptr primitive_inst::realloc_if_needed() {
                                <<  " Current buffer_size=" << _max_output_layout_count
                                <<  " Requested buffer_size=" << updated_layout.count() << std::endl;
         _outputs = allocate_outputs(&updated_params, need_reset_output_memory(), true);
+
+        if (dump_output_layout) {
+            std::string dump_file = "C:\\dev\\ahnyoung\\cldnn.01\\dump_reuse_buffer_usage.csv";
+            bool is_empty_file = !is_opened_already;
+            if (!is_opened_already) {
+                is_opened_already = true;
+                std::ifstream r_dump(dump_file.c_str());
+                if (!r_dump) {
+                    is_empty_file = true;
+                } else {
+                    is_empty_file = (r_dump.peek() == std::ifstream::traits_type::eof());
+                }
+            }
+            std::ofstream f_dump(dump_file.c_str(), std::ios_base::out | std::ios::app);
+            if (f_dump.is_open()) {
+                if (is_empty_file) {
+                    f_dump << "net,prim_id,origin_max_layout,origin_max_layout_count,"
+                                "new_max_layout,new_max_layout_count,updated_layout,updated_layout_count,mem_type" << std::endl;
+                }
+                auto new_max_output_layout_count = updated_params.output_layouts[0].count();
+                auto new_max_output_layout = updated_params.output_layouts[0];
+                f_dump << get_network().tags << ","
+                    << id() << ","
+                    << _max_output_layout.to_short_string() << "," << _max_output_layout_count << ","
+                    << new_max_output_layout.to_short_string() << "," << _max_output_layout_count << ","
+                    << updated_layout.to_short_string() << "," << updated_layout.count() << "," << mem_tags << std::endl;
+            }
+        }
+
         // TODO : need to handle multiple outputs
         _max_output_layout_count = updated_params.output_layouts[0].count();
         _max_output_layout = updated_params.output_layouts[0];
@@ -1522,6 +1533,7 @@ memory::ptr primitive_inst::allocate_internal_buffer(size_t idx, bool reset) {
                              alloc_type,
                              reuse_internal_buf,
                              _runtime_memory_dependencies,
+                             mem_tags,
                              reset,
                              _intermediates_memory.size() > idx ? _intermediates_memory[idx].get() : nullptr);
     GPU_DEBUG_LOG << " [" << _network.get_id() << ":" << _node->id() << ": internal buf " << idx << "] " << alloc_type
@@ -1680,6 +1692,7 @@ memory::ptr primitive_inst::allocate_output(engine& _engine,
                                             const std::set<primitive_id>& memory_dependencies,
                                             uint32_t net_id,
                                             bool is_internal,
+                                            std::string& tags,
                                             size_t idx,
                                             bool reset,
                                             bool is_output_buffer,
@@ -1740,16 +1753,19 @@ memory::ptr primitive_inst::allocate_output(engine& _engine,
                                         alloc_type,
                                         false,
                                         memory_dependencies,
+                                        tags,
                                         reset,
                                         curr_memory);
         } else {
             if ((_node.is_output() && is_reorder_weights) || (!_node.is_output() && _node.is_type<input_layout>()))
                 reset = false;
             GPU_DEBUG_LOG << "[" << _node.id() << ": constant]" << std::endl;
+            tags = "alloc";
             return _engine.allocate_memory(layout, alloc_type, reset);
         }
     } else if (!_node.can_share_buffer() || _node.can_be_optimized() || _node.is_output()) {
         GPU_DEBUG_LOG << "[" << _node.id() << ": output]" << std::endl;
+        tags = "alloc";
         return _engine.allocate_memory(layout, alloc_type, reset);
     } else {
         return get_memory_from_pool(_engine,
@@ -1760,6 +1776,7 @@ memory::ptr primitive_inst::allocate_output(engine& _engine,
                                     alloc_type,
                                     reusable_across_network,
                                     memory_dependencies,
+                                    tags,
                                     reset,
                                     curr_memory);
     }
@@ -1769,13 +1786,15 @@ std::vector<memory::ptr> primitive_inst::allocate_outputs(kernel_impl_params* up
     std::vector<memory::ptr> outputs;
     auto impl_params = updated_params != nullptr ? *updated_params : *_impl_params;
     auto& out_layouts = impl_params.output_layouts;
+    const auto num_outputs = get_node().get_outputs_count();
+    mem_tags = (num_outputs > 1) ? std::to_string(get_node().get_outputs_count()) : "";
     for (size_t i = 0; i < get_node().get_outputs_count() ; ++i) {
         if (out_layouts[i].is_dynamic() && !out_layouts[i].has_upper_bound()) {
             outputs.push_back(memory::ptr());
         } else {
             auto current_memory_ptr = _outputs.size() > i ? output_memory_ptr(i).get() : nullptr;
             auto is_output = is_output_buffer(this, runtime_alloc);
-
+            std::string itag = "";
             outputs.push_back(allocate_output(_network.get_engine(),
                                             _network.get_memory_pool(),
                                             *_node,
@@ -1783,11 +1802,13 @@ std::vector<memory::ptr> primitive_inst::allocate_outputs(kernel_impl_params* up
                                             _runtime_memory_dependencies,
                                             get_network_id(),
                                             _network.is_internal(),
+                                            itag,
                                             i,
                                             reset_mem,
                                             is_output,
                                             current_memory_ptr,
                                             runtime_alloc));
+            mem_tags += (mem_tags.empty()? "" : "_") + itag;
         }
     }
     return outputs;

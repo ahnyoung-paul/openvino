@@ -216,6 +216,41 @@ memory::ptr memory_pool::get_memory(const layout& layout, allocation_type type, 
     return alloc_memory(layout, type, reset);
 }
 
+memory::ptr memory_pool::get_memory_with_tags(const layout& layout,
+                                    const primitive_id& id,
+                                    uint32_t network_id,
+                                    const std::set<primitive_id>& restrictions,
+                                    allocation_type type,
+                                    std::string& tags,
+                                    bool reusable_across_network,
+                                    bool reset) {
+    bool do_reuse = reusable_across_network;
+    GPU_DEBUG_GET_INSTANCE(debug_config);
+    GPU_DEBUG_IF(debug_config->disable_memory_reuse) {
+        do_reuse = false;
+    }
+    if (do_reuse) {
+        // reusable within the same network
+        if (!layout.format.is_image() && layout.data_padding == padding{{0, 0, 0, 0}, 0}) {
+            tags = "pool";
+            // non-padded buffers
+            return get_from_non_padded_pool(layout, id, network_id, restrictions, type, reset);
+        } else if (!layout.format.is_image()) {
+            // padded buffers
+            tags = "pool";
+            return get_from_padded_pool(layout, id, network_id, restrictions, type);
+        } else {
+            tags = "alloc";
+            // images (reuse not yet implemented)
+            return alloc_memory(layout, type, reset);
+        }
+    } else {
+        tags = "alloc";
+        return alloc_memory(layout, type, reset);
+    }
+}
+
+
 memory::ptr memory_pool::get_memory(const layout& layout,
                                     const primitive_id& id,
                                     uint32_t network_id,
@@ -231,16 +266,20 @@ memory::ptr memory_pool::get_memory(const layout& layout,
     if (do_reuse) {
         // reusable within the same network
         if (!layout.format.is_image() && layout.data_padding == padding{{0, 0, 0, 0}, 0}) {
+            _tags.emplace(id, "get_from_non_padded_pool");
             // non-padded buffers
             return get_from_non_padded_pool(layout, id, network_id, restrictions, type, reset);
         } else if (!layout.format.is_image()) {
             // padded buffers
+            _tags.emplace(id, "get_from_padded_pool");
             return get_from_padded_pool(layout, id, network_id, restrictions, type);
         } else {
+            _tags.emplace(id, "alloc_memory");
             // images (reuse not yet implemented)
             return alloc_memory(layout, type, reset);
         }
     } else {
+        _tags.emplace(id, "alloc_memory,do_reuse_false");
         return alloc_memory(layout, type, reset);
     }
 }

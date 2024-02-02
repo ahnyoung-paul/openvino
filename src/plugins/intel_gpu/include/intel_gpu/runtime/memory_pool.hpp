@@ -108,6 +108,16 @@ public:
                           allocation_type type,
                           bool reusable = true,
                           bool reset = true);  // get from pool or create memory allocation
+    memory_ptr get_memory_with_tags(const layout& layout,
+                          const primitive_id& id,
+                          uint32_t network_id,
+                          const std::set<primitive_id>& restrictions,
+                          allocation_type type,
+                          std::string& tags,
+                          bool reusable = true,
+                          bool reset = true);  // get from pool or create memory allocation
+
+
     memory_ptr get_memory(const layout& layout, allocation_type type, bool reset = true);
     memory_ptr get_from_non_padded_pool(const layout& layout,
                                         const primitive_id& id,
@@ -132,6 +142,11 @@ public:
     }
 
     void dump(uint32_t id);
+
+    std::string get_tags(primitive_id id);
+
+private:
+    std::map<std::string,std::string> _tags;
 };
 
 }  // namespace cldnn
