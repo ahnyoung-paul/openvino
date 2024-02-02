@@ -26,7 +26,7 @@
 #include <list>
 #include <set>
 
-// #define PROFILE_REUSE_BUFFER
+#define PROFILE_REUSE_BUFFER
 
 namespace cldnn {
 

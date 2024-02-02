@@ -604,7 +604,7 @@ event::ptr primitive_inst::realloc_if_needed() {
                 f_dump << get_network().tags << ","
                     << id() << ","
                     << _max_output_layout.to_short_string() << "," << _max_output_layout_count << ","
-                    << new_max_output_layout.to_short_string() << "," << _max_output_layout_count << ","
+                    << new_max_output_layout.to_short_string() << "," << new_max_output_layout_count << ","
                     << updated_layout.to_short_string() << "," << updated_layout.count() << "," << mem_tags << std::endl;
             }
         }
