@@ -843,6 +843,18 @@ std::map<primitive_id, network_output> network::execute(const std::vector<event:
 
 void network::execute_impl(const std::vector<event::ptr>& events) {
     OV_ITT_SCOPED_TASK(ov::intel_gpu::itt::domains::intel_gpu_plugin, "NetworkImpl::Execute");
+    {
+        std::stringstream str_net;
+        str_net << "net_info[" << get_id() << ";";
+        str_net << "in_";
+        for (auto& inst : _inputs) {
+            str_net << inst->get_output_layout(0).to_short_string();
+            break;
+        }
+        str_net << ";num_iter:" << iteration << "]";
+        this->tags = str_net.str();
+    }
+
     int64_t curr_iter = -1;
     GPU_DEBUG_GET_INSTANCE(debug_config);
 #ifdef GPU_DEBUG_CONFIG

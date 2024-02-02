@@ -47,6 +47,7 @@
 #include <vector>
 #include <memory>
 #include <algorithm>
+#include <fstream>
 
 #ifdef ENABLE_ONEDNN_FOR_GPU
 #include <impls/onednn/utils.hpp>
@@ -54,6 +55,8 @@
 
 namespace cldnn {
 namespace {
+
+static bool is_opened_already = false;
 
 template <typename T>
 bool is_optimized_output_user(const T user) {
@@ -477,6 +480,7 @@ event::ptr primitive_inst::realloc_if_needed() {
             } else if (_outputs[0] && variable.get_memory() && get_network().get_engine().is_the_same_buffer(*_outputs[0], *variable.get_memory())) {
                 _outputs[0] = nullptr;
                 _max_output_layout_count = 0;
+                _max_output_layout = cldnn::layout();
             }
         }
         variable.set_layout(actual_layout);
@@ -517,6 +521,7 @@ event::ptr primitive_inst::realloc_if_needed() {
             && _network.get_engine().is_the_same_buffer(dep_memory(0), output_memory(0))) {
             _outputs[0] = nullptr;
             _max_output_layout_count = 0;
+            _max_output_layout = cldnn::layout();
         }
     }
 
@@ -529,9 +534,34 @@ event::ptr primitive_inst::realloc_if_needed() {
     bool can_reuse_buffer = _outputs[0] && updated_layout.count() <= _max_output_layout_count;
 
     // If we allocated too large memory, reclaim the memory.
-    if (updated_layout.count() * 10 < _max_output_layout_count)
+#if 1
+    if (updated_layout.count() * 10 < _max_output_layout_count) {
+        if (can_reuse_buffer) {
+            std::string dump_file = "C:\\dev\\ahnyoung\\cldnn.01\\dump_reuse_buffer_usage.csv";
+            bool is_empty_file = !is_opened_already;
+            if (!is_opened_already) {
+                is_opened_already = true;
+                std::ifstream r_dump(dump_file.c_str());
+                if (!r_dump) {
+                    is_empty_file = true;
+                } else {
+                    is_empty_file = (r_dump.peek() == std::ifstream::traits_type::eof());
+                }
+            }
+            std::ofstream f_dump(dump_file.c_str(), std::ios_base::out | std::ios::app);
+            if (f_dump.is_open()) {
+                if (is_empty_file) {
+                    f_dump << "net,prim_id,origin_max_layout,origin_max_layout_count,updated_layout,updated_layout_count" << std::endl;
+                }
+                f_dump << get_network().tags << ","
+                    << id() << ","
+                    << _max_output_layout.to_short_string() << "," << _max_output_layout_count << ","
+                    << updated_layout.to_short_string() << "," << updated_layout.count() << std::endl;
+            }
+        }
         can_reuse_buffer = false;
-
+    }
+#endif
     // Handle runtime dynamic concat optimization
     if (_node->is_type<concatenation>() && can_be_optimized() && allocation_done_by_other) {
         allocation_done_by_other = false;
@@ -568,6 +598,7 @@ event::ptr primitive_inst::realloc_if_needed() {
         _outputs = allocate_outputs(&updated_params, need_reset_output_memory(), true);
         // TODO : need to handle multiple outputs
         _max_output_layout_count = updated_params.output_layouts[0].count();
+        _max_output_layout = updated_params.output_layouts[0];
     }
     _mem_allocated = true;
     // intermediate memory allocation is required for primitives consisting of multiple kernels in dynamic case
@@ -1415,8 +1446,10 @@ primitive_inst::primitive_inst(network& network, program_node const& node, bool 
         }
     }
     _impl_params->strm = _network.get_stream_ptr();
-    if (_outputs[0])
+    if (_outputs[0]) {
         _max_output_layout_count = _outputs[0]->get_layout().get_tensor().count();
+        _max_output_layout = _outputs[0]->get_layout();
+    }
 }
 
 memory::ptr primitive_inst::allocate_internal_buffer(size_t idx, bool reset) {

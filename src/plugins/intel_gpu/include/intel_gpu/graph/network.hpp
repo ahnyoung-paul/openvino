@@ -228,6 +228,7 @@ public:
 
 #ifdef GPU_DEBUG_CONFIG
     int64_t get_current_iteration_num() { return iteration; }
+    std::string tags;
 #endif
 
 private:

@@ -369,6 +369,7 @@ protected:
     bool _needs_completion_event = false;
 
     size_t _max_output_layout_count = 0;
+    cldnn::layout _max_output_layout;
     std::vector<size_t> max_intermediates_memory_sizes;
 
     std::vector<memory::ptr> allocate_outputs(kernel_impl_params* updated_params = nullptr, bool reset_mem = true, bool runtime_alloc = false);
