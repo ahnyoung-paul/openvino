@@ -534,13 +534,14 @@ event::ptr primitive_inst::realloc_if_needed() {
     }
 
     bool can_reuse_buffer = _outputs[0] && updated_layout.count() <= _max_output_layout_count;
-
     // If we allocated too large memory, reclaim the memory.
     bool dump_output_layout = false;
     if (updated_layout.count() * 10 < _max_output_layout_count) {
+#ifdef PROFILE_REUSE_BUFFER
         if (can_reuse_buffer) {
             dump_output_layout = true;
         }
+#endif
         can_reuse_buffer = false;
     }
 
@@ -579,6 +580,7 @@ event::ptr primitive_inst::realloc_if_needed() {
                                <<  " Requested buffer_size=" << updated_layout.count() << std::endl;
         _outputs = allocate_outputs(&updated_params, need_reset_output_memory(), true);
 
+#ifdef PROFILE_REUSE_BUFFER
         if (dump_output_layout) {
             std::string dump_file = "C:\\dev\\ahnyoung\\cldnn.01\\dump_reuse_buffer_usage.csv";
             bool is_empty_file = !is_opened_already;
@@ -606,7 +608,7 @@ event::ptr primitive_inst::realloc_if_needed() {
                     << updated_layout.to_short_string() << "," << updated_layout.count() << "," << mem_tags << std::endl;
             }
         }
-
+#endif
         // TODO : need to handle multiple outputs
         _max_output_layout_count = updated_params.output_layouts[0].count();
         _max_output_layout = updated_params.output_layouts[0];

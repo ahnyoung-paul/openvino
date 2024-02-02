@@ -26,6 +26,8 @@
 #include <list>
 #include <set>
 
+// #define PROFILE_REUSE_BUFFER
+
 namespace cldnn {
 
 /// @brief Represents network output returned by @ref network::get_output().
