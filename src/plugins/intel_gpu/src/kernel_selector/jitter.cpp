@@ -1871,14 +1871,24 @@ JitConstants FusedOpsCodeGenerator::MakeOpJitConstants(const FusedOpsConfigurati
             }
 
             auto tmp_var = out_var + "_tmp";
-            auto acc_t_type = GetType(get_acc_t(), vec_size);
-            op_decls += "\\\n\t" + acc_t_type + " " + tmp_var + " = " + input_vars[0] + op + input_vars[1] + ";";
+            auto acc_data_type = get_acc_t();
+            auto acc_t_type = GetType(acc_data_type, vec_size);
+            if (acc_data_type == Datatype::F16) {
+                auto f32_t_type = GetType(Datatype::F32, vec_size);
+                op_decls += "\\\n\t" + f32_t_type + " " + tmp_var + " = " + ConvertToType(input_vars[0], Datatype::F32, vec_size)
+                            + op + ConvertToType(input_vars[1], Datatype::F32, vec_size) + ";";
+            } else {
+                op_decls += "\\\n\t" + acc_t_type + " " + tmp_var + " = " + input_vars[0] + op + input_vars[1] + ";";
+            }
+
             if (floor_integer_div) {
                 auto tmp_var_rem = tmp_var + "_rem";
                 op_decls += "\\\n\t" + acc_t_type + " " + tmp_var_rem + " = " + input_vars[0] + " % " + input_vars[1] + ";";
                 op_decls += "\\\n\t" + tmp_var + " -= " + "((" + tmp_var_rem + " != 0 && (" + input_vars[0] + " < 0) != (" + input_vars[1] + " < 0)) ? 1 : 0);";
             }
             op_decls += "\\\n\t" + GetOutputType(vec_size) + " " + out_var + " = " + ConvertToOutputType(tmp_var, vec_size) + ";";
+            // op_decls += "\\\n\t" + GetOutputType(vec_size) + " " + out_var + " = -9997.950195;";
+            // op_decls += "\\\n\t" + GetOutputType(vec_size) + " " + out_var + " = -11.11;";
             break;
         }
         case KernelType::QUANTIZE: {

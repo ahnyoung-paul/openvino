@@ -425,6 +425,28 @@ KERNEL(gemm_tiled_opt)(
         FUSED_OPS_VEC;
 #endif // FUSED_OPS_CAN_USE_PRELOAD
         OUTPUT_TYPE_VEC res = FUSED_OPS_RESULT_VEC;
+
+        if (get_global_id(0) < 3 && get_global_id(1) < 3 && get_global_id(2) < 3) {
+            half8 res2 = -9997.950195f;
+            res2[0] = (half)-9997.955f;
+            res2[1] = (half)-9900.12345f;
+            res2[2] = (half)-9995.12345f;
+            res2[3] = (half)-9996.12345f;
+            res2[4] = (half)-10008.12345f;
+            half8 res3 = -9997.950195f;
+            res3[0] = (half)-9997.955f;
+            res3[1] = (half)-9900.12345f;
+            res3[2] = (half)-9995.12345f;
+            res3[3] = (half)-9996.12345f;
+            res3[4] = (half)-10008.12345f;
+            ushort8 test = as_ushort8(res2);
+            half8 test2 = as_half8(test);
+            printf("%f: %f [0]=> %f, %u\n", res3[0], (float)res2[0], (float)test2[0], test[0]);
+            printf("%f: %f [1]=> %f, %u\n", (float)res3[1], (float)res2[1], (float)test2[1], test[1]);
+            printf("%f: %f [2]=> %f, %u\n", (float)res3[2], (float)res2[2], (float)test2[2], test[2]);
+            printf("%f: %f [3]=> %f, %u\n", (float)res3[3], (float)res2[3], (float)test2[3], test[3]);
+            printf("%f: %f [4]=> %f, %u\n", (float)res3[4], (float)res2[4], (float)test2[4], test[4]);
+        }
         BLOCK_WRITE_C(d_ptr, 0, res);
 #else // HAS_FUSED_OPS
         BLOCK_WRITE_C(d_ptr, 0, dequantized);

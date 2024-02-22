@@ -4234,6 +4234,8 @@ void test_gemm_accuracy(ov::element::Type_t d_type = data_types::f32) {
     ExecutionConfig config = get_test_default_config(engine);
     config.set_property(ov::intel_gpu::optimize_data(true));
     config.set_property(ov::intel_gpu::allow_new_shape_infer(true));
+    ov::intel_gpu::ImplementationDesc gemm_impl = { format::bfyx, "gemm_ref" };
+    config.set_property(ov::intel_gpu::force_implementations(ov::intel_gpu::ImplForcingMap{ {gemm_id, gemm_impl} }));
     network::ptr network = get_network(engine, topology, config, get_test_stream_ptr(), false);
 
     {

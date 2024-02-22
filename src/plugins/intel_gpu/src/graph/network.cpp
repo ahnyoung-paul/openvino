@@ -1039,6 +1039,15 @@ void network::execute_impl(const std::vector<event::ptr>& events) {
         if (needs_flushing && executed_prims % flush_frequency == 0)
             get_stream().flush();
 
+        if (inst->id() == "matmul:Div_72") {
+            get_stream().flush();
+            mem_lock<ov::float16, mem_lock_type::read> lock(inst->output_memory_ptr(0), get_stream());
+            ov::float16 *p_data = lock.data();
+            for (size_t i = 0; i < 10; i++) {
+                std::cout << "p_data[" << i << "] : " << static_cast<float>(p_data[i]) << std::endl;
+            }
+        }
+
         // Dump output buffers of 'inst'
         GPU_DEBUG_IF(debug_config->dump_layers_path.length() > 0) {
             get_stream().finish();

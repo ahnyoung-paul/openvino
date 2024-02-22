@@ -127,7 +127,37 @@ KERNEL(gemm_ref)(
 #if HAS_FUSED_OPS
     FUSED_OPS;
     OUTPUT_TYPE res = FUSED_OPS_RESULT;
+#if 0
     output[dst_index] = res;
+    if (dst_index == 5 || dst_index == 6)
+        output[dst_index] = -9995.993164;
+    else if (dst_index == 7 || dst_index == 8)
+        output[dst_index] = -9996.085938;
+    else if (dst_index == 4)
+        output[dst_index] = -11.085938;
+    else if (dst_index == 3)
+        output[dst_index] = -10013.085938;
+    else if (dst_index == 2)
+        output[dst_index] = -9001.1234;
+    else if (dst_index == 9)
+        output[dst_index] = 9996.1234;
+#else
+    if (dst_index == 5 || dst_index == 6)
+        res = -9995.993164;
+    else if (dst_index == 7 || dst_index == 8)
+        res = -9996.085938;
+    else if (dst_index == 4)
+        res = -11.085938;
+    else if (dst_index == 3)
+        res = -10013.085938;
+    else if (dst_index == 2)
+        res = -9001.1234;
+    else if (dst_index == 9)
+        res = 9996.1234;
+    output[dst_index] = res;
+#endif
+    if (dst_index < 10)
+        printf("[%d] acc,deq: %f + eltwise_data0: %f = deq_tmp: %f, res: %f, out: %f(%f)\n", dst_index, dequantized, eltwise0_data0, dequantized_out_0_tmp, res, output[dst_index], (float)output[dst_index]);
 #else
     output[dst_index] = dequantized;
 #endif
