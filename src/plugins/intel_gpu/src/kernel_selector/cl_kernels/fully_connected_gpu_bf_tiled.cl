@@ -341,7 +341,8 @@ inline void FUNC(fc_bf_tiled_kernel_default)(
             barrier(CLK_LOCAL_MEM_FENCE);
         #endif
 
-        unroll_for(uint ki = 0; ki < (TILE_IFM * SIMD) / TILE_K; ++ki) {
+        // fully_connected_gpu_bf_tiled_1934536794611325665_1_0__sa
+        for (uint ki = 0; ki < (TILE_IFM * SIMD) / TILE_K; ++ki) {
             #if COMPRESSED_WEIGHTS_INT4
                 #if USE_SLM
                     FILTER_VEC_TYPE wei = 0;

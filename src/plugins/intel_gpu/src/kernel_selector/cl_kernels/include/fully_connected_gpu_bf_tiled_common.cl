@@ -121,7 +121,8 @@ inline void (FUNC_NAME)(
             ACCUMULATOR_VEC_TYPE acc_tmp[FORCED_TILE_B] = { };
         #endif
 
-        unroll_for(uint ki = 0; ki < (TILE_IFM * SIMD) / TILE_K; ++ki) {
+        // fully_connected_gpu_bf_tiled_6734993247477004926_1_0__sa
+        for(uint ki = 0; ki < (TILE_IFM * SIMD) / TILE_K; ++ki) {
             #if COMPRESSED_WEIGHTS_INT4
                 FILTER_PACKED_VEC_TYPE wei_packed = FILTER_BLOCK_READ(weights, weights_offset);
                 wei = UNPACK_INT4x2(ACCUMULATOR_TYPE, *((INT4_PACKED_TYPE*)&wei_packed));
