@@ -85,6 +85,11 @@ std::string KernelBaseOpenCL::GetEntryPoint(const std::string& templateName,
 std::pair<std::string, std::string> KernelBaseOpenCL::CreateJit(const std::string& template_name,
                                           const JitConstants& constants,
                                           const std::string& kernel_id) const {
+    const std::string debug_kernel_id = "fully_connected_gpu_bf_tiled_1934536794611325665_1_0__sa";
+    const int32_t hint_size = 0;
+    if (debug_kernel_id == kernel_id) {
+        std::cout << "Set kernel : " << debug_kernel_id << " w/ hint_size " << hint_size << std::endl;
+    }
     class CodeBuilder code;
     std::string undefs;
     code.add_line("\n//====================================================")
@@ -92,6 +97,8 @@ std::pair<std::string, std::string> KernelBaseOpenCL::CreateJit(const std::strin
         .add_line("// Kernel name: " + kernel_id)
         .value_macro("KERNEL(name)", "__kernel void " + kernel_id)
         .value_macro("KERNEL_ID", kernel_id)
+        .value_macro("IS_DEBUG", ((debug_kernel_id == kernel_id && hint_size > 0)? "1" : "0"))
+        .value_macro("DEBUG_HINT_SIZE", std::to_string(hint_size))
         .decoration_macro("FUNC", "", kernel_id)
         .decoration_macro("FUNC_CALL", "", kernel_id)
         .decoration_macro("CONST_ARRAY_DECL", "__constant size_t ", kernel_id + " []")
@@ -99,6 +106,8 @@ std::pair<std::string, std::string> KernelBaseOpenCL::CreateJit(const std::strin
 
     undefs += "#undef KERNEL\n";
     undefs += "#undef KERNEL_ID\n";
+    undefs += "#undef IS_DEBUG\n";
+    undefs += "#undef DEBUG_HINT_SIZE\n";
     undefs += "#undef FUNC\n";
     undefs += "#undef FUNC_CALL\n";
     undefs += "#undef CONST_ARRAY_DECL\n";

@@ -122,6 +122,10 @@
 #pragma enable_includes_optimization
 #endif
 
+
+#define TO_STR(string) #string
+#define TO_LITERAL(string) TO_STR(string)
+
 inline void FUNC(fc_bf_tiled_kernel_default)(
     OPTIONAL_SHAPE_INFO_ARG
     const __global INPUT0_TYPE* input,
@@ -143,6 +147,25 @@ inline void FUNC(fc_bf_tiled_kernel_default)(
     , FUSED_OPS_DECLS
 #endif
 ) {
+    // uint local_size_0  = (uint)get_local_size(0);
+    // uint local_size_1  = (uint)get_local_size(1);
+    // uint local_size_2  = (uint)get_local_size(2);
+    // uint global_size_0  = get_global_size(0);
+    // uint global_size_1  = get_global_size(1);
+    // uint global_size_2  = get_global_size(2);
+
+    // uint hint_size = 1;
+    // bool debug_mode = false;
+    // // gws=[13696, 1, 392] lws=[16, 1, 8] case
+    // // TILE_IFM * SIMD) / TILE_K
+    // if (global_size_0 == 13696 && global_size_1 == 1 && global_size_2 == 392
+    //     && local_size_0 == 16 && local_size_1 == 1 && local_size_2 == 8) {
+    //         debug_mode = true;
+    //         hint_size = 1;
+    //         if (get_global_id(0) == 0 && get_global_id(1) == 0 && get_global_id(2) == 0) {
+    //             printf( "KERNEL : " TO_LITERAL(KERNEL_ID) " - KERNEL ((TILE_IFM[%d] * SIMD[%d]) / TILE_K[%d]) = %d \n", TILE_IFM, SIMD, TILE_K, ((TILE_IFM * SIMD) / TILE_K));
+    //         }
+    // }
 #if USE_SLM
     uint gid = (uint)get_group_id(0);
     uint local_id = (uint)get_local_id(2);
@@ -341,6 +364,17 @@ inline void FUNC(fc_bf_tiled_kernel_default)(
             barrier(CLK_LOCAL_MEM_FENCE);
         #endif
 
+        // DEBUG PAUL
+        // gws=[13696, 1, 392] lws=[16, 1, 8] case
+        // TILE_IFM * SIMD) / TILE_K
+        // Apply fake alignment: input(f16:bfyx:3083x1x4096:nopad -> f16:bfyx:3136x1x4096:nopad), output(f16:bfyx:3083x1x27392:nopad -> f16:bfyx:3136x1x27392:nopad)
+        // __attribute__((opencl_unroll_hint(1)))
+        // if (debug_mode) {
+            
+        // }
+        #if IS_DEBUG
+        __attribute__((opencl_unroll_hint(DEBUG_HINT_SIZE)))
+        #endif
         unroll_for(uint ki = 0; ki < (TILE_IFM * SIMD) / TILE_K; ++ki) {
             #if COMPRESSED_WEIGHTS_INT4
                 #if USE_SLM
