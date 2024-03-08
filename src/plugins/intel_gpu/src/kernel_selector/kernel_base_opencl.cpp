@@ -86,7 +86,7 @@ std::pair<std::string, std::string> KernelBaseOpenCL::CreateJit(const std::strin
                                           const JitConstants& constants,
                                           const std::string& kernel_id) const {
     const std::string debug_kernel_id = "fully_connected_gpu_bf_tiled_1934536794611325665_1_0__sa";
-    const int32_t hint_size = 0;
+    const int32_t hint_size = 8;
     if (debug_kernel_id == kernel_id) {
         std::cout << "Set kernel : " << debug_kernel_id << " w/ hint_size " << hint_size << std::endl;
     }
