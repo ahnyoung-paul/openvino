@@ -97,7 +97,7 @@ std::pair<std::string, std::string> KernelBaseOpenCL::CreateJit(const std::strin
         .add_line("// Kernel name: " + kernel_id)
         .value_macro("KERNEL(name)", "__kernel void " + kernel_id)
         .value_macro("KERNEL_ID", kernel_id)
-        .value_macro("IS_DEBUG", ((debug_kernel_id == kernel_id && hint_size > 0)? "1" : "0"))
+        .value_macro("IS_DEBUG", (debug_kernel_id == kernel_id? "1" : "0"))
         .value_macro("DEBUG_HINT_SIZE", std::to_string(hint_size))
         .decoration_macro("FUNC", "", kernel_id)
         .decoration_macro("FUNC_CALL", "", kernel_id)
