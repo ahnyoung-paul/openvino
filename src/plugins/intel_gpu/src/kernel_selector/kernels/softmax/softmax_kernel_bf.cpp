@@ -63,9 +63,9 @@ SoftmaxKernel_bf::Parent::DispatchData SoftmaxKernel_bf::SetDefault(const softma
         dispatchData.leftovers = dispatchData.dataSetSize % dispatchData.lws[0];
         // To use subgroup read/write, the starting address should be aligned to 128 bit
         size_t dataSetSizeInByte = dispatchData.dataSetSize * params.inputs[0].ElementSize();
-        if ((dispatchData.dataSetsCount > 1) && ((dataSetSizeInByte - ((dataSetSizeInByte >> 4) << 4)))) {
-            dispatchData.subgroupBlockSize = 1;
-        } else {
+        // if ((dispatchData.dataSetsCount > 1) && ((dataSetSizeInByte - ((dataSetSizeInByte >> 4) << 4)))) {
+        //     dispatchData.subgroupBlockSize = 1;
+        // } else {
             if (dispatchData.itemsNum >> 3)
                 dispatchData.subgroupBlockSize = 8;
             else if (dispatchData.itemsNum >> 2)
@@ -74,7 +74,7 @@ SoftmaxKernel_bf::Parent::DispatchData SoftmaxKernel_bf::SetDefault(const softma
                 dispatchData.subgroupBlockSize = 2;
             else
                 dispatchData.subgroupBlockSize = 1;
-        }
+        // }
         assert((dispatchData.itemsNum + 1) * dispatchData.lws[0] >= dispatchData.dataSetSize && "More than 'lws[0]' items per batch remains! Lws too small?");
 
         dispatchData.gws[0] = dispatchData.lws[0];
