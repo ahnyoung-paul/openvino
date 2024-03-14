@@ -73,7 +73,7 @@ SoftmaxKernel_bf::Parent::DispatchData SoftmaxKernel_bf::SetDefault(const softma
             else if (dispatchData.itemsNum >> 1)
                 dispatchData.subgroupBlockSize = 2;
             else
-                dispatchData.subgroupBlockSize = 1;
+                dispatchData.subgroupBlockSize = 8;
         // }
         assert((dispatchData.itemsNum + 1) * dispatchData.lws[0] >= dispatchData.dataSetSize && "More than 'lws[0]' items per batch remains! Lws too small?");
 
@@ -81,7 +81,7 @@ SoftmaxKernel_bf::Parent::DispatchData SoftmaxKernel_bf::SetDefault(const softma
 
         assert(dispatchData.itemsNum > 0 && dispatchData.lws[0] && dispatchData.gws[0] > 0);
     } else {
-        dispatchData.subgroupBlockSize = 1;
+        dispatchData.subgroupBlockSize = 8;
     }
     return dispatchData;
 }
