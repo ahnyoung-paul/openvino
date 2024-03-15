@@ -36,6 +36,18 @@ DeviceFeaturesKey SoftmaxKernel_bf::get_required_device_features_key(const Param
     return k;
 }
 
+std::ostream& operator<<(std::ostream& os, const SoftmaxKernel_bf::Parent::DispatchData& obj) {
+    os << "[itemNum,leftovers,dataSetsCount,dataSetSize,maxSlmSize,normIndex,subgroupBlockSize]"
+        << "=[" << obj.itemsNum << ","
+        << obj.leftovers << ","
+        << obj.dataSetsCount << ","
+        << obj.dataSetSize << ","
+        << obj.maxSlmSize << ","
+        << obj.normIndex << ","
+        << obj.subgroupBlockSize << "]";
+    return os;
+}
+
 SoftmaxKernel_bf::Parent::DispatchData SoftmaxKernel_bf::SetDefault(const softmax_params& params) const {
     auto dispatchData = Parent::SetDefault(params);
 
@@ -60,10 +72,17 @@ SoftmaxKernel_bf::Parent::DispatchData SoftmaxKernel_bf::SetDefault(const softma
             dispatchData.itemsNum /= 2;
         }
 
+        size_t bit_size = 1;
         dispatchData.leftovers = dispatchData.dataSetSize % dispatchData.lws[0];
         // To use subgroup read/write, the starting address should be aligned to 128 bit
         size_t dataSetSizeInByte = dispatchData.dataSetSize * params.inputs[0].ElementSize();
-        if ((dispatchData.dataSetsCount > 1) && ((dataSetSizeInByte - ((dataSetSizeInByte >> 4) << 4)))) {
+        // std::cout << "* params.inputs[0].ElementSize() : " << params.inputs[0].ElementSize() << std::endl;
+        // std::cout << "* dispatchData.dataSetSize : " << dispatchData.dataSetSize << std::endl;
+        // std::cout << "* dataSetSizeInByte : " << dataSetSizeInByte << std::endl;
+        // std::cout << "* ((dataSetSizeInByte - ((dataSetSizeInByte >> " << bit_size << ") << " << bit_size << "))) : " 
+        //             << ((dataSetSizeInByte - ((dataSetSizeInByte >> bit_size) << bit_size))) << std::endl;
+
+        if ((dispatchData.dataSetsCount > 1) && ((dataSetSizeInByte - ((dataSetSizeInByte >> bit_size) << bit_size)))) {
             dispatchData.subgroupBlockSize = 1;
         } else {
             if (dispatchData.itemsNum >> 3)
@@ -81,8 +100,11 @@ SoftmaxKernel_bf::Parent::DispatchData SoftmaxKernel_bf::SetDefault(const softma
 
         assert(dispatchData.itemsNum > 0 && dispatchData.lws[0] && dispatchData.gws[0] > 0);
     } else {
+        // std::cout << "* has dynamic tensors " << std::endl;
         dispatchData.subgroupBlockSize = 1;
     }
+    // std::cout << "dispatchData : " << dispatchData << std::endl;
+    // dispatchData.subgroupBlockSize = 8;
     return dispatchData;
 }
 
@@ -156,6 +178,7 @@ JitConstants SoftmaxKernel_bf::GetJitConstants(const softmax_params& params, Dis
     }
     jit.AddConstant(MakeJitConstant("SUB_GROUP_SIZE", subgroup_size));
     jit.AddConstant(MakeJitConstant("SUBGROUP_BLOCK_SIZE", dispatchData.subgroupBlockSize));
+    // std::cout << "CreateGitConstant : SUBGROUP_BLOCK_SIZE : " << dispatchData.subgroupBlockSize << std::endl;
     auto activation_dt = GetActivationType(params);
     jit.Merge(MakeTypeJitConstants(activation_dt, "ACTIVATION"));
 

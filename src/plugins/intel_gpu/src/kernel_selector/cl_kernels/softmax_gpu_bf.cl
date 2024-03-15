@@ -56,11 +56,15 @@ KERNEL (softmax_gpu_continuous_bfyx)(
     __local INPUT0_TYPE lg_storage[SLM_SIZE];
 
     uint i=0;
+    printf("[wpds:%d, sgs:%d, dss:%d, dsc:%d, sbs:%d, items_num:%d, leftovers:%d]\n",
+            workers_per_data_set, SUB_GROUP_SIZE, data_set_size, data_sets_count, SUBGROUP_BLOCK_SIZE, items_num, leftovers);
+    // [workers_per_data_set:128, SUB_GROUP_SIZE:16, data_set_size:3083, data_sets_count:98656, SUBGROUP_BLOCK_SIZE:1]
 #if SUBGROUP_BLOCK_SIZE != 1
     if (workers_per_data_set > SUB_GROUP_SIZE)
     {
         for (; i<items_num - (items_num % SUBGROUP_BLOCK_SIZE); i+=SUBGROUP_BLOCK_SIZE)
         {
+            // #define BLOCK_READ intel_sub_group_block_read
             BLOCK_TYPE vec_tmp = BLOCK_READ(input, data_set_offset + subgroup_offset + i * get_sub_group_size());
             for (int j = 0; j < SUBGROUP_BLOCK_SIZE; j++)
             {
