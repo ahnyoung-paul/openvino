@@ -4,6 +4,8 @@
 
 #include "test_utils.h"
 
+#include "openvino/reference/softmax.hpp"
+
 #include <intel_gpu/primitives/input_layout.hpp>
 #include <intel_gpu/primitives/softmax.hpp>
 
@@ -1200,4 +1202,51 @@ TEST(softmax_gpu_bfyx_f32, bf_opt_normalize_f_dynamic) {
             }
         }
     }
+}
+
+static void run_softmax_bfyx_opt(const int64_t b, const int64_t f, const int64_t y, const int64_t x) {
+    auto& engine = get_test_engine();
+    auto config = get_test_default_config(engine);
+    config.set_property(ov::intel_gpu::optimize_data(true));
+    config.set_property(ov::intel_gpu::allow_new_shape_infer(true));
+    ov::intel_gpu::ImplementationDesc softmax_bf_kernel = {format::bfyx, "softmax_gpu_bf"};
+    config.set_property(ov::intel_gpu::force_implementations(ov::intel_gpu::ImplForcingMap{{"softmax", softmax_bf_kernel}}));
+
+    const int64_t buf_size = b * f * y * x;
+    auto input_layout_dynamic = layout{ov::PartialShape{ov::Dimension::dynamic(), f, ov::Dimension::dynamic(), ov::Dimension::dynamic()},
+                                        data_types::f16, format::bfyx};
+    auto input_layout_static = layout{ov::PartialShape{b, f, y, x}, data_types::f16, format::bfyx};
+
+    topology topology;
+    topology.add(input_layout("input", input_layout_dynamic));
+    topology.add(softmax("softmax", input_info("input"), 3));
+    topology.add(reorder("output", input_info("softmax"), format::bfyx, data_types::f16));
+
+    cldnn::network::ptr network = get_network(engine, topology, config, get_test_stream_ptr(), false);
+
+    auto input_mem = engine.allocate_memory(input_layout_static);
+    std::vector<ov::float16> input_data(buf_size, (ov::float16)1.f);
+    input_data[buf_size / 3] = (ov::float16)10.f;
+    input_data[(buf_size * 2) / 3] = (ov::float16)20.f;
+
+    set_values(input_mem, input_data);
+    network->set_input_data("input", input_mem);
+
+    auto outputs = network->execute();
+    auto output = outputs.at("output").get_memory();
+
+    ASSERT_NE(output, nullptr);
+    cldnn::mem_lock<ov::float16> output_ptr(output, get_test_stream());
+
+    std::vector<ov::float16> output_ref(buf_size);
+    ov::reference::softmax<ov::float16>(input_data.data(), output_ref.data(), input_layout_static.get_shape(), ov::AxisSet{3});
+}
+
+TEST(softmax_gpu_bfyx_f16, opt_softmax_bf) {
+    run_softmax_bfyx_opt(1, 32, 3083, 3083);
+}
+
+// SIMD(16) * SUBGROUP_BLOCK_SIZE(8) * num_iterations_per_WI(4)
+TEST(softmax_gpu_bfyx_f16, opt_softmax_bf_01) {
+    run_softmax_bfyx_opt(1, 4, 139, 2059);
 }
