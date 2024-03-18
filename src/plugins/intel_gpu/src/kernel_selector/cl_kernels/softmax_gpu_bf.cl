@@ -71,6 +71,12 @@ KERNEL (softmax_gpu_continuous_bfyx)(
         }
     }
 #endif
+    if (get_global_id(0) == 0 && get_global_id(1) == 0 && get_global_id(2) == 0) {
+        printf("in_data_set_idx(local_id(0)),data_set_idx(global_id(1),idx of b*f*y),data_sets_count(b*f*y),data_set_size(x),data_set_offset(data_set_size * data_set_idx),"
+            "get_sub_group_id(),get_sub_group_size(),subgroup_offset(sub_group_id * sub_group_size * items_num),(default_offset(data_set_offset+subgroup_offset)),"
+            "SUB_GROUP_SIZE,SUBGROUP_BLOCK_SIZE,workers_per_data_set(LWS),power,items_num,leftovers,p_input\n");
+    }
+
     for (; i<items_num; i++)
     {
         INPUT0_TYPE tmp = input[data_set_offset + subgroup_offset + get_sub_group_local_id() + i * get_sub_group_size()];
@@ -89,6 +95,11 @@ KERNEL (softmax_gpu_continuous_bfyx)(
         lg_storage[get_sub_group_id()] = my_maximum;
 
     barrier(CLK_LOCAL_MEM_FENCE);
+    if (data_set_idx == 127)
+        printf("%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%u\n",
+            in_data_set_idx,data_set_idx,data_sets_count,data_set_size,data_set_offset,
+            get_sub_group_id(),get_sub_group_size(),subgroup_offset,(data_set_offset+subgroup_offset),SUB_GROUP_SIZE,
+            SUBGROUP_BLOCK_SIZE,workers_per_data_set,power,items_num,leftovers,(void*)input);
     if (in_data_set_idx == 0)
     {
         for (uint i=1; i<get_num_sub_groups(); ++i)
