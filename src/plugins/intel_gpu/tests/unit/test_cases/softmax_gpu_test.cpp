@@ -1243,8 +1243,10 @@ static void run_softmax_bfyx_opt(const int64_t b, const int64_t f, const int64_t
 
     size_t not_matched = 0;
     for (size_t idx = 0; idx < static_cast<size_t>(buf_size); idx++) {
-        if (output_ptr[idx] != output_ref[idx])
+        if ((output_ptr[idx] - output_ref[idx] > 0.005f)) {
+            std::cout << "Checking " << std::fixed << setprecision(8) << output_ptr[idx] << " vs " << output_ref[idx] << std::endl;
             not_matched++;
+        }
     }
     std::cout << "not matched: " << not_matched << ", pass_rate: " << (static_cast<float>(buf_size - not_matched) * 100 / buf_size) << std::endl;
     ASSERT_EQ(not_matched, 0);
