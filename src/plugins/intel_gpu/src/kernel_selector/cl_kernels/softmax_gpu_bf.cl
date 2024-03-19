@@ -7,8 +7,6 @@
 #include "include/batch_headers/sub_group_block_read.cl"
 #include "include/batch_headers/sub_group_block_write.cl"
 
-#define DEBUG_LOG 1
-
 #if SUBGROUP_BLOCK_SIZE == 1
 #define BLOCK_READ(ptr, offset) DT_INPUT_BLOCK_READ(ptr, offset)
 #define BLOCK_WRITE(ptr, offset, val) DT_OUTPUT_BLOCK_WRITE(ptr, offset, val)
@@ -58,21 +56,25 @@ KERNEL (softmax_gpu_continuous_bfyx)(
     __local INPUT0_TYPE lg_storage[SLM_SIZE];
 
     uint i=0;
-#if SUBGROUP_BLOCK_SIZE != 1
     if (workers_per_data_set > SUB_GROUP_SIZE)
     {
         for (; i<items_num - (items_num % SUBGROUP_BLOCK_SIZE); i+=SUBGROUP_BLOCK_SIZE)
         {
             BLOCK_TYPE vec_tmp = BLOCK_READ(input, data_set_offset + subgroup_offset + i * get_sub_group_size());
+#if SUBGROUP_BLOCK_SIZE == 1
+            my_maximum = max(my_maximum, vec_tmp);
+            my_chunk[i] = vec_tmp;
+#else
             for (int j = 0; j < SUBGROUP_BLOCK_SIZE; j++)
             {
                 INPUT0_TYPE tmp = vec_tmp[j];
                 my_maximum = max(my_maximum, tmp);
                 my_chunk[i+j] = tmp;
             }
+#endif
         }
     }
-#endif
+
     // if (get_global_id(0) == 0 && get_global_id(1) == 0 && get_global_id(2) == 0) {
     //     printf("in_data_set_idx(local_id(0)),data_set_idx(global_id(1),idx of b*f*y),data_sets_count(b*f*y),data_set_size(x),data_set_offset(data_set_size * data_set_idx),"
     //         "get_sub_group_id(),get_sub_group_size(),subgroup_offset(sub_group_id * sub_group_size * items_num),(default_offset(data_set_offset+subgroup_offset)),"
@@ -150,22 +152,26 @@ KERNEL (softmax_gpu_continuous_bfyx)(
 
     i=0;
 #if HAS_FUSED_OPS
-#if SUBGROUP_BLOCK_SIZE != 1
     if (workers_per_data_set > SUB_GROUP_SIZE)
     {
         for (; i < items_num - (items_num % SUBGROUP_BLOCK_SIZE); i+=SUBGROUP_BLOCK_SIZE)
         {
             BLOCK_TYPE vec_tmp;
+#if SUBGROUP_BLOCK_SIZE == 1
+            ACTIVATION_TYPE dequantized = my_chunk[i] / my_sum;
+            FUSED_OPS_MAIN;
+            vec_tmp = FUSED_OPS_RESULT_MAIN;
+#else
             for (int j = 0; j < SUBGROUP_BLOCK_SIZE; j++)
             {
                 ACTIVATION_TYPE dequantized = my_chunk[i + j] / my_sum;
                 FUSED_OPS_MAIN;
                 vec_tmp[j] = FUSED_OPS_RESULT_MAIN;
             }
+#endif
             BLOCK_WRITE(output, data_set_offset + subgroup_offset + i * get_sub_group_size(), vec_tmp);
         }
     }
-#endif
     for (; i<items_num; i++)
     {
         ACTIVATION_TYPE dequantized = my_chunk[i] / my_sum;
@@ -179,18 +185,20 @@ KERNEL (softmax_gpu_continuous_bfyx)(
         output[data_set_offset + workers_per_data_set * items_num + in_data_set_idx] = FUSED_OPS_RESULT_LEFTOVERS;
     }
 #else
-#if SUBGROUP_BLOCK_SIZE != 1
     if (workers_per_data_set > SUB_GROUP_SIZE)
     {
         for (; i<items_num - (items_num % SUBGROUP_BLOCK_SIZE); i+=SUBGROUP_BLOCK_SIZE)
         {
             BLOCK_TYPE vec_tmp;
+#if SUBGROUP_BLOCK_SIZE == 1
+            vec_tmp = ACTIVATION(my_chunk[i] / my_sum, ACTIVATION_PARAMS);
+#else
             for (int j = 0; j < SUBGROUP_BLOCK_SIZE; j++)
                 vec_tmp[j] = ACTIVATION(my_chunk[i + j] / my_sum, ACTIVATION_PARAMS);
+#endif
             BLOCK_WRITE(output, data_set_offset + subgroup_offset + i * get_sub_group_size(), vec_tmp);
         }
     }
-#endif
     for (; i < items_num; i++)
     {
         output[data_set_offset + subgroup_offset + get_sub_group_local_id() + i * get_sub_group_size()] = ACTIVATION(my_chunk[i] / my_sum, ACTIVATION_PARAMS);
