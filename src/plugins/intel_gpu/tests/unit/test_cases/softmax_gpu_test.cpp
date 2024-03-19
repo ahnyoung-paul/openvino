@@ -3,6 +3,7 @@
 //
 
 #include "test_utils.h"
+#include "openvino/reference/softmax.hpp"
 
 #include <intel_gpu/primitives/input_layout.hpp>
 #include <intel_gpu/primitives/softmax.hpp>
@@ -1200,4 +1201,135 @@ TEST(softmax_gpu_bfyx_f32, bf_opt_normalize_f_dynamic) {
             }
         }
     }
+}
+
+static void run_softmax_bfyx_opt(const int64_t b, const int64_t f, const int64_t y, const int64_t x) {
+    auto& engine = get_test_engine();
+    auto config = get_test_default_config(engine);
+    config.set_property(ov::intel_gpu::optimize_data(true));
+    config.set_property(ov::intel_gpu::allow_new_shape_infer(true));
+    config.set_property(ov::enable_profiling(true));
+    ov::intel_gpu::ImplementationDesc softmax_bf_kernel = {format::bfyx, "softmax_gpu_bf"};
+    config.set_property(ov::intel_gpu::force_implementations(ov::intel_gpu::ImplForcingMap{{"softmax", softmax_bf_kernel}}));
+
+    const int64_t buf_size = b * f * y * x;
+    auto input_layout_dynamic = layout{ov::PartialShape{ov::Dimension::dynamic(), f, ov::Dimension::dynamic(), ov::Dimension::dynamic()},
+                                        data_types::f16, format::bfyx};
+    auto input_layout_static = layout{ov::PartialShape{b, f, y, x}, data_types::f16, format::bfyx};
+
+    std::string softmax_id = "softmax";
+    topology topology;
+    topology.add(input_layout("input", input_layout_dynamic));
+    topology.add(softmax(softmax_id, input_info("input"), 3));
+    topology.add(reorder("output", input_info("softmax"), format::bfyx, data_types::f16));
+
+    cldnn::network::ptr network = get_network(engine, topology, config, get_test_stream_ptr(), false);
+
+    auto input_mem = engine.allocate_memory(input_layout_static);
+    std::vector<ov::float16> input_data(buf_size);
+    // , (ov::float16)1.f);
+    // input_data[buf_size / 3] = (ov::float16)10.f;
+    // input_data[(buf_size * 2) / 3] = (ov::float16)20.f;
+
+    std::cout << "input_data[" << int(buf_size /  3) << "] = " << std::fixed << setprecision(8) << input_data[buf_size / 3]  << ";" << std::endl;
+    std::cout << "input_data[" << int(buf_size * 2 /  3) << "] = " << std::fixed << setprecision(8) << input_data[(buf_size * 2) / 3]  << ";" << std::endl;
+
+    set_values(input_mem, input_data);
+
+    std::map<cldnn::primitive_id, cldnn::network_output> outputs;
+    cldnn::memory::ptr output = nullptr;
+
+    std::vector<int64_t> time_records;
+    const size_t num_tests = 1;
+    for (size_t i = 0; i < num_tests; i++) {
+        network->set_input_data("input", input_mem);
+        outputs = network->execute();
+        output = outputs.at("output").get_memory();
+        ASSERT_NE(output, nullptr);
+
+        auto executed_primitives = network->get_executed_primitives();
+        ASSERT_NE(executed_primitives.find(softmax_id), executed_primitives.end());
+        auto ev = executed_primitives[softmax_id];
+        if (ev != nullptr) {
+            auto intervals = ev->get_profiling_info();
+            for (const auto &interval : intervals) {
+                if (interval.stage == cldnn::instrumentation::profiling_stage::executing) {
+                    time_records.push_back(std::chrono::duration_cast<std::chrono::microseconds>(interval.value->value()).count());
+                }
+            }
+        }
+    }
+
+    if (num_tests > 1) {
+        auto output_layout = output->get_layout();
+        auto sum = std::accumulate(time_records.begin(), time_records.end(), 0);
+        auto max = *std::max_element(time_records.begin(), time_records.end());
+        auto min = *std::min_element(time_records.begin(), time_records.end());
+        auto avg = (static_cast<float>(sum - max - min) / (time_records.size() - 2)) / 1000.f;
+        auto min_ms =  (static_cast<float>(min) / 1000.f);
+        auto max_ms =  (static_cast<float>(max) / 1000.f);
+        std::cout << "latency[kernel : " << network->get_primitive(softmax_id)->get_implementation_name() << "]"
+                    << "[num:" << std::setfill('0') << std::setw(3) << time_records.size() << "]"
+                    << "[output: " << output_layout.to_short_string() << "] avg: "
+                    << std::setfill(' ') << std::setw(8) << avg << " ms, max: " << max_ms
+                    << " ms, min: " << min_ms << " ms, min io throughput : "
+                    << (static_cast<float>(output_layout.count() * 2) / min / 1e3f) << std::endl;
+    } else {
+        std::cout << "latency[kernel : " << network->get_primitive(softmax_id)->get_implementation_name() << "] "
+                    << (static_cast<float>(time_records.front()) / 1000.f) << " ms " << std::endl;
+    }
+
+    // auto outputs = network->execute();
+    // auto output = outputs.at("output").get_memory();
+
+    ASSERT_NE(output, nullptr);
+    cldnn::mem_lock<ov::float16> output_ptr(output, get_test_stream());
+    std::cout << "output_ptr[" << int(buf_size /  3) << "] = " << std::fixed << setprecision(8) << output_ptr[buf_size / 3]  << ";" << std::endl;
+    std::cout << "output_ptr[" << int(buf_size * 2 /  3) << "] = " << std::fixed << setprecision(8) << output_ptr[(buf_size * 2) / 3]  << ";" << std::endl;
+    
+    // std::cout << "cldnn::mem_lock<ov::float16> output_ptr = {" << std::endl;
+    // for (size_t idx = 0; idx < static_cast<size_t>(buf_size); idx++) {
+    //     // std::cout << "(ov::float16)(" << std::fixed << setprecision(8) << output_ptr[idx] << "),";
+    //     // if ((idx + 1) % 10 == 0) {
+    //     //     std::cout << std::endl;
+    //     // }
+    //     if (output_ptr[idx] != (ov::float16)0.00719452f) {
+    //         std::cout << "output_ptr[" << idx << "] = " << std::fixed << setprecision(8) << output_ptr[idx]  << ";" << std::endl;
+    //     }
+    // }
+    // // std::cout << "};" << std::endl;
+
+    std::vector<ov::float16> output_ref(buf_size);
+    ov::reference::softmax<ov::float16>(input_data.data(), output_ref.data(), input_layout_static.get_shape(), ov::AxisSet{3});
+    // std::cout << "cldnn::mem_lock<ov::float16> output_ref = {" << std::endl;
+    // for (size_t idx = 0; idx < static_cast<size_t>(buf_size); idx++) {
+    //     std::cout << "(ov::float16)(" << std::fixed << setprecision(8) << output_ref[idx] << "),";
+    //     if ((idx + 1) % 10 == 0) {
+    //         std::cout << std::endl;
+    //     }
+    // }
+    // std::cout << "};" << std::endl;
+    std::cout << "output_ref[" << int(buf_size /  3) << "] = " << std::fixed << setprecision(8) << output_ref[buf_size / 3]  << ";" << std::endl;
+    std::cout << "output_ref[" << int(buf_size * 2 /  3) << "] = " << std::fixed << setprecision(8) << output_ref[(buf_size * 2) / 3]  << ";" << std::endl;
+
+
+
+    // size_t not_matched = 0;
+    // for (size_t idx = 0; idx < static_cast<size_t>(buf_size); idx++) {
+    //     if ((output_ptr[idx] - output_ref[idx] > 0.005f)) {
+    //         std::cout << "Checking " << std::fixed << setprecision(8) << output_ptr[idx] << " vs " << output_ref[idx] << std::endl;
+    //         not_matched++;
+    //     }
+    // }
+    // std::cout << "not matched: " << not_matched << ", pass_rate: " << (static_cast<float>(buf_size - not_matched) * 100 / buf_size) << std::endl;
+    // ASSERT_EQ(not_matched, 0);
+}
+
+TEST(softmax_gpu_bfyx_f16, opt_softmax_bf) {
+    run_softmax_bfyx_opt(1, 32, 3083, 3083);
+}
+
+// SIMD(16) * SUBGROUP_BLOCK_SIZE(8) * num_iterations_per_WI(4)
+TEST(softmax_gpu_bfyx_f16, opt_softmax_bf_01) {
+    run_softmax_bfyx_opt(1, 1, 1, 128);
 }
