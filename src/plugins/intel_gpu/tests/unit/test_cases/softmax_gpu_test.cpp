@@ -2518,7 +2518,7 @@ static void run_softmax_bfyx_opt(const int64_t b, const int64_t f, const int64_t
     for (size_t idx = 0; idx < static_cast<size_t>(buf_size); idx++) {
         
         if (std::fabs(static_cast<float>(output_ptr[idx]) - static_cast<float>(output_ref[idx])) > 0.000005f) {
-            std::cout << "Checking " << std::fixed << setprecision(8) << output_ptr[idx] << " vs " << output_ref[idx] << std::endl;
+            // std::cout << "Checking " << std::fixed << setprecision(8) << output_ptr[idx] << " vs " << output_ref[idx] << std::endl;
             not_matched++;
         }
     }

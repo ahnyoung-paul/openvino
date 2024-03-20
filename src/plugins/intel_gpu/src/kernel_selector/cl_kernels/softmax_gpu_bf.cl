@@ -45,7 +45,7 @@ KERNEL (softmax_gpu_continuous_bfyx)(
     const uint items_num = data_set_size>>power;
     const uint leftovers = data_set_size-(items_num<<power);
 #endif
-    const uint odd = workers_per_data_set - ((workers_per_data_set>>2)<<2);
+    const uint odd = data_set_idx - ((data_set_idx>>1)<<1) ;
     uint leftover_offsets = 0;
     uint in_data_offset = workers_per_data_set * items_num + in_data_set_idx;
     if (odd == 1)
@@ -66,6 +66,7 @@ KERNEL (softmax_gpu_continuous_bfyx)(
     uint i=0;
     if (workers_per_data_set > SUB_GROUP_SIZE)
     {
+        // printf("[%d,%d],%d:%d(%d,%d,%d),%d\n", data_set_idx, in_data_set_idx, get_sub_group_id(), (data_set_offset + subgroup_offset + leftover_offsets), data_set_offset, subgroup_offset, leftover_offsets, odd); 
         for (; i<items_num - (items_num % SUBGROUP_BLOCK_SIZE); i+=SUBGROUP_BLOCK_SIZE)
         {
             BLOCK_TYPE vec_tmp = BLOCK_READ(input, data_set_offset + subgroup_offset + leftover_offsets + i * get_sub_group_size());
