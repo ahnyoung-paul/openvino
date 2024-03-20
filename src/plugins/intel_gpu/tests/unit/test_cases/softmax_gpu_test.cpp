@@ -1227,11 +1227,26 @@ static void run_softmax_bfyx_opt(const int64_t b, const int64_t f, const int64_t
 
     auto input_mem = engine.allocate_memory(input_layout_static);
     std::vector<ov::float16> input_data(buf_size, (ov::float16)1.f);
-    input_data[buf_size / 3] = (ov::float16)18.f;
-    input_data[(buf_size * 2) / 3] = (ov::float16)20.f;
+    const int64_t x_length = x;
+    std::vector<size_t> sample_indices;
+    std::vector<ov::float16> sample_values = { (ov::float16)2.0f, (ov::float16)-3.0f, (ov::float16)22.0f, (ov::float16)18.2f, (ov::float16)10.f};
+    const size_t y_length = b * y * f;
+    for (size_t j = 0; j < y_length; j++) {
+        for (size_t k = 1; k <= 5; k++) {
+            sample_indices.push_back(x_length * j + (x_length - 1) * k / 5);
+        }
+    }
 
-    std::cout << "input_data[" << int(buf_size /  3) << "] = " << std::fixed << setprecision(8) << input_data[buf_size / 3]  << ";" << std::endl;
-    std::cout << "input_data[" << int(buf_size * 2 /  3) << "] = " << std::fixed << setprecision(8) << input_data[(buf_size * 2) / 3]  << ";" << std::endl;
+    for (size_t j = 0; j < y_length; j++) {
+        for (size_t k = 0; k < 5; k++) {
+            auto idx = j * 5 + k;
+            input_data[sample_indices[idx]] = sample_values[k];
+        }
+    }
+
+    // for (auto idx : sample_indices) {
+    //     std::cout << "input_data[" << idx << "] " << std::fixed << setprecision(8) << input_data[idx] << std::endl;
+    // }
 
     set_values(input_mem, input_data);
 
@@ -1278,57 +1293,51 @@ static void run_softmax_bfyx_opt(const int64_t b, const int64_t f, const int64_t
                     << (static_cast<float>(time_records.front()) / 1000.f) << " ms " << std::endl;
     }
 
-    // auto outputs = network->execute();
-    // auto output = outputs.at("output").get_memory();
-
     ASSERT_NE(output, nullptr);
     cldnn::mem_lock<ov::float16> output_ptr(output, get_test_stream());
-    std::cout << "output_ptr[" << int(buf_size /  3) << "] = " << std::fixed << setprecision(8) << output_ptr[buf_size / 3]  << ";" << std::endl;
-    std::cout << "output_ptr[" << int(buf_size * 2 /  3) << "] = " << std::fixed << setprecision(8) << output_ptr[(buf_size * 2) / 3]  << ";" << std::endl;
-
-    std::cout << "cldnn::mem_lock<ov::float16> output_ptr = {" << std::endl;
-    for (size_t idx = 0; idx < static_cast<size_t>(buf_size); idx++) {
-        std::cout << "(ov::float16)(" << std::fixed << setprecision(8) << output_ptr[idx] << "),";
-        if ((idx + 1) % 10 == 0) {
-            std::cout << std::endl;
-        }
-        // if (output_ptr[idx] != (ov::float16)0.00719452f) {
-        //     std::cout << "output_ptr[" << idx << "] = " << std::fixed << setprecision(8) << output_ptr[idx]  << ";" << std::endl;
-        // }
-    }
-    std::cout << "};" << std::endl;
-
-    std::vector<ov::float16> output_ref(buf_size);
-    ov::reference::softmax<ov::float16>(input_data.data(), output_ref.data(), input_layout_static.get_shape(), ov::AxisSet{3});
-    std::cout << "cldnn::mem_lock<ov::float16> output_ref = {" << std::endl;
-    for (size_t idx = 0; idx < static_cast<size_t>(buf_size); idx++) {
-        std::cout << "(ov::float16)(" << std::fixed << setprecision(8) << output_ref[idx] << "),";
-        if ((idx + 1) % 10 == 0) {
-            std::cout << std::endl;
-        }
-    }
-    std::cout << "};" << std::endl;
-    std::cout << "output_ref[" << int(buf_size /  3) << "] = " << std::fixed << setprecision(8) << output_ref[buf_size / 3]  << ";" << std::endl;
-    std::cout << "output_ref[" << int(buf_size * 2 /  3) << "] = " << std::fixed << setprecision(8) << output_ref[(buf_size * 2) / 3]  << ";" << std::endl;
-
-
-
-    // size_t not_matched = 0;
     // for (size_t idx = 0; idx < static_cast<size_t>(buf_size); idx++) {
-    //     if ((output_ptr[idx] - output_ref[idx] > 0.005f)) {
-    //         std::cout << "Checking " << std::fixed << setprecision(8) << output_ptr[idx] << " vs " << output_ref[idx] << std::endl;
-    //         not_matched++;
+    //     if (output_ptr[idx] != (ov::float16)0.00f) {
+    //         std::cout << "output_ref[" << idx << "]=(ov::float16)" << std::fixed << setprecision(8) << output_ptr[idx] << "f;" << std::endl;
     //     }
     // }
-    // std::cout << "not matched: " << not_matched << ", pass_rate: " << (static_cast<float>(buf_size - not_matched) * 100 / buf_size) << std::endl;
-    // ASSERT_EQ(not_matched, 0);
+
+    std::vector<ov::float16> output_ref(buf_size, (ov::float16)0.0f);
+    output_ref[620]=(ov::float16)0.97802734f;
+    output_ref[827]=(ov::float16)0.02197266f;
+    output_ref[1034]=(ov::float16)0.00000602f;
+    output_ref[1655]=(ov::float16)0.97802734f;
+    output_ref[1862]=(ov::float16)0.02197266f;
+    output_ref[2069]=(ov::float16)0.00000602f;
+    output_ref[2690]=(ov::float16)0.97802734f;
+    output_ref[2897]=(ov::float16)0.02197266f;
+    output_ref[3104]=(ov::float16)0.00000602f;
+    output_ref[3725]=(ov::float16)0.97802734f;
+    output_ref[3932]=(ov::float16)0.02197266f;
+    output_ref[4139]=(ov::float16)0.00000602f;
+
+    // ov::reference::softmax<ov::float16>(input_data.data(), output_ref.data(), input_layout_static.get_shape(), ov::AxisSet{3});
+    // std::cout << "cldnn::mem_lock<ov::float16> output_ref = {" << std::endl;
+    // for (size_t idx = 0; idx < static_cast<size_t>(buf_size); idx++) {
+    //     std::cout << "(ov::float16)(" << std::fixed << setprecision(8) << output_ref[idx] << "),";
+    //     if ((idx + 1) % 10 == 0) {
+    //         std::cout << std::endl;
+    //     }
+    // }
+    // std::cout << "};" << std::endl;
+    // std::cout << "output_ref[" << int(buf_size /  3) << "] = " << std::fixed << setprecision(8) << output_ref[buf_size / 3]  << ";" << std::endl;
+    // std::cout << "output_ref[" << int(buf_size * 2 /  3) << "] = " << std::fixed << setprecision(8) << output_ref[(buf_size * 2) / 3]  << ";" << std::endl;
+
+    size_t not_matched = 0;
+    for (size_t idx = 0; idx < static_cast<size_t>(buf_size); idx++) {
+        if (output_ptr[idx] != output_ref[idx]) {
+            std::cout << "Checking " << std::fixed << setprecision(8) << output_ptr[idx] << " vs " << output_ref[idx] << std::endl;
+            not_matched++;
+        }
+    }
+    std::cout << "not matched: " << not_matched << ", pass_rate: " << (static_cast<float>(buf_size - not_matched) * 100 / buf_size) << std::endl;
+    ASSERT_EQ(not_matched, 0);
 }
 
-TEST(softmax_gpu_bfyx_f16, opt_softmax_bf) {
-    run_softmax_bfyx_opt(1, 32, 3083, 3083);
-}
-
-// SIMD(16) * SUBGROUP_BLOCK_SIZE(8) * num_iterations_per_WI(4)
 TEST(softmax_gpu_bfyx_f16, opt_softmax_bf_01) {
-    run_softmax_bfyx_opt(1, 1, 1, 128);
+    run_softmax_bfyx_opt(1, 2, 2, 1035);
 }
