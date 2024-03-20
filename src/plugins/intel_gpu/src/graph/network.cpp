@@ -1050,81 +1050,81 @@ void network::execute_impl(const std::vector<event::ptr>& events) {
         if (needs_flushing && executed_prims % flush_frequency == 0)
             get_stream().flush();
         // if (inst->get_node().is_type<softmax>()) {
-        if (inst->id() == "softmax:Softmax_116024") {
-            std::string layer_name = debug_config->get_name_for_dump(inst->id());
-            get_stream().flush();
-            bool is_good = true;
-            const size_t length_x = 3083;
-            const size_t length_y = 32 * length_x;
-            const size_t begin_y = length_y - 4; 
-            const size_t last_idx = length_x * length_y - 1;
-            {
-                auto input_mem = get_primitive(inst->id())->input_memory_ptr(0);
-                auto input_layout = inst->get_input_layout(0);
-                auto actual_mem = input_mem->get_engine()->reinterpret_buffer(*input_mem, input_layout);
-                mem_lock<ov::float16, mem_lock_type::read> lock(actual_mem, get_stream());
-                auto mem_ptr = lock.data();
-                std::string filename = "C:\\dev\\ahnyoung\\dumps\\test03\\" + std::string(is_good? "good" : "bad") + "\\input_dump_net_" + std::to_string(curr_iter)
-                    + "_" + std::to_string(executed_prims) + "_" + layer_name + ".txt";
-                std::ofstream of(filename.c_str());
-                if (of.is_open()) {
-                    of << "std::vector<ov::float16> input_data = {" << std::endl;
-                    for (size_t j = begin_y; j < length_y; j++) {
-                        for (size_t i = 0; i < length_x; i++) {
-                            size_t idx = j * length_x + i;
-                            of << std::fixed << std::setprecision(6) << mem_ptr[idx];
-                            if (idx < last_idx)
-                                of << ",";
-                            if ((idx + 1) % 20 == 0)
-                                of << std::endl;
-                        }
-                    }
-                    of << "};" << std::endl;
-                }
-                std::cout << "input dump is completed ..... " << filename << std::endl;
-            }
-            {
-                auto output_mem = get_primitive(inst->id())->output_memory_ptr(0);
-                auto output_layout = inst->get_output_layout(0);
-                auto actual_mem = output_mem->get_engine()->reinterpret_buffer(*output_mem, output_layout);
-                mem_lock<ov::float16, mem_lock_type::read> lock(actual_mem, get_stream());
-                auto mem_ptr = lock.data();
-#if 0
-                std::string filename = "C:\\dev\\ahnyoung\\dumps\\test02\\" + std::string(is_good? "good" : "bad") + "\\output_dump_net_" + std::to_string(curr_iter)
-                    + "_" + std::to_string(executed_prims) + "_" + layer_name + ".txt";
-                std::ofstream of(filename.c_str());
-                if (of.is_open()) {
-                    size_t count = output_layout.count();
-                    for (size_t idx = 0; idx < count; idx++) {
-                        if (mem_ptr[idx] != 0.000000f) {
-                            of << idx << "," << std::fixed << std::setprecision(8) << static_cast<float>(mem_ptr[idx]) << std::endl;
-                        }
-                    }
-                } 
-                std::cout << "output dump is completed ..... " << filename << std::endl;
-#else
-                std::string filename = "C:\\dev\\ahnyoung\\dumps\\test03\\" + std::string(is_good? "good" : "bad") + "\\output_dump_net_" + std::to_string(curr_iter)
-                    + "_" + std::to_string(executed_prims) + "_" + layer_name + ".txt";
-                std::ofstream of(filename.c_str());
-                if (of.is_open()) {
-                    of << "std::vector<ov::float16> output_data = {" << std::endl;
-                    for (size_t j = begin_y; j < length_y; j++) {
-                        for (size_t i = 0; i < length_x; i++) {
-                            size_t idx = j * length_x + i;
-                            float val = static_cast<float>(mem_ptr[idx]);
-                            of << std::fixed << std::setprecision(6) << mem_ptr[idx];
-                            if (idx < last_idx)
-                                of << ",";
-                            if ((idx + 1) % 20 == 0)
-                                of << std::endl;
-                        }
-                    }
-                    of << "};" << std::endl;
-                }
-                std::cout << "output dump is completed ..... " << filename << std::endl;
-#endif
-            }
-        }
+//         if (inst->id() == "softmax:Softmax_116024") {
+//             std::string layer_name = debug_config->get_name_for_dump(inst->id());
+//             get_stream().flush();
+//             bool is_good = true;
+//             const size_t length_x = 3083;
+//             const size_t length_y = 32 * length_x;
+//             const size_t begin_y = length_y - 4;
+//             const size_t last_idx = length_x * length_y - 1;
+//             {
+//                 auto input_mem = get_primitive(inst->id())->input_memory_ptr(0);
+//                 auto input_layout = inst->get_input_layout(0);
+//                 auto actual_mem = input_mem->get_engine()->reinterpret_buffer(*input_mem, input_layout);
+//                 mem_lock<ov::float16, mem_lock_type::read> lock(actual_mem, get_stream());
+//                 auto mem_ptr = lock.data();
+//                 std::string filename = "C:\\dev\\ahnyoung\\dumps\\test03\\" + std::string(is_good? "good" : "bad") + "\\input_dump_net_" + std::to_string(curr_iter)
+//                     + "_" + std::to_string(executed_prims) + "_" + layer_name + ".txt";
+//                 std::ofstream of(filename.c_str());
+//                 if (of.is_open()) {
+//                     of << "std::vector<ov::float16> input_data = {" << std::endl;
+//                     for (size_t j = begin_y; j < length_y; j++) {
+//                         for (size_t i = 0; i < length_x; i++) {
+//                             size_t idx = j * length_x + i;
+//                             of << std::fixed << std::setprecision(6) << mem_ptr[idx];
+//                             if (idx < last_idx)
+//                                 of << ",";
+//                             if ((idx + 1) % 20 == 0)
+//                                 of << std::endl;
+//                         }
+//                     }
+//                     of << "};" << std::endl;
+//                 }
+//                 std::cout << "input dump is completed ..... " << filename << std::endl;
+//             }
+//             {
+//                 auto output_mem = get_primitive(inst->id())->output_memory_ptr(0);
+//                 auto output_layout = inst->get_output_layout(0);
+//                 auto actual_mem = output_mem->get_engine()->reinterpret_buffer(*output_mem, output_layout);
+//                 mem_lock<ov::float16, mem_lock_type::read> lock(actual_mem, get_stream());
+//                 auto mem_ptr = lock.data();
+// #if 0
+//                 std::string filename = "C:\\dev\\ahnyoung\\dumps\\test02\\" + std::string(is_good? "good" : "bad") + "\\output_dump_net_" + std::to_string(curr_iter)
+//                     + "_" + std::to_string(executed_prims) + "_" + layer_name + ".txt";
+//                 std::ofstream of(filename.c_str());
+//                 if (of.is_open()) {
+//                     size_t count = output_layout.count();
+//                     for (size_t idx = 0; idx < count; idx++) {
+//                         if (mem_ptr[idx] != 0.000000f) {
+//                             of << idx << "," << std::fixed << std::setprecision(8) << static_cast<float>(mem_ptr[idx]) << std::endl;
+//                         }
+//                     }
+//                 }
+//                 std::cout << "output dump is completed ..... " << filename << std::endl;
+// #else
+//                 std::string filename = "C:\\dev\\ahnyoung\\dumps\\test03\\" + std::string(is_good? "good" : "bad") + "\\output_dump_net_" + std::to_string(curr_iter)
+//                     + "_" + std::to_string(executed_prims) + "_" + layer_name + ".txt";
+//                 std::ofstream of(filename.c_str());
+//                 if (of.is_open()) {
+//                     of << "std::vector<ov::float16> output_data = {" << std::endl;
+//                     for (size_t j = begin_y; j < length_y; j++) {
+//                         for (size_t i = 0; i < length_x; i++) {
+//                             size_t idx = j * length_x + i;
+//                             float val = static_cast<float>(mem_ptr[idx]);
+//                             of << std::fixed << std::setprecision(6) << mem_ptr[idx];
+//                             if (idx < last_idx)
+//                                 of << ",";
+//                             if ((idx + 1) % 20 == 0)
+//                                 of << std::endl;
+//                         }
+//                     }
+//                     of << "};" << std::endl;
+//                 }
+//                 std::cout << "output dump is completed ..... " << filename << std::endl;
+// #endif
+//             }
+//         }
 
         // Dump output buffers of 'inst'
         GPU_DEBUG_IF(debug_config->dump_layers_path.length() > 0) {
