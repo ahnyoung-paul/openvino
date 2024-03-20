@@ -49,6 +49,23 @@ KERNEL (softmax_gpu_continuous_bfyx)(
     const uint data_set_offset = data_set_idx * data_set_size;
     const uint subgroup_offset = get_sub_group_id() * get_sub_group_size() * items_num;
 
+// #if SUBGROUP_BLOCK_SIZE == 1
+//     printf("SUBGROUP_BLOCK_SIZE : 1, offset : %d\n", (data_set_offset + subgroup_offset));
+// #endif
+
+// #if SUBGROUP_BLOCK_SIZE == 2
+//     printf("SUBGROUP_BLOCK_SIZE : 2, offset : %d\n", (data_set_offset + subgroup_offset));
+// #endif
+
+// #if SUBGROUP_BLOCK_SIZE == 4
+//     printf("SUBGROUP_BLOCK_SIZE : 4, offset : %d\n", (data_set_offset + subgroup_offset));
+// #endif
+
+// #if SUBGROUP_BLOCK_SIZE == 8
+//     printf("SUBGROUP_BLOCK_SIZE : 8, offset : %d\n", (data_set_offset + subgroup_offset));
+// #endif
+
+
     INPUT0_TYPE my_chunk[STACK_SIZE];
     INPUT0_TYPE my_maximum = -UNIT_VAL_MAX;
     INPUT0_TYPE my_sum = UNIT_VAL_ZERO;

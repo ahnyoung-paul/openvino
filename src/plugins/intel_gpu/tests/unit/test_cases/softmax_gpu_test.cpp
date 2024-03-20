@@ -1291,7 +1291,7 @@ static void run_softmax_bfyx_opt(const int64_t b, const int64_t f, const int64_t
 
     ASSERT_NE(output, nullptr);
     cldnn::mem_lock<ov::float16> output_ptr(output, get_test_stream());
-
+#if 0
     std::vector<ov::float16> output_ref(buf_size, (ov::float16)0.0f);
     output_ref[620]=(ov::float16)0.97802734f;
     output_ref[827]=(ov::float16)0.02197266f;
@@ -1305,7 +1305,10 @@ static void run_softmax_bfyx_opt(const int64_t b, const int64_t f, const int64_t
     output_ref[3725]=(ov::float16)0.97802734f;
     output_ref[3932]=(ov::float16)0.02197266f;
     output_ref[4139]=(ov::float16)0.00000602f;
-
+#else
+    std::vector<ov::float16> output_ref(buf_size);
+    ov::reference::softmax<ov::float16>(input_data.data(), output_ref.data(), input_layout_static.get_shape(), ov::AxisSet{3});
+#endif
     size_t not_matched = 0;
     for (size_t idx = 0; idx < static_cast<size_t>(buf_size); idx++) {
         if (output_ptr[idx] != output_ref[idx]) {
@@ -1317,6 +1320,6 @@ static void run_softmax_bfyx_opt(const int64_t b, const int64_t f, const int64_t
     ASSERT_EQ(not_matched, 0);
 }
 
-TEST(softmax_gpu_bfyx_f16, opt_softmax_bf_01) {
-    run_softmax_bfyx_opt(1, 2, 2, 1035);
+TEST(softmax_gpu_bfyx_f16, opt_softmax_bf) {
+    run_softmax_bfyx_opt(1, 2, 2, 3083);
 }
