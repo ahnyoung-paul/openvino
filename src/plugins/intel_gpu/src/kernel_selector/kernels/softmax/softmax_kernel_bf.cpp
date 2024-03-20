@@ -81,7 +81,7 @@ SoftmaxKernel_bf::Parent::DispatchData SoftmaxKernel_bf::SetDefault(const softma
 
         assert(dispatchData.itemsNum > 0 && dispatchData.lws[0] && dispatchData.gws[0] > 0);
     } else {
-        dispatchData.subgroupBlockSize = 1;
+        dispatchData.subgroupBlockSize = 2;
     }
     return dispatchData;
 }

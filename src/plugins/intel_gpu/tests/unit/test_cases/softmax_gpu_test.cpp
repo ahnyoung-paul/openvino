@@ -1244,10 +1244,6 @@ static void run_softmax_bfyx_opt(const int64_t b, const int64_t f, const int64_t
         }
     }
 
-    // for (auto idx : sample_indices) {
-    //     std::cout << "input_data[" << idx << "] " << std::fixed << setprecision(8) << input_data[idx] << std::endl;
-    // }
-
     set_values(input_mem, input_data);
 
     std::map<cldnn::primitive_id, cldnn::network_output> outputs;
@@ -1295,11 +1291,6 @@ static void run_softmax_bfyx_opt(const int64_t b, const int64_t f, const int64_t
 
     ASSERT_NE(output, nullptr);
     cldnn::mem_lock<ov::float16> output_ptr(output, get_test_stream());
-    // for (size_t idx = 0; idx < static_cast<size_t>(buf_size); idx++) {
-    //     if (output_ptr[idx] != (ov::float16)0.00f) {
-    //         std::cout << "output_ref[" << idx << "]=(ov::float16)" << std::fixed << setprecision(8) << output_ptr[idx] << "f;" << std::endl;
-    //     }
-    // }
 
     std::vector<ov::float16> output_ref(buf_size, (ov::float16)0.0f);
     output_ref[620]=(ov::float16)0.97802734f;
@@ -1314,18 +1305,6 @@ static void run_softmax_bfyx_opt(const int64_t b, const int64_t f, const int64_t
     output_ref[3725]=(ov::float16)0.97802734f;
     output_ref[3932]=(ov::float16)0.02197266f;
     output_ref[4139]=(ov::float16)0.00000602f;
-
-    // ov::reference::softmax<ov::float16>(input_data.data(), output_ref.data(), input_layout_static.get_shape(), ov::AxisSet{3});
-    // std::cout << "cldnn::mem_lock<ov::float16> output_ref = {" << std::endl;
-    // for (size_t idx = 0; idx < static_cast<size_t>(buf_size); idx++) {
-    //     std::cout << "(ov::float16)(" << std::fixed << setprecision(8) << output_ref[idx] << "),";
-    //     if ((idx + 1) % 10 == 0) {
-    //         std::cout << std::endl;
-    //     }
-    // }
-    // std::cout << "};" << std::endl;
-    // std::cout << "output_ref[" << int(buf_size /  3) << "] = " << std::fixed << setprecision(8) << output_ref[buf_size / 3]  << ";" << std::endl;
-    // std::cout << "output_ref[" << int(buf_size * 2 /  3) << "] = " << std::fixed << setprecision(8) << output_ref[(buf_size * 2) / 3]  << ";" << std::endl;
 
     size_t not_matched = 0;
     for (size_t idx = 0; idx < static_cast<size_t>(buf_size); idx++) {
