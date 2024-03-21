@@ -115,21 +115,23 @@ KERNEL (softmax_gpu_continuous_bfyx)(
     my_maximum = lg_storage[0];
 
     barrier(CLK_LOCAL_MEM_FENCE);
-
-    for (uint i=0; i<items_num; ++i)
     {
-        INPUT0_TYPE tmp = native_exp(my_chunk[i] - my_maximum);
-        my_sum += tmp;
-        my_chunk[i] = tmp;
-    }
+        float tmp_sum = 0.f;
+        for (uint i=0; i<items_num; ++i)
+        {
+            INPUT0_TYPE tmp = native_exp(my_chunk[i] - my_maximum);
+            tmp_sum += convert_float(tmp);
+            my_chunk[i] = tmp;
+        }
 
-    if (in_data_set_idx < leftovers)
-    {
-        INPUT0_TYPE tmp = native_exp(my_chunk[items_num] - my_maximum);
-        my_sum += tmp;
-        my_chunk[items_num] = tmp;
+        if (in_data_set_idx < leftovers)
+        {
+            INPUT0_TYPE tmp = native_exp(my_chunk[items_num] - my_maximum);
+            tmp_sum += convert_float(tmp);
+            my_chunk[items_num] = tmp;
+        }
+        my_sum = TO_OUTPUT_TYPE(tmp_sum);
     }
-
     my_sum = sub_group_reduce_add(my_sum);
 
     if (get_sub_group_local_id() == 0)
@@ -139,10 +141,12 @@ KERNEL (softmax_gpu_continuous_bfyx)(
 
     if (in_data_set_idx == 0)
     {
+        float tmp_sum = lg_storage[0];
         for (uint i=1; i<get_num_sub_groups(); ++i)
-            my_sum += lg_storage[i];
-
-        lg_storage[0] = my_sum;
+        {
+            tmp_sum += convert_float(lg_storage[i]);
+        }
+        lg_storage[0] = TO_OUTPUT_TYPE(tmp_sum);
     }
     barrier(CLK_LOCAL_MEM_FENCE);
 
