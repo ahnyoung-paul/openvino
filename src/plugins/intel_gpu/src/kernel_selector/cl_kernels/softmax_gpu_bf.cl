@@ -56,6 +56,7 @@ KERNEL (softmax_gpu_continuous_bfyx)(
     const uint subgroup_offset = get_sub_group_id() * get_sub_group_size() * items_num;
     const uint leftover_idx = (data_set_offset + in_data_set_idx) + (convert_leftover_position? 0 : (workers_per_data_set * items_num));
     const uint data_offset = data_set_offset + subgroup_offset + leftovers_offset;
+    const uint data_offset_bytes_count = data_offset * sizeof(INPUT0_TYPE);
 
     INPUT0_TYPE my_chunk[STACK_SIZE];
     INPUT0_TYPE my_maximum = -UNIT_VAL_MAX;
@@ -67,7 +68,7 @@ KERNEL (softmax_gpu_continuous_bfyx)(
     uint i=0;
     if (workers_per_data_set > SUB_GROUP_SIZE)
     {
-        for (; i<items_num - (items_num % SUBGROUP_BLOCK_SIZE); i+=SUBGROUP_BLOCK_SIZE)
+        unroll_for (; i<items_num - (items_num % SUBGROUP_BLOCK_SIZE); i+=SUBGROUP_BLOCK_SIZE)
         {
             BLOCK_TYPE vec_tmp = BLOCK_READ(input, data_offset + i * get_sub_group_size());
 #if SUBGROUP_BLOCK_SIZE == 1
@@ -84,7 +85,7 @@ KERNEL (softmax_gpu_continuous_bfyx)(
         }
     }
 
-    for (; i<items_num; i++)
+    unroll_for (; i<items_num; i++)
     {
         INPUT0_TYPE tmp = input[data_offset + get_sub_group_local_id() + i * get_sub_group_size()];
         my_maximum = max(my_maximum, tmp);
@@ -104,7 +105,7 @@ KERNEL (softmax_gpu_continuous_bfyx)(
     barrier(CLK_LOCAL_MEM_FENCE);
     if (in_data_set_idx == 0)
     {
-        for (uint i=1; i<get_num_sub_groups(); ++i)
+        unroll_for (uint i=1; i<get_num_sub_groups(); ++i)
             my_maximum = max(my_maximum, lg_storage[i]);
 
         lg_storage[0] = my_maximum;
@@ -118,7 +119,7 @@ KERNEL (softmax_gpu_continuous_bfyx)(
     barrier(CLK_LOCAL_MEM_FENCE);
     {
         float tmp_sum = 0.f;
-        for (uint i=0; i<items_num; ++i)
+        unroll_for (uint i=0; i<items_num; ++i)
         {
             INPUT0_TYPE tmp = native_exp(my_chunk[i] - my_maximum);
             tmp_sum += convert_float(tmp);
@@ -143,7 +144,7 @@ KERNEL (softmax_gpu_continuous_bfyx)(
     if (in_data_set_idx == 0)
     {
         float tmp_sum = lg_storage[0];
-        for (uint i=1; i<get_num_sub_groups(); ++i)
+        unroll_for (uint i=1; i<get_num_sub_groups(); ++i)
             tmp_sum += convert_float(lg_storage[i]);
         lg_storage[0] = TO_OUTPUT_TYPE(tmp_sum);
     }
@@ -153,11 +154,11 @@ KERNEL (softmax_gpu_continuous_bfyx)(
 
     // Write outputs
     i=0;
-    const bool avaialble_subgroup_block_write = (data_set_bytes_count - ((data_set_bytes_count>>4)<<4)) == 0;
+    const bool avaialble_subgroup_block_write = (data_offset_bytes_count - ((data_offset_bytes_count>>4)<<4)) == 0;
 #if HAS_FUSED_OPS
     if (avaialble_subgroup_block_write && (workers_per_data_set > SUB_GROUP_SIZE))
     {
-        for (; i < items_num - (items_num % SUBGROUP_BLOCK_SIZE); i+=SUBGROUP_BLOCK_SIZE)
+        unroll_for (; i < items_num - (items_num % SUBGROUP_BLOCK_SIZE); i+=SUBGROUP_BLOCK_SIZE)
         {
             BLOCK_TYPE vec_tmp;
 #if SUBGROUP_BLOCK_SIZE == 1
@@ -165,7 +166,7 @@ KERNEL (softmax_gpu_continuous_bfyx)(
             FUSED_OPS_MAIN;
             vec_tmp = FUSED_OPS_RESULT_MAIN;
 #else
-            for (int j = 0; j < SUBGROUP_BLOCK_SIZE; j++)
+            unroll_for (int j = 0; j < SUBGROUP_BLOCK_SIZE; j++)
             {
                 ACTIVATION_TYPE dequantized = my_chunk[i + j] / my_sum;
                 FUSED_OPS_MAIN;
@@ -175,7 +176,7 @@ KERNEL (softmax_gpu_continuous_bfyx)(
             BLOCK_WRITE(output, data_offset + i * get_sub_group_size(), vec_tmp);
         }
     }
-    for (; i<items_num; i++)
+    unroll_for (; i<items_num; i++)
     {
         ACTIVATION_TYPE dequantized = my_chunk[i] / my_sum;
         FUSED_OPS_MAIN;
@@ -190,19 +191,22 @@ KERNEL (softmax_gpu_continuous_bfyx)(
 #else
     if (avaialble_subgroup_block_write && (workers_per_data_set > SUB_GROUP_SIZE))
     {
-        for (; i<items_num - (items_num % SUBGROUP_BLOCK_SIZE); i+=SUBGROUP_BLOCK_SIZE)
+        unroll_for (; i<items_num - (items_num % SUBGROUP_BLOCK_SIZE); i+=SUBGROUP_BLOCK_SIZE)
         {
             BLOCK_TYPE vec_tmp;
 #if SUBGROUP_BLOCK_SIZE == 1
             vec_tmp = ACTIVATION(my_chunk[i] / my_sum, ACTIVATION_PARAMS);
 #else
-            for (int j = 0; j < SUBGROUP_BLOCK_SIZE; j++)
+            unroll_for (int j = 0; j < SUBGROUP_BLOCK_SIZE; j++)
                 vec_tmp[j] = ACTIVATION(my_chunk[i + j] / my_sum, ACTIVATION_PARAMS);
 #endif
             BLOCK_WRITE(output, data_offset + i * get_sub_group_size(), vec_tmp);
         }
+    } else {
+        if (get_sub_group_local_id() == 0)
+            printf("checking data  data_offset_bytes_count %u (aliged 4: %d, algined 16: %d), items_num(%d), workers_per_data_set(%d) \n",data_offset_bytes_count, (data_offset_bytes_count%4), (data_offset_bytes_count%16), items_num, workers_per_data_set);
     }
-    for (; i < items_num; i++)
+    unroll_for (; i < items_num; i++)
     {
         output[data_offset + get_sub_group_local_id() + i * get_sub_group_size()] = ACTIVATION(my_chunk[i] / my_sum, ACTIVATION_PARAMS);
     }
