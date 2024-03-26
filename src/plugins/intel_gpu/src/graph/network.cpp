@@ -905,28 +905,28 @@ void network::execute_impl(const std::vector<event::ptr>& events) {
     auto surf_lock = surfaces_lock::create(get_engine().type(), in_out_mem, get_stream());
 
     set_arguments();
-    GPU_DEBUG_IF(debug_config->list_layers == 1) {
-        for (auto& inst : _exec_order) {
-            GPU_DEBUG_COUT << inst->id() << std::endl;
-            if (inst->get_node().is_type<loop>()) {
-                auto& loop_node = inst->get_node().as<loop>();
-                for (auto& prim : loop_node.get_body_program()->get_processing_order()) {
-                    GPU_DEBUG_COUT << "\t" << prim->id() << std::endl;
-                }
-            } else if (inst->get_node().is_type<condition>()) {
-                auto& cond_node = inst->get_node().as<condition>();
-                GPU_DEBUG_COUT << "* Branch_True" << std::endl;
-                for (auto& prim : cond_node.get_branch_true().inner_program->get_processing_order()) {
-                    GPU_DEBUG_COUT << "\t" << prim->id() << std::endl;
-                }
-                GPU_DEBUG_COUT << "* Branch_False" << std::endl;
-                for (auto& prim : cond_node.get_branch_false().inner_program->get_processing_order()) {
-                    GPU_DEBUG_COUT << "\t" << prim->id() << std::endl;
-                }
-            }
-        }
-        if (!is_internal()) exit(0);
-    }
+    // GPU_DEBUG_IF(debug_config->list_layers == 1) {
+    //     for (auto& inst : _exec_order) {
+    //         GPU_DEBUG_COUT << inst->id() << std::endl;
+    //         if (inst->get_node().is_type<loop>()) {
+    //             auto& loop_node = inst->get_node().as<loop>();
+    //             for (auto& prim : loop_node.get_body_program()->get_processing_order()) {
+    //                 GPU_DEBUG_COUT << "\t" << prim->id() << std::endl;
+    //             }
+    //         } else if (inst->get_node().is_type<condition>()) {
+    //             auto& cond_node = inst->get_node().as<condition>();
+    //             GPU_DEBUG_COUT << "* Branch_True" << std::endl;
+    //             for (auto& prim : cond_node.get_branch_true().inner_program->get_processing_order()) {
+    //                 GPU_DEBUG_COUT << "\t" << prim->id() << std::endl;
+    //             }
+    //             GPU_DEBUG_COUT << "* Branch_False" << std::endl;
+    //             for (auto& prim : cond_node.get_branch_false().inner_program->get_processing_order()) {
+    //                 GPU_DEBUG_COUT << "\t" << prim->id() << std::endl;
+    //             }
+    //         }
+    //     }
+    //     if (!is_internal()) exit(0);
+    // }
     auto get_iteration_prefix = [](int64_t iter) {
         if (iter < 0)
             return std::string("");
