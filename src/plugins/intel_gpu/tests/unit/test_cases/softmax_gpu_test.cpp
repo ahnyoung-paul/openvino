@@ -1867,9 +1867,48 @@ static void run_softmax_bfyx_opt(const int64_t b, const int64_t f, const int64_t
     ASSERT_NE(output, nullptr);
     const float threshold_fp16 = 0.0005f;
     cldnn::mem_lock<ov::float16> output_ptr(output, get_test_stream());
+
+    std::cout << "bfyx={" << b << "x" << f << "x" << y << "x" << x << "};" << std::endl;
+    const size_t h_fixed = 6;
+    std::stringstream ss;
+    ss << "input_data[]={" << std::endl;
+    const size_t x_length = static_cast<size_t>(x);
+    const size_t l_length = 18;
+    const size_t num_items = 16;
+    size_t input_idx = x_length * h_fixed;
+#if 1
+    ss << std::fixed << setprecision(6) << input_data[input_idx] << "(" << input_idx << ")" << std::endl;
+    input_idx++;
+    ss << std::fixed << setprecision(6) << input_data[input_idx] << "(" << input_idx << ")" << std::endl;
+    input_idx++;
+    for (size_t lid = 0; lid < l_length; lid++) {
+        for (size_t idx = 0; idx < num_items; idx++) {
+            ss << std::fixed << setprecision(6) << input_data[input_idx] << "(" << input_idx << ")";
+            if ( lid < (x_length - 1))
+                ss << ",";
+            input_idx++;
+        }
+        ss << std::endl;
+    }
+#else
+    for (size_t lid = 0; lid < l_length; lid++) {
+        for (size_t idx = 0; idx < num_items; idx++) {
+            ss << std::fixed << setprecision(6) << input_data[input_idx] << "(" << input_idx << ")";
+            if ( lid < (x_length - 1))
+                ss << ",";
+            input_idx++;
+        }
+        ss << std::endl;
+    }
+    ss << std::fixed << setprecision(6) << input_data[input_idx] << "(" << input_idx << ")" << std::endl;
+#endif
+    ss << "}";
+    std::cout << ss.str() << std::endl;
+
+
     for (size_t idx = 0; idx < static_cast<size_t>(buf_size); idx++) {
         if ((std::abs(float(output_ptr[idx])) - float(output_ref[idx])) > threshold_fp16) {
-            std::cout << idx << ", " << std::fixed << setprecision(6) << output_ptr[idx] << " vs " << output_ref[idx];
+            std::cout << idx << ", [" << int(idx / x) << "](" << (idx % x) << ") " << std::fixed << setprecision(6) << output_ptr[idx] << " vs " << output_ref[idx];
             ASSERT_FALSE(1);
         }
         // ASSERT_NEAR(float(output_ptr[idx]), float(output_ref[idx]), threshold_fp16) << idx << ", " << std::fixed << setprecision(8) << output_ptr[idx] << " vs " << output_ref[idx];
