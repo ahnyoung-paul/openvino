@@ -132,7 +132,7 @@ void memory_pool::release_memory(memory* mem, const size_t& unique_id, primitive
         }
     }
 #ifdef GPU_DEBUG_CONFIG
-    {
+    GPU_DEBUG_IF(debug_config->dump_memory_pool) {
         auto it = _no_reusable_pool.lower_bound(_layout_bytes_count);
 
         while (it != _no_reusable_pool.end()) {
@@ -331,15 +331,13 @@ memory::ptr memory_pool::get_memory(const layout& layout,
             // images (reuse not yet implemented)
             auto mem = alloc_memory(layout, type, reset);
 #ifdef GPU_DEBUG_CONFIG
-            {
+            GPU_DEBUG_IF(debug_config->dump_memory_pool) {
                 auto allocated_mem_size = mem->size();
                 _no_reusable_pool.emplace(allocated_mem_size,
                                         memory_record({{unique_id, network_id, prim_id, allocated_mem_size}}, mem, network_id, type));
-                GPU_DEBUG_IF(debug_config->dump_memory_pool) {
-                    total_mem_size_no_reusable += allocated_mem_size;
-                    if (type == allocation_type::usm_host)
-                        mem_size_no_reusable_host += allocated_mem_size;
-                }
+                total_mem_size_no_reusable += allocated_mem_size;
+                if (type == allocation_type::usm_host)
+                    mem_size_no_reusable_host += allocated_mem_size;
             }
 #endif
             return mem;
@@ -347,15 +345,13 @@ memory::ptr memory_pool::get_memory(const layout& layout,
     } else {
         auto mem = alloc_memory(layout, type, reset);
 #ifdef GPU_DEBUG_CONFIG
-        {
+        GPU_DEBUG_IF(debug_config->dump_memory_pool) {
             auto allocated_mem_size = mem->size();
             _no_reusable_pool.emplace(allocated_mem_size,
                                     memory_record({{unique_id, network_id, prim_id, allocated_mem_size}}, mem, network_id, type));
-            GPU_DEBUG_IF(debug_config->dump_memory_pool) {
-                total_mem_size_no_reusable += allocated_mem_size;
-                if (type == allocation_type::usm_host)
-                    mem_size_no_reusable_host += allocated_mem_size;
-            }
+            total_mem_size_no_reusable += allocated_mem_size;
+            if (type == allocation_type::usm_host)
+                mem_size_no_reusable_host += allocated_mem_size;
         }
 #endif
         return mem;
@@ -423,7 +419,7 @@ void memory_pool::clear_pool_for_network(uint32_t network_id) {
 
 #ifdef GPU_DEBUG_CONFIG
     // free up _no_reusable_pool for this network
-    {
+    GPU_DEBUG_IF(debug_config->dump_memory_pool) {
         auto itr = _no_reusable_pool.begin();
 
         while (itr != _no_reusable_pool.end()) {
