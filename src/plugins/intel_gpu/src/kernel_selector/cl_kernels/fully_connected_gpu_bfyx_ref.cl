@@ -32,6 +32,8 @@ KERNEL(fc)(
 
     ACCUMULATOR_TYPE dotProd = ACCUMULATOR_VAL_ZERO;
 
+    const uint dst_index = OUTPUT_GET_INDEX(b, ofm, oym, 0);
+
     for (uint y = 0; y < INPUT0_SIZE_Y; ++y)
     {
         for (uint x = 0; x < INPUT0_SIZE_X; ++x)
@@ -60,20 +62,19 @@ KERNEL(fc)(
             #elif COMPRESSED_WEIGHTS_INT4
                 FILTER_TYPE filter_packed = weights[filter_idx / 2];
                 MAKE_VECTOR_TYPE(ACCUMULATOR_TYPE, 2) filter_unpacked = UNPACK_INT4x2(ACCUMULATOR_TYPE, *((INT4_PACKED_TYPE*)&filter_packed));
-                if (ofm == 0 && oym == 0 && b == 0) {
-                    printf("%d,%f,%f\n", filter_packed, ((half*)(&filter_unpacked))[0], ((half*)(&filter_unpacked))[1]);
-                }
 
                 ACCUMULATOR_TYPE filter_compressed = ((ACCUMULATOR_TYPE*)(&filter_unpacked))[filter_idx % 2];
                 ACCUMULATOR_TYPE filter_val = (filter_compressed - zp) * scale;
                 dotProd += (ACCUMULATOR_TYPE)(input[input0_idx]) * filter_val;
+                if (dst_index == 0) {
+                    printf("%d,%d,%d,%f,%f,%f,%f\n", x, y, filter_packed, ((half*)(&filter_unpacked))[0], ((half*)(&filter_unpacked))[1], filter_val, dotProd);
+                }
             #else
                 dotProd += (ACCUMULATOR_TYPE)(input[input0_idx]) * (ACCUMULATOR_TYPE)(weights[filter_idx]);
             #endif
         }
     }
 
-    const uint dst_index = OUTPUT_GET_INDEX(b, ofm, oym, 0);
 #else
     const uint ofm = get_global_id(0);
     const uint b = get_global_id(1);

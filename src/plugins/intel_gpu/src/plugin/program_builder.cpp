@@ -236,7 +236,7 @@ std::shared_ptr<cldnn::program> ProgramBuilder::build(const std::vector<std::sha
             impl_map.insert({id, {cldnn::format::bfyx, "fully_connected_gpu_bfyx_ref"}});
         }
         m_config.set_property(ov::intel_gpu::force_implementations(impl_map));
-        std::cout << "Replace fc kernel to fully_connected_gpu_bfyx_ref ...................... impl_map " << impl_map.size() << std::endl; 
+        std::cout << "Replace fc kernel to fully_connected_gpu_bfyx_ref ...................... impl_map " << impl_map.size() << std::endl;
     }
     // m_config.set_property(ov::intel_gpu::force_implementations(
     //         ov::intel_gpu::ImplForcingMap{ { "fullyconnectedcompressed:__module.model.gpt_neox.layers.0.attention.query_key_value/aten::linear/MatMul",
