@@ -161,6 +161,88 @@ std::shared_ptr<cldnn::program> ProgramBuilder::build(const std::vector<std::sha
     m_config.set_property(ov::intel_gpu::partial_build_program(partial_build));
     m_config.set_property(ov::intel_gpu::optimize_data(true));
     m_config.set_property(ov::intel_gpu::allow_new_shape_infer(allow_new_shape_infer));
+    {
+        std::vector<std::string> id_list = {
+            "fullyconnectedcompressed:__module.model.gpt_neox.layers.0.attention.query_key_value/aten::linear/MatMul",
+            // "fullyconnectedcompressed:__module.model.gpt_neox.layers.0.mlp.dense_h_to_4h/aten::linear/MatMul",
+            // "fullyconnectedcompressed:__module.model.gpt_neox.layers.0.mlp.dense_4h_to_h/aten::linear/MatMul",
+            // "fullyconnectedcompressed:__module.model.gpt_neox.layers.0.attention.dense/aten::linear/MatMul",
+            // "fullyconnectedcompressed:__module.model.gpt_neox.layers.1.mlp.dense_h_to_4h/aten::linear/MatMul",
+            // "fullyconnectedcompressed:__module.model.gpt_neox.layers.1.attention.query_key_value/aten::linear/MatMul",
+            // "fullyconnectedcompressed:__module.model.gpt_neox.layers.1.mlp.dense_4h_to_h/aten::linear/MatMul",
+            // "fullyconnectedcompressed:__module.model.gpt_neox.layers.1.attention.dense/aten::linear/MatMul",
+            // "fullyconnectedcompressed:__module.model.gpt_neox.layers.2.mlp.dense_h_to_4h/aten::linear/MatMul",
+            // "fullyconnectedcompressed:__module.model.gpt_neox.layers.2.attention.query_key_value/aten::linear/MatMul",
+            // "fullyconnectedcompressed:__module.model.gpt_neox.layers.2.mlp.dense_4h_to_h/aten::linear/MatMul",
+            // "fullyconnectedcompressed:__module.model.gpt_neox.layers.2.attention.dense/aten::linear/MatMul",
+            // "fullyconnectedcompressed:__module.model.gpt_neox.layers.3.mlp.dense_h_to_4h/aten::linear/MatMul",
+            // "fullyconnectedcompressed:__module.model.gpt_neox.layers.3.attention.query_key_value/aten::linear/MatMul",
+            // "fullyconnectedcompressed:__module.model.gpt_neox.layers.3.mlp.dense_4h_to_h/aten::linear/MatMul",
+            // "fullyconnectedcompressed:__module.model.gpt_neox.layers.3.attention.dense/aten::linear/MatMul",
+            // "fullyconnectedcompressed:__module.model.gpt_neox.layers.4.mlp.dense_h_to_4h/aten::linear/MatMul",
+            // "fullyconnectedcompressed:__module.model.gpt_neox.layers.4.attention.query_key_value/aten::linear/MatMul",
+            // "fullyconnectedcompressed:__module.model.gpt_neox.layers.4.mlp.dense_4h_to_h/aten::linear/MatMul",
+            // "fullyconnectedcompressed:__module.model.gpt_neox.layers.4.attention.dense/aten::linear/MatMul",
+            // "fullyconnectedcompressed:__module.model.gpt_neox.layers.5.mlp.dense_h_to_4h/aten::linear/MatMul",
+            // "fullyconnectedcompressed:__module.model.gpt_neox.layers.5.attention.query_key_value/aten::linear/MatMul",
+            // "fullyconnectedcompressed:__module.model.gpt_neox.layers.5.mlp.dense_4h_to_h/aten::linear/MatMul",
+            // "fullyconnectedcompressed:__module.model.gpt_neox.layers.5.attention.dense/aten::linear/MatMul",
+            // "fullyconnectedcompressed:__module.model.gpt_neox.layers.6.mlp.dense_h_to_4h/aten::linear/MatMul",
+            // "fullyconnectedcompressed:__module.model.gpt_neox.layers.6.attention.query_key_value/aten::linear/MatMul",
+            // "fullyconnectedcompressed:__module.model.gpt_neox.layers.6.mlp.dense_4h_to_h/aten::linear/MatMul",
+            // "fullyconnectedcompressed:__module.model.gpt_neox.layers.6.attention.dense/aten::linear/MatMul",
+            // "fullyconnectedcompressed:__module.model.gpt_neox.layers.7.mlp.dense_h_to_4h/aten::linear/MatMul",
+            // "fullyconnectedcompressed:__module.model.gpt_neox.layers.7.attention.query_key_value/aten::linear/MatMul",
+            // "fullyconnectedcompressed:__module.model.gpt_neox.layers.7.mlp.dense_4h_to_h/aten::linear/MatMul",
+            // "fullyconnectedcompressed:__module.model.gpt_neox.layers.7.attention.dense/aten::linear/MatMul",
+            // "fullyconnectedcompressed:__module.model.gpt_neox.layers.8.mlp.dense_h_to_4h/aten::linear/MatMul",
+            // "fullyconnectedcompressed:__module.model.gpt_neox.layers.8.attention.query_key_value/aten::linear/MatMul",
+            // "fullyconnectedcompressed:__module.model.gpt_neox.layers.8.mlp.dense_4h_to_h/aten::linear/MatMul",
+            // "fullyconnectedcompressed:__module.model.gpt_neox.layers.8.attention.dense/aten::linear/MatMul",
+            // "fullyconnectedcompressed:__module.model.gpt_neox.layers.9.mlp.dense_h_to_4h/aten::linear/MatMul",
+            // "fullyconnectedcompressed:__module.model.gpt_neox.layers.9.attention.query_key_value/aten::linear/MatMul",
+            // "fullyconnectedcompressed:__module.model.gpt_neox.layers.9.mlp.dense_4h_to_h/aten::linear/MatMul",
+            // "fullyconnectedcompressed:__module.model.gpt_neox.layers.9.attention.dense/aten::linear/MatMul",
+            // "fullyconnectedcompressed:__module.model.gpt_neox.layers.10.mlp.dense_h_to_4h/aten::linear/MatMul",
+            // "fullyconnectedcompressed:__module.model.gpt_neox.layers.10.attention.query_key_value/aten::linear/MatMul",
+            // "fullyconnectedcompressed:__module.model.gpt_neox.layers.10.mlp.dense_4h_to_h/aten::linear/MatMul",
+            // "fullyconnectedcompressed:__module.model.gpt_neox.layers.10.attention.dense/aten::linear/MatMul",
+            // "fullyconnectedcompressed:__module.model.gpt_neox.layers.11.mlp.dense_h_to_4h/aten::linear/MatMul",
+            // "fullyconnectedcompressed:__module.model.gpt_neox.layers.11.attention.query_key_value/aten::linear/MatMul",
+            // "fullyconnectedcompressed:__module.model.gpt_neox.layers.11.mlp.dense_4h_to_h/aten::linear/MatMul",
+            // "fullyconnectedcompressed:__module.model.gpt_neox.layers.11.attention.dense/aten::linear/MatMul",
+            // "fullyconnectedcompressed:__module.model.gpt_neox.layers.12.mlp.dense_h_to_4h/aten::linear/MatMul",
+            // "fullyconnectedcompressed:__module.model.gpt_neox.layers.12.attention.query_key_value/aten::linear/MatMul",
+            // "fullyconnectedcompressed:__module.model.gpt_neox.layers.12.mlp.dense_4h_to_h/aten::linear/MatMul",
+            // "fullyconnectedcompressed:__module.model.gpt_neox.layers.12.attention.dense/aten::linear/MatMul",
+            // "fullyconnectedcompressed:__module.model.gpt_neox.layers.13.mlp.dense_h_to_4h/aten::linear/MatMul",
+            // "fullyconnectedcompressed:__module.model.gpt_neox.layers.13.attention.query_key_value/aten::linear/MatMul",
+            // "fullyconnectedcompressed:__module.model.gpt_neox.layers.13.mlp.dense_4h_to_h/aten::linear/MatMul",
+            // "fullyconnectedcompressed:__module.model.gpt_neox.layers.13.attention.dense/aten::linear/MatMul",
+            // "fullyconnectedcompressed:__module.model.gpt_neox.layers.14.mlp.dense_h_to_4h/aten::linear/MatMul",
+            // "fullyconnectedcompressed:__module.model.gpt_neox.layers.14.attention.query_key_value/aten::linear/MatMul",
+            // "fullyconnectedcompressed:__module.model.gpt_neox.layers.14.mlp.dense_4h_to_h/aten::linear/MatMul",
+            // "fullyconnectedcompressed:__module.model.gpt_neox.layers.14.attention.dense/aten::linear/MatMul",
+            // "fullyconnectedcompressed:__module.model.gpt_neox.layers.15.mlp.dense_h_to_4h/aten::linear/MatMul",
+            // "fullyconnectedcompressed:__module.model.gpt_neox.layers.15.attention.query_key_value/aten::linear/MatMul",
+            // "fullyconnectedcompressed:__module.model.gpt_neox.layers.15.mlp.dense_4h_to_h/aten::linear/MatMul",
+            // "fullyconnectedcompressed:__module.model.gpt_neox.layers.15.attention.dense/aten::linear/MatMul",
+            // "fullyconnectedcompressed:__module.model.embed_out/aten::linear/MatMul"
+        };
+
+        ov::intel_gpu::ImplForcingMap impl_map;
+
+        for (auto& id : id_list) {
+            impl_map.insert({id, {cldnn::format::bfyx, "fully_connected_gpu_bfyx_ref"}});
+        }
+        m_config.set_property(ov::intel_gpu::force_implementations(impl_map));
+        std::cout << "Replace fc kernel to fully_connected_gpu_bfyx_ref ...................... impl_map " << impl_map.size() << std::endl; 
+    }
+    // m_config.set_property(ov::intel_gpu::force_implementations(
+    //         ov::intel_gpu::ImplForcingMap{ { "fullyconnectedcompressed:__module.model.gpt_neox.layers.0.attention.query_key_value/aten::linear/MatMul",
+    //         {cldnn::format::bfyx, "fully_connected_gpu_bfyx_ref"} }}));
+    // std::cout << "&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&" << std::endl;
+    // std::cout << "Set kernel to fc bfyx ref" << std::endl;
 
     prepare_build();
     {

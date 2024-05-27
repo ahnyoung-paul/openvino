@@ -60,6 +60,9 @@ KERNEL(fc)(
             #elif COMPRESSED_WEIGHTS_INT4
                 FILTER_TYPE filter_packed = weights[filter_idx / 2];
                 MAKE_VECTOR_TYPE(ACCUMULATOR_TYPE, 2) filter_unpacked = UNPACK_INT4x2(ACCUMULATOR_TYPE, *((INT4_PACKED_TYPE*)&filter_packed));
+                if (ofm == 0 && oym == 0 && b == 0) {
+                    printf("%d,%f,%f\n", filter_packed, ((half*)(&filter_unpacked))[0], ((half*)(&filter_unpacked))[1]);
+                }
 
                 ACCUMULATOR_TYPE filter_compressed = ((ACCUMULATOR_TYPE*)(&filter_unpacked))[filter_idx % 2];
                 ACCUMULATOR_TYPE filter_val = (filter_compressed - zp) * scale;
