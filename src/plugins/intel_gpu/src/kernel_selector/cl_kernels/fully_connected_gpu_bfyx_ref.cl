@@ -66,14 +66,17 @@ KERNEL(fc)(
                 ACCUMULATOR_TYPE filter_compressed = ((ACCUMULATOR_TYPE*)(&filter_unpacked))[filter_idx % 2];
                 ACCUMULATOR_TYPE filter_val = (filter_compressed - zp) * scale;
                 dotProd += (ACCUMULATOR_TYPE)(input[input0_idx]) * filter_val;
-                if (dst_index == 0) {
-                    printf("%d,%d,%d,%f,%f,%f,%f\n", x, y, filter_packed, ((half*)(&filter_unpacked))[0], ((half*)(&filter_unpacked))[1], filter_val, dotProd);
-                }
+                // if (dst_index == 0) {
+                //     printf("%d,%d,[%dx%d][%dx%dx%d][%dx%dx%d],%d,%f,%f,%f,%f\n", x, y, INPUT0_SIZE_X, INPUT0_SIZE_Y, b, ofm, oym,
+                //         get_global_size(0), get_global_size(1), get_global_size(2),
+                //         filter_packed, ((half*)(&filter_unpacked))[0], ((half*)(&filter_unpacked))[1], filter_val, dotProd);
+                // }
             #else
                 dotProd += (ACCUMULATOR_TYPE)(input[input0_idx]) * (ACCUMULATOR_TYPE)(weights[filter_idx]);
             #endif
         }
     }
+    printf("%d,%d,%d,%d,%f\n", b, ofm, oym, dst_index, dotProd);
 
 #else
     const uint ofm = get_global_id(0);
