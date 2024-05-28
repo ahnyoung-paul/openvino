@@ -1124,6 +1124,11 @@ void network::execute_impl(const std::vector<event::ptr>& events) {
         if (needs_flushing && executed_prims % flush_frequency == 0)
             get_stream().flush();
 
+        if (inst->id() == "fullyconnectedcompressed:__module.model.gpt_neox.layers.0.attention.query_key_value/aten::linear/MatMul"
+            || inst->id() == "fullyconnectedcompressed:__module.model.gpt_neox.layers.0.mlp.dense_h_to_4h/aten::linear/MatMul") {
+            std::cout << "\"" << inst->id() << "\"," << inst->get_impl()->get_kernel_name() << std::endl;
+        }
+
         // Dump output buffers of 'inst'
         GPU_DEBUG_IF(debug_config->dump_layers_path.length() > 0) {
             get_stream().finish();
