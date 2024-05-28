@@ -76,7 +76,8 @@ KERNEL(fc)(
             #endif
         }
     }
-    printf("%d,%d,%d,%d,%f\n", b, ofm, oym, dst_index, dotProd);
+    // if (dst_index == 55319 || dst_index == 55313  || (dst_index >= 0 && dst_index <=5))
+    //     printf("%d,%d,%d,%d,%f\n", b, ofm, oym, dst_index, dotProd);
 
 #else
     const uint ofm = get_global_id(0);
@@ -152,6 +153,13 @@ KERNEL(fc)(
     OUTPUT_TYPE res = FUSED_OPS_RESULT;
     output[dst_index] = res;
 #else
+// #if OUTPUT_3D
+//     printf("%d,%d,%d,%d,%f\n", dst_index, b, ofm, oym, dotProd);
+// #else
+//     printf("%d,%d,%d,%d,%f\n", dst_index, b, ofm, 0, dotProd);
+// #endif
+    if (dst_index < 10)
+        printf("%d, %f, %f\n", dst_index, dotProd, dequantized);
     output[dst_index] = TO_OUTPUT_TYPE(ACTIVATION_TYPED(dequantized, ACTIVATION_PARAMS_TYPED));
 #endif
 }

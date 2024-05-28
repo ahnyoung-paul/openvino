@@ -164,7 +164,7 @@ std::shared_ptr<cldnn::program> ProgramBuilder::build(const std::vector<std::sha
     {
         std::vector<std::string> id_list = {
             "fullyconnectedcompressed:__module.model.gpt_neox.layers.0.attention.query_key_value/aten::linear/MatMul",
-            // "fullyconnectedcompressed:__module.model.gpt_neox.layers.0.mlp.dense_h_to_4h/aten::linear/MatMul",
+            "fullyconnectedcompressed:__module.model.gpt_neox.layers.0.mlp.dense_h_to_4h/aten::linear/MatMul",
             // "fullyconnectedcompressed:__module.model.gpt_neox.layers.0.mlp.dense_4h_to_h/aten::linear/MatMul",
             // "fullyconnectedcompressed:__module.model.gpt_neox.layers.0.attention.dense/aten::linear/MatMul",
             // "fullyconnectedcompressed:__module.model.gpt_neox.layers.1.mlp.dense_h_to_4h/aten::linear/MatMul",
