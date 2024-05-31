@@ -59,6 +59,10 @@ static void CreateFullyConnectedCompressedOp(ProgramBuilder& p, const std::share
 
     if (has_scalar_zp) {
         fc.decompression_zero_point_scalar = zp_value;
+        if (primitive_name == "fullyconnectedcompressed:__module.model.gpt_neox.layers.0.attention.query_key_value/aten::linear/MatMul") {
+            std::cout << "Set zp_value : " << zp_value << std::endl;
+        }
+
     }
 
     p.add_primitive(*op, fc);

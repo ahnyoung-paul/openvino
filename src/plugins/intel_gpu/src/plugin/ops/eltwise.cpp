@@ -92,6 +92,22 @@ void CreateElementwiseOp(ProgramBuilder& p,
                                       out_dt,
                                       op->get_autob(),
                                       pythondiv);
+    if (layerName == "add:__module.model.gpt_neox.layers.0.attention.query_key_value/aten::linear/Add") {
+        std::cout << "eltwise is created " << std::endl;
+        std::cout << " * id: " << eltwisePrim.id << std::endl;
+        std::cout << " * input: " << std::endl;
+        for (auto& in : inputs) {
+            std::cout << " ** " << in.to_string() << std::endl;
+        }
+        std::cout << " * coeff : {";
+        for (auto& c : coefficients) {
+            std::cout << c << ",";
+        }
+        std::cout << "}" << std::endl;
+        std::cout << " * out_dt : " << out_dt << std::endl;
+        std::cout << " * autob : " << op->get_autob().m_axis << ", " << op->get_autob().m_type << std::endl;
+        std::cout << " * pythondiv : " << pythondiv << std::endl;
+    }
 
     p.add_primitive(*op, eltwisePrim);
 }

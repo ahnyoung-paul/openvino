@@ -122,12 +122,22 @@ static void create_data(ProgramBuilder& p, const ov::Shape& const_shape, const s
         p.add_primitive(*op, cldnn::data(initialconstPrimID, mem));
         p.blobMemCache[cache_key] = initialconstPrimID;
         constPrimID = initialconstPrimID;
+
+        if (initialconstPrimID == "constant:Constant_150450_compressed") {
+            std::cout << initialconstPrimID << " is created .." << std::endl;
+        }
     }
 }
 
 static void CreateConstantOp(ProgramBuilder& p, const std::shared_ptr<ov::op::v0::Constant>& op) {
     ov::Shape constDims = op->get_shape();
     auto constUsers = op->get_output_target_inputs(0);
+    cldnn::primitive_id initialconstPrimID = layer_type_name_ID(op);
+    {   
+        if (initialconstPrimID == "constant:Constant_150450_compressed") {
+            std::cout << initialconstPrimID << " is CreateConstantOp .." << std::endl;
+        }
+    }
 
     std::unordered_map<std::shared_ptr<ov::op::v0::Constant>, ConstProperties> consts = {
         {op, {false}}
@@ -183,6 +193,9 @@ static void CreateConstantOp(ProgramBuilder& p, const std::shared_ptr<ov::op::v0
     // Also check if constant users is a backprop convolution - in that case O and I need to be swapped.
     for (auto& node : constUsers) {
         auto outOp = node.get_node();
+        if (initialconstPrimID == "constant:Constant_150450_compressed") {
+            std::cout << "* user " << outOp->get_friendly_name() << std::endl;
+        }
         if (auto castedOp = dynamic_cast<ov::op::v0::Concat*>(outOp)) {
             if (castedOp->get_axis() == 0) {
                 consts[op].needsBatchInterpretation = constDims.size() == 1;
@@ -238,6 +251,7 @@ static void CreateConstantOp(ProgramBuilder& p, const std::shared_ptr<ov::op::v0
             consts[op].needsBatchInterpretation = constDims.size() == 1;
         }
     }
+
 
     for (auto& it : consts) {
         create_data(p, constDims, it.first, it.second);

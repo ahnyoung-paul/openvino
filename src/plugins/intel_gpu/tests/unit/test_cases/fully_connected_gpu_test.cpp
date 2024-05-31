@@ -1343,6 +1343,132 @@ public:
             ASSERT_NEAR(output_ptr_ref[i], output_ptr[i], 9.0) << "i = " << i;
     }
 
+
+// GPU_Debug: primitive_type_base.h:116:calc_output_layouts: fullyconnectedcompressed:__module.model.gpt_neox.layers.0.attention.query_key_value/aten::linear/MatMul input tensor: f16:bfyx:1x4096x6144:nopad
+// GPU_Debug: primitive_type_base.h:116:calc_output_layouts: fullyconnectedcompressed:__module.model.gpt_neox.layers.0.attention.query_key_value/aten::linear/MatMul input tensor: u4:os_is_yx_osv32_isv2:18432x6144:nopad
+// GPU_Debug: primitive_type_base.h:116:calc_output_layouts: fullyconnectedcompressed:__module.model.gpt_neox.layers.0.attention.query_key_value/aten::linear/MatMul input tensor: f16:bfyx:1x1x18432:nopad
+// GPU_Debug: primitive_type_base.h:116:calc_output_layouts: fullyconnectedcompressed:__module.model.gpt_neox.layers.0.attention.query_key_value/aten::linear/MatMul input tensor: f16:fbyx:18432x48:nopad
+// GPU_Debug: primitive_type_base.h:122:calc_output_layouts: fullyconnectedcompressed:__module.model.gpt_neox.layers.0.attention.query_key_value/aten::linear/MatMul output tensor: f16:bfyx:1x4096x18432:nopad
+// GPU_Debug: primitive_inst.cpp:413:operator (): fullyconnectedcompressed:__module.model.gpt_neox.layers.0.attention.query_key_value/aten::linear/MatMul: update shape: was: f16:bfyx:?x?x18432:nopad now: f16:bfyx:1x4096x18432:nopad
+// batch_num: 4096
+// ifm_num: 6144
+// ofm_num: 18432
+// scales_group_size: 128
+// ctor FC[2] : fullyconnectedcompressed:__module.model.gpt_neox.layers.0.attention.query_key_value/aten::linear/MatMul
+// * input: input_info(pid:add:__module.model.gpt_neox.layers.0.input_layernorm/aten::layer_norm/Add,idx:0)
+// * weights : constant:Constant_211333
+// * bias : 
+// * decompression_scale : constant:Constant_211331
+// * decompression_zero_point : 
+// * data_type: f16
+// * input_size : 3
+// * weights_rank : 2
+// Set zp_value : 8
+// constant:Constant_150450_compressed is CreateConstantOp ..
+// * user __module.model.gpt_neox.layers.0.attention.query_key_value/aten::linear/Add
+// constant:Constant_150450_compressed is created ..
+// eltwise is created 
+//  * id: add:__module.model.gpt_neox.layers.0.attention.query_key_value/aten::linear/Add
+//  * input: 
+//  ** input_info(pid:fullyconnectedcompressed:__module.model.gpt_neox.layers.0.attention.query_key_value/aten::linear/MatMul,idx:0)
+//  ** input_info(pid:constant:Constant_150450_compressed,idx:0)
+//  * coeff : {}
+//  * out_dt : f16
+//  * autob : 0, numpy
+//  * pythondiv : 1
+
+    void test_compressed_int4_scale_bias(bool is_caching_test, bool is_dynamic, long int batch_num,
+                                        long int scales_group_size = 128, long int ifm_num = 256, long int ofm_num = 256) {
+        tests::random_generator rg(GET_SUITE_NAME);
+        auto& engine = get_test_engine();
+
+        auto input_mem = engine.allocate_memory({ { 1, batch_num, ifm_num}, data_types::f16, format::bfyx });
+        auto weights_mem = engine.allocate_memory({ {ofm_num, ifm_num}, data_types::u4, format::bfyx });
+        auto bias_mem = engine.allocate_memory({ {1, 1, ofm_num}, data_types::f16, format::bfyx });
+        auto scale_mem = engine.allocate_memory({ {ofm_num, ifm_num / scales_group_size}, data_types::f16, format::bfyx });
+
+        auto input_data = rg.generate_random_1d<ov::float16>(batch_num * ifm_num, -2.0f, 2.0f);
+        set_values(input_mem, input_data);
+
+        auto weigths_data = rg.generate_random_1d<uint8_t>(ofm_num * ifm_num / 2, 0, 10);
+        set_values(weights_mem, weigths_data);
+
+        auto bias_data = rg.generate_random_1d<ov::float16>(ofm_num, -2.0f, 2.0f);
+        set_values(bias_mem, bias_data);
+
+        auto scale_data = rg.generate_random_1d<ov::float16>(ofm_num * ifm_num / scales_group_size, -4.0f, 4.0f);
+        set_values(scale_mem, scale_data);
+
+        auto in_layout = is_dynamic ? layout{ {-1, ifm_num}, data_types::f16, format::bfyx }
+                                    : layout{ {batch_num, ifm_num}, data_types::f16, format::bfyx };
+
+        auto fc_prim = fully_connected("fc_compressed_prim", input_info("input"), "weights", "", "scale", "", data_types::f16, padding(), 3, 2);
+
+        fc_prim.decompression_zero_point_scalar = 8;
+
+        auto get_ref_results = [&]() {
+            topology topology(
+                input_layout("input", in_layout),
+                data("weights", weights_mem),
+                data("bias", bias_mem),
+                data("scale", scale_mem),
+                fc_prim
+            );
+
+            auto config = get_test_default_config(engine);
+            config.set_property(ov::intel_gpu::allow_new_shape_infer(true));
+
+            network network(engine, topology, config);
+            network.set_input_data("input", input_mem);
+
+            auto outputs = network.execute();
+            OPENVINO_ASSERT(outputs.size() == 1);
+            OPENVINO_ASSERT(outputs.begin()->first == "fc_prim");
+
+            auto output_layout = outputs.begin()->second.get_layout();
+            auto output_mem = outputs.begin()->second.get_memory();
+
+            return engine.reinterpret_buffer(*output_mem, output_layout);
+        };
+
+        topology topology(
+            input_layout("input", in_layout),
+            data("weights", weights_mem),
+            data("bias", bias_mem),
+            data("scale", scale_mem),
+            fc_prim
+        );
+
+        auto config = get_test_default_config(engine);
+        config.set_property(ov::intel_gpu::allow_new_shape_infer(true));
+        config.set_property(ov::intel_gpu::optimize_data(true));
+
+        network::ptr network = get_network(engine, topology, config, get_test_stream_ptr(), is_caching_test);
+
+        // Impl is selected only when it is running from cldnn
+        if (is_dynamic && !engine.get_device_info().supports_immad) {
+            auto inst = network->get_primitive("fc_prim");
+            auto impl = inst->get_impl();
+            ASSERT_TRUE(impl != NULL);
+            ASSERT_EQ(impl->get_kernels().size(), 2);
+        }
+
+        network->set_input_data("input", input_mem);
+
+        auto outputs = network->execute();
+        ASSERT_EQ(outputs.size(), size_t(1));
+        ASSERT_EQ(outputs.begin()->first, "fc_prim");
+
+        auto output_mem = outputs.begin()->second.get_memory();
+        cldnn::mem_lock<ov::float16> output_ptr (output_mem, get_test_stream());
+
+        auto ref_output_mem = get_ref_results();
+        cldnn::mem_lock<ov::float16> output_ptr_ref (ref_output_mem, get_test_stream());
+
+        for (size_t i = 0; i < output_ptr_ref.size(); i++)
+            ASSERT_NEAR(output_ptr_ref[i], output_ptr[i], 9.0) << "i = " << i;
+    }
+
     void test_compressed_int8_scale_zp_bias(bool is_caching_test) {
         auto& engine = get_test_engine();
 

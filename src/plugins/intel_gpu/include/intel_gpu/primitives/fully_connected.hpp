@@ -53,7 +53,16 @@ struct fully_connected : public primitive_base<fully_connected> {
           bias(bias),
           input_size(input_size),
           weights_rank(weights_rank)
-    {}
+    {
+        if (id == "fullyconnectedcompressed:__module.model.gpt_neox.layers.0.attention.query_key_value/aten::linear/MatMul") {
+            std::cout << "ctor FC[0] : " << id << std::endl;
+            std::cout << "* input: " << input.to_string() << std::endl;
+            std::cout << "* weights : " << weights << std::endl;
+            std::cout << "* bias : " << bias << std::endl;
+            std::cout << "* input_size : " << input_size << std::endl;
+            std::cout << "* weights_rank : " << weights_rank << std::endl;
+        }
+    }
 
     /// @brief Constructs fully connected layer.
     /// @param id This primitive id.
@@ -73,7 +82,17 @@ struct fully_connected : public primitive_base<fully_connected> {
           bias(bias),
           input_size(input_size),
           weights_rank(weights_rank)
-    {}
+    {
+        if (id == "fullyconnectedcompressed:__module.model.gpt_neox.layers.0.attention.query_key_value/aten::linear/MatMul") {
+            std::cout << "ctor FC[1] : " << id << std::endl;
+            std::cout << "* input: " << input.to_string() << std::endl;
+            std::cout << "* weights : " << weights << std::endl;
+            std::cout << "* bias : " << bias << std::endl;
+            std::cout << "* data_type: " << data_type << std::endl;
+            std::cout << "* input_size : " << input_size << std::endl;
+            std::cout << "* weights_rank : " << weights_rank << std::endl;
+        }
+    }
 
     /// @brief Constructs fully connected compressed layer.
     /// @param id This primitive id.
@@ -101,6 +120,17 @@ struct fully_connected : public primitive_base<fully_connected> {
           input_size(input_size),
           weights_rank(weights_rank) {
         OPENVINO_ASSERT(!decompression_scale.empty(), "[GPU] Compressed fully connected requires at least decompression scale input");
+        if (id == "fullyconnectedcompressed:__module.model.gpt_neox.layers.0.attention.query_key_value/aten::linear/MatMul") {
+            std::cout << "ctor FC[2] : " << id << std::endl;
+            std::cout << "* input: " << input.to_string() << std::endl;
+            std::cout << "* weights : " << weights << std::endl;
+            std::cout << "* bias : " << bias << std::endl;
+            std::cout << "* decompression_scale : " << decompression_scale << std::endl;
+            std::cout << "* decompression_zero_point : " << decompression_zero_point << std::endl;
+            std::cout << "* data_type: " << data_type << std::endl;
+            std::cout << "* input_size : " << input_size << std::endl;
+            std::cout << "* weights_rank : " << weights_rank << std::endl;
+        }
     }
 
     /// @brief Primitive id containing weights data.

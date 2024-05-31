@@ -1123,6 +1123,19 @@ void network::execute_impl(const std::vector<event::ptr>& events) {
         executed_prims++;
         if (needs_flushing && executed_prims % flush_frequency == 0)
             get_stream().flush();
+        
+        if (inst->id() == "fullyconnectedcompressed:__module.model.gpt_neox.layers.0.attention.query_key_value/aten::linear/MatMul") {
+            std::cout << " " << std::endl;
+            std::cout << " * iter: " << curr_iter << std::endl;
+            std::cout << " * deps: " << inst->dependencies().size() << std::endl;
+            for (auto& in : inst->dependencies()) {
+                std::cout << " - " << in.first->id() << std::endl;
+            }
+            std::cout << "desc: " << inst->get_node().get_fused_primitives().size() << std::endl;
+            for (auto& desc : inst->get_node().get_fused_primitives()) {
+                std::cout << "* desc: " << desc.desc->id << std::endl;
+            }
+        }
 
         // Dump output buffers of 'inst'
         GPU_DEBUG_IF(debug_config->dump_layers_path.length() > 0) {
