@@ -1376,16 +1376,25 @@ public:
 //  * out_dt : f16
 //  * autob : 0, numpy
 //  * pythondiv : 1
+// primitive_type_base.h:122:calc_output_layouts: multiply:__module.model.gpt_neox.layers.0.input_layernorm/aten::layer_norm/Multiply output tensor: f16:bfyx:1x4096x6144:nopad
+// constant.cpp:114:create_data: [constant:Constant_211331: constant] layout: f16:bfyx:18432x48:nopad, mem_ptr(000002116CCD5B10, 1769472 bytes)
+// constant.cpp:114:create_data: [constant:Constant_211333: constant] layout: u4:bfyx:18432x6144:nopad, mem_ptr(000002116CCCDD10, 56623104 bytes)
+// constant.cpp:114:create_data: [constant:Constant_150450_compressed: constant] layout: f16:bfyx:1x1x18432:nopad, mem_ptr(000002116CCD6050, 36864 bytes)
 
+    // test_compressed_int4_scale_bias(false, true, 4096, 128, 6144, 18432);
     void test_compressed_int4_scale_bias(bool is_caching_test, bool is_dynamic, long int batch_num,
                                         long int scales_group_size = 128, long int ifm_num = 256, long int ofm_num = 256) {
         tests::random_generator rg(GET_SUITE_NAME);
         auto& engine = get_test_engine();
 
-        auto input_mem = engine.allocate_memory({ { 1, batch_num, ifm_num}, data_types::f16, format::bfyx });
-        auto weights_mem = engine.allocate_memory({ {ofm_num, ifm_num}, data_types::u4, format::bfyx });
-        auto bias_mem = engine.allocate_memory({ {1, 1, ofm_num}, data_types::f16, format::bfyx });
-        auto scale_mem = engine.allocate_memory({ {ofm_num, ifm_num / scales_group_size}, data_types::f16, format::bfyx });
+        // batch_num: 4096
+        // ifm_num: 6144
+        // ofm_num: 18432
+        // scales_group_size: 128
+        auto input_mem = engine.allocate_memory({ { 1, batch_num, ifm_num}, data_types::f16, format::bfyx });               // 1 x 4066 x 6144
+        auto weights_mem = engine.allocate_memory({ {ofm_num, ifm_num}, data_types::u4, format::bfyx });                    // 18432 x 6144
+        auto scale_mem = engine.allocate_memory({ {ofm_num, ifm_num / scales_group_size}, data_types::f16, format::bfyx }); // 18432 x (6144 / 128)
+        auto sum_mem = engine.allocate_memory({ {1, 1, ofm_num}, data_types::f16, format::bfyx });                          // 1 x 1 x 18432
 
         auto input_data = rg.generate_random_1d<ov::float16>(batch_num * ifm_num, -2.0f, 2.0f);
         set_values(input_mem, input_data);
@@ -1393,8 +1402,8 @@ public:
         auto weigths_data = rg.generate_random_1d<uint8_t>(ofm_num * ifm_num / 2, 0, 10);
         set_values(weights_mem, weigths_data);
 
-        auto bias_data = rg.generate_random_1d<ov::float16>(ofm_num, -2.0f, 2.0f);
-        set_values(bias_mem, bias_data);
+        auto sum_data = rg.generate_random_1d<ov::float16>(ofm_num, -2.0f, 2.0f);
+        set_values(sum_mem, sum_data);
 
         auto scale_data = rg.generate_random_1d<ov::float16>(ofm_num * ifm_num / scales_group_size, -4.0f, 4.0f);
         set_values(scale_mem, scale_data);
@@ -1402,7 +1411,21 @@ public:
         auto in_layout = is_dynamic ? layout{ {-1, ifm_num}, data_types::f16, format::bfyx }
                                     : layout{ {batch_num, ifm_num}, data_types::f16, format::bfyx };
 
-        auto fc_prim = fully_connected("fc_compressed_prim", input_info("input"), "weights", "", "scale", "", data_types::f16, padding(), 3, 2);
+        auto fc_prim    = fully_connected("fc_compressed_prim", input_info("input"), "weights", "", "scale", "", data_types::f16, padding(), 3, 2);
+// eltwise is created 
+//  * id: add:__module.model.gpt_neox.layers.0.attention.query_key_value/aten::linear/Add
+//  * input: 
+//  ** input_info(pid:fullyconnectedcompressed:__module.model.gpt_neox.layers.0.attention.query_key_value/aten::linear/MatMul,idx:0)
+//  ** input_info(pid:constant:Constant_150450_compressed,idx:0)
+//  * coeff : {}
+//  * out_dt : f16
+//  * autob : 0, numpy
+//  * pythondiv : 1
+        auto add_prim   = eltwise("add_prim",
+                            {input_info("fc_compressed_prim"), input_info("sum_data")},
+                            eltwise_mode::sum, {},
+                            cldnn::data_types::f16,
+                            ov::op::AutoBroadcastSpec(ov::op::AutoBroadcastType::NUMPY), true);
 
         fc_prim.decompression_zero_point_scalar = 8;
 
@@ -1410,9 +1433,10 @@ public:
             topology topology(
                 input_layout("input", in_layout),
                 data("weights", weights_mem),
-                data("bias", bias_mem),
+                data("sum_data", sum_mem),
                 data("scale", scale_mem),
-                fc_prim
+                fc_prim,
+                add_prim
             );
 
             auto config = get_test_default_config(engine);
@@ -1434,9 +1458,10 @@ public:
         topology topology(
             input_layout("input", in_layout),
             data("weights", weights_mem),
-            data("bias", bias_mem),
+            data("sum_data", sum_mem),
             data("scale", scale_mem),
-            fc_prim
+            fc_prim,
+            add_prim
         );
 
         auto config = get_test_default_config(engine);
@@ -3241,6 +3266,10 @@ TEST_F(fully_connected_gpu_tests, compressed_int4_scale_b1g64) {
 
 TEST_F(fully_connected_gpu_tests, compressed_int4_scale_b1g128) {
     this->test_compressed_int4_scale(false, false, 1, 128);
+}
+
+TEST_F(fully_connected_gpu_tests, compressed_int4_scale_bias) {
+    this->test_compressed_int4_scale_bias(false, true, 4096, 128, 6144, 18432);
 }
 
 TEST_F(fully_connected_gpu_tests, compressed_scale_bias) {
