@@ -1412,6 +1412,7 @@ public:
                                     : layout{ {batch_num, ifm_num}, data_types::f16, format::bfyx };
 
         auto fc_prim    = fully_connected("fc_compressed_prim", input_info("input"), "weights", "", "scale", "", data_types::f16, padding(), 3, 2);
+        fc_prim.decompression_zero_point_scalar = 8;
 // eltwise is created 
 //  * id: add:__module.model.gpt_neox.layers.0.attention.query_key_value/aten::linear/Add
 //  * input: 
@@ -1426,8 +1427,7 @@ public:
                             eltwise_mode::sum, {},
                             cldnn::data_types::f16,
                             ov::op::AutoBroadcastSpec(ov::op::AutoBroadcastType::NUMPY), true);
-
-        fc_prim.decompression_zero_point_scalar = 8;
+        auto reorder_prim = reorder("reorder_prim", input_info("add_prim"), format::bfyx, data_types::f16);
 
         auto get_ref_results = [&]() {
             topology topology(
@@ -1436,7 +1436,8 @@ public:
                 data("sum_data", sum_mem),
                 data("scale", scale_mem),
                 fc_prim,
-                add_prim
+                add_prim,
+                reorder_prim
             );
 
             auto config = get_test_default_config(engine);
@@ -1447,7 +1448,7 @@ public:
 
             auto outputs = network.execute();
             OPENVINO_ASSERT(outputs.size() == 1);
-            OPENVINO_ASSERT(outputs.begin()->first == "fc_prim");
+            OPENVINO_ASSERT(outputs.begin()->first == "reorder_prim");
 
             auto output_layout = outputs.begin()->second.get_layout();
             auto output_mem = outputs.begin()->second.get_memory();
@@ -1461,7 +1462,8 @@ public:
             data("sum_data", sum_mem),
             data("scale", scale_mem),
             fc_prim,
-            add_prim
+            add_prim,
+            reorder_prim
         );
 
         auto config = get_test_default_config(engine);
@@ -1472,17 +1474,18 @@ public:
 
         // Impl is selected only when it is running from cldnn
         if (is_dynamic && !engine.get_device_info().supports_immad) {
-            auto inst = network->get_primitive("fc_prim");
+            auto inst = network->get_primitive("fc_compressed_prim");
             auto impl = inst->get_impl();
             ASSERT_TRUE(impl != NULL);
-            ASSERT_EQ(impl->get_kernels().size(), 2);
+            ASSERT_EQ(impl->get_kernels().size(), 1);
         }
 
         network->set_input_data("input", input_mem);
 
         auto outputs = network->execute();
+        std::cout << "outputs.begin()->first : " << outputs.begin()->first << std::endl;
         ASSERT_EQ(outputs.size(), size_t(1));
-        ASSERT_EQ(outputs.begin()->first, "fc_prim");
+        ASSERT_EQ(outputs.begin()->first, "reorder_prim");
 
         auto output_mem = outputs.begin()->second.get_memory();
         cldnn::mem_lock<ov::float16> output_ptr (output_mem, get_test_stream());
