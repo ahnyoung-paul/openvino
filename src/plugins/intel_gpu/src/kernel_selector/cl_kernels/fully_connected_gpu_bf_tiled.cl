@@ -179,6 +179,23 @@ inline void FUNC(fc_bf_tiled_kernel_default)(
     uint out_b = ((batch_mega_block * DISPATCH_BSV + batch_mini_block) * TILE_B);
 #endif
 
+#if IS_DYNAMIC
+    if (get_global_id(0) == 0 && get_global_id(1) == 0 && get_global_id(2) == 0
+        && shape_info[1] == 4096 && shape_info[6] == 6144 && shape_info[14] == 18432) {
+        printf("get_global_size global_size[%d,%d,%d] local_size[%d,%d,%d] group_size[%d,%d,%d] \n",
+            get_global_size(0), get_global_size(1), get_global_size(2),
+            get_local_size(0), get_local_size(1), get_local_size(2),
+            get_num_groups(0), get_num_groups(1), get_num_groups(2));
+        printf("get_sub_group_size : %d\n", get_sub_group_size());
+        printf("get_num_sub_groups : %d\n", get_num_sub_groups());
+#if DECOMPRESSION_SCALE_POST_OP
+        printf("DECOMPRESSION_SCALE_POST_OP is on \n");
+#else
+        printf("DECOMPRESSION_SCALE_POST_OP is off \n");
+#endif
+    }
+#endif
+
     ACCUMULATOR_VEC_TYPE acc[TILE_B] = { };
     INPUT_VEC_TYPE       in_0[TILE_B] = { };
 
