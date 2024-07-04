@@ -190,7 +190,7 @@ public:
 #define CASE_FC_FP16_3D_2 { 1, 1, 3 }, { 1, 1, 32 }, { 32, 3, 1 }, data_types::f16, format::bfyx, data_types::f16, format::oiyx, data_types::f32, format::bfyx
 
 #define CASE_FC_FP16_INT4_COMP_1 { 1, 128 }, { 1, 128 }, { 128, 128 }, data_types::f16, format::bfyx, data_types::u4, format::oiyx, data_types::f16, format::bfyx
-#define CASE_FC_FP16_INT4_COMP_3D_1 { 1, 32, 3072 }, { 1, 32, 3072 }, { 24576, 128 }, data_types::f16, format::bfyx, data_types::u4, format::oiyx, data_types::f16, format::bfyx
+#define CASE_FC_FP16_INT4_COMP_3D_1 { 1, 16, 512 }, { 1, 16, 1024 }, { 1024, 512 }, data_types::f16, format::bfyx, data_types::u4, format::oiyx, data_types::f16, format::bfyx
 
 /* ----------------------------------------------------------------------------------------------------- */
 /* ---------------------------------------- FC cases --------------------------------------------------- */
@@ -595,8 +595,36 @@ INSTANTIATE_TEST_SUITE_P(fusings_gpu, fc_fp16_eltwise_add_dynamic, ::testing::Va
     fully_connected_test_params{ CASE_FC_FP16_4, 2, 3 }
 }));
 
-class fc_compressed_int4_eltwise_dynamic : public FullyConnectedFusingTestOneDNN {};
-TEST_P(fc_compressed_int4_eltwise_dynamic, basic) {
+class fc_compressed_int4_eltwise_onednn_dynamic : public FullyConnectedFusingTestOneDNN {
+public:
+    void execute(fully_connected_test_params& p, bool is_caching_test = false, bool is_dynamic = false) {
+        // Onednn post operation has issue in a machine that does not support imad.
+        if (!engine.get_device_info().supports_immad)
+            return;
+
+        auto input_prim = p.data_type == data_types::u8 ? get_mem(get_input_layout(p), 0, 10) : get_mem(get_input_layout(p));
+
+        auto impl_forcing = cfg_fused.get_property(ov::intel_gpu::force_implementations);
+        auto forcing_format = p.input_format;
+        for (auto& forcing : impl_forcing)
+            if (forcing.first == "fc1" || forcing.first == "fc2")
+                forcing_format = forcing.second.output_format;
+
+        ov::intel_gpu::ImplementationDesc fc_impl = { forcing_format, "", impl_types::onednn };
+        cfg_fused.set_property(ov::intel_gpu::force_implementations(ov::intel_gpu::ImplForcingMap{ { "fc1", fc_impl } }));
+        cfg_fused.set_property(ov::intel_gpu::force_implementations(ov::intel_gpu::ImplForcingMap{ { "fc2", fc_impl } }));
+        cfg_fused.set_property(ov::intel_gpu::allow_new_shape_infer(is_dynamic));
+
+        network::ptr network_not_fused = get_network(this->engine, this->topology_non_fused, cfg_not_fused, get_test_stream_ptr(cfg_not_fused), is_caching_test);
+        network::ptr network_fused = get_network(this->engine, this->topology_fused, cfg_fused, get_test_stream_ptr(cfg_fused), is_caching_test);
+        network_fused->set_input_data("input", input_prim);
+        network_not_fused->set_input_data("input", input_prim);
+
+        compare(*network_not_fused, *network_fused, p);
+    }
+};
+
+TEST_P(fc_compressed_int4_eltwise_onednn_dynamic, basic) {
     auto p = GetParam();
     auto test_input_layout = get_input_layout(p);
     auto dynamic_input_layout = layout{ov::PartialShape::dynamic(test_input_layout.get_partial_shape().size()), test_input_layout.data_type, test_input_layout.format};
@@ -607,20 +635,20 @@ TEST_P(fc_compressed_int4_eltwise_dynamic, basic) {
     const size_t input_size = test_input_layout.get_partial_shape().size();
     const size_t weights_rank = weight_layout.get_partial_shape().size();
     create_topologies(
-        input_layout("input0", dynamic_input_layout),
-        input_layout("input1", dynamic_input_layout),
+        input_layout("input", dynamic_input_layout),
+        data("data_addition", get_mem(test_input_layout)),
         data("data_gamma_rms", get_mem(get_bias_layout(p))),
         data("data_weights_fc1", get_mem(get_weights_layout(p))),
         data("data_weights_fc2", get_mem(get_weights_layout(p))),
         data("data_decomp_fc1", get_mem(get_scale_layout(p, 128))),
         data("data_decomp_fc2", get_mem(get_scale_layout(p, 128))),
         data("eltwise_data", get_mem(get_per_channel_layout(p), 1, 9)),
-        eltwise("add", { input_info("input0"), input_info("input1") }, eltwise_mode::sum),
+        eltwise("add", { input_info("input"), input_info("data_addition") }, eltwise_mode::sum),
         rms("rms", input_info("add"), input_info("data_gamma_rms"), epsilon),
         fully_connected("fc1", input_info("rms"), "data_weights_fc1", empty_id, "data_decomp_fc1", empty_id, test_input_layout.data_type, padding(), input_size, weights_rank),
         fully_connected("fc2", input_info("rms"), "data_weights_fc2", empty_id, "data_decomp_fc2", empty_id, test_input_layout.data_type, padding(), input_size, weights_rank),
         activation("act", input_info("fc2"), empty_id, activation_func::gelu_tanh),
-        eltwise("mul", { input_info("fc_prim"), input_info("eltwise_data") }, eltwise_mode::prod),
+        eltwise("mul", { input_info("fc1"), input_info("act") }, eltwise_mode::prod),
         reorder("reorder_bfyx", input_info("mul"), p.default_format, data_types::f32)
     );
 
@@ -630,7 +658,7 @@ TEST_P(fc_compressed_int4_eltwise_dynamic, basic) {
     execute(p, false, is_dynamic);
 }
 
-INSTANTIATE_TEST_SUITE_P(fusings_gpu, fc_fp16_eltwise_add_dynamic, ::testing::ValuesIn(std::vector<fully_connected_test_params>{
+INSTANTIATE_TEST_SUITE_P(fusings_gpu, fc_compressed_int4_eltwise_onednn_dynamic, ::testing::ValuesIn(std::vector<fully_connected_test_params>{
     fully_connected_test_params{ CASE_FC_FP16_INT4_COMP_3D_1, 6, 7 },
 }));
 
