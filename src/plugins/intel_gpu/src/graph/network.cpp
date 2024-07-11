@@ -1131,6 +1131,9 @@ void network::execute_impl(const std::vector<event::ptr>& events) {
                                 // for (size_t i = 0; i < 6144; i++) {
                                 //     dst_ptr[28 * 6144 + i] = ov::float16(1.0f);
                                 // }
+                                for (size_t i = 0; i < size; i++) {
+                                    dst_ptr[i] = ov::float16(1.0f);
+                                }
                                 ov::util::save_binary(filename, reinterpret_cast<char*>(dst_ptr.get()), input_mem->size());
                                 GPU_DEBUG_COUT  << " Dump layer src : " << layer_name << " to " << filename << std::endl;
                                 debug_str_for_bin_load += (filename + ",");
@@ -1162,9 +1165,10 @@ void network::execute_impl(const std::vector<event::ptr>& events) {
                                 //     static_cast<uint8_t>(0xFF)
                                 // };
                                 std::unique_ptr<uint8_t[]> dst_ptr(new uint8_t[size]{static_cast<uint8_t>(0x11)});
-                                // for (size_t i = 0; i < size; i++) {
-                                //     dst_ptr[i] = static_cast<uint8_t>(static_cast<uint8_t>(i / 20) % 16);
-                                // }
+                                for (size_t i = 0; i < size; i++) {
+                                    dst_ptr[i] = static_cast<uint8_t>(static_cast<uint8_t>(0x11));
+                                    // dst_ptr[i] = static_cast<uint8_t>(static_cast<uint8_t>(i / 20) % 16);
+                                }
                                 // for (size_t i = 0; i < 3072; i++) {
                                 //     dst_ptr[18 * 18432 + i] = static_cast<uint8_t>(i % 256); // Test 03
                                 //     // dst_ptr[18 * 18432 + i] = weights[i % 15]; // Test 02
@@ -1184,9 +1188,9 @@ void network::execute_impl(const std::vector<event::ptr>& events) {
                                 auto src_ptr = lock.data();
                                 std::unique_ptr<ov::float16[]> dst_ptr(new ov::float16[size]{0});
                                 // dst_ptr[20] = ov::float16(1.0f);
-                                for (size_t i = 0; i < size; i++) {
-                                    dst_ptr[i] = static_cast<ov::float16>(i);
-                                }
+                                // for (size_t i = 0; i < size; i++) {
+                                //     dst_ptr[i] = static_cast<ov::float16>(i);
+                                // }
                                 ov::util::save_binary(filename, reinterpret_cast<char*>(dst_ptr.get()), input_mem->size());
                                 GPU_DEBUG_COUT  << " Dump layer src : " << layer_name << " to " << filename << std::endl;
                                 debug_str_for_bin_load += (filename + ",");
@@ -1201,6 +1205,10 @@ void network::execute_impl(const std::vector<event::ptr>& events) {
                                 const auto size = input_mem->count();
                                 auto src_ptr = lock.data();
                                 std::unique_ptr<ov::float16[]> dst_ptr(new ov::float16[size]{1});
+                                for (size_t i = 0; i < size; i++) {
+                                    // dst_ptr[i] = ov::float16(0.000001 * i);
+                                    dst_ptr[i] = ov::float16(1.0f);
+                                }
                                 ov::util::save_binary(filename, reinterpret_cast<char*>(dst_ptr.get()), input_mem->size());
                                 GPU_DEBUG_COUT  << " Dump layer src : " << layer_name << " to " << filename << std::endl;
                                 debug_str_for_bin_load += (filename + ",");
@@ -1226,17 +1234,7 @@ void network::execute_impl(const std::vector<event::ptr>& events) {
                     debug_str_for_bin_load[debug_str_for_bin_load.size()-1] = '\"';
                     GPU_DEBUG_COUT << debug_str_for_bin_load << std::endl;;
                 }
-                // {
-                //     uint8_t sample = 0x11;
-                //     int8_t v0 = 3;
-                //     int8_t v1 = 5;
-                //     unpack(data_types::u4, sample, v0, v1);
-                //     std::cout << "unpack result : v0 " << static_cast<int>(v0) << ", v1 " << static_cast<int>(v1) << std::endl;
-                // }
-                std::cout << "Stop to run for generating dummy data" << std::endl;
-                exit(0);
             }
-
         }
 
         execute_primitive(inst, events);
@@ -1245,42 +1243,65 @@ void network::execute_impl(const std::vector<event::ptr>& events) {
             get_stream().flush();
 
         // Dump output buffers of 'inst'
-        // GPU_DEBUG_IF(debug_config->dump_layers_path.length() > 0) {
-        //     get_stream().finish();
-        //     const std::string layer_name = inst->id();
-        //     auto prog_id = ((get_program() != nullptr) ? get_program()->get_id() : 0);
-        //     auto net_id = get_id();
-        //     GPU_DEBUG_IF(debug_config->is_target_iteration(curr_iter) &&
-        //                 debug_config->is_layer_for_dumping(layer_name, inst->is_output(), inst->is_input())) {
-        //         std::string debug_str_for_bin_load = " Command for loading : OV_GPU_LoadDumpRawBinary=\""
-        //                                                 + layer_name + ":";
-        //         for (size_t i = 0; i < get_primitive(layer_name)->outputs_memory_count(); i++) {
-        //             std::string name = "program" + std::to_string(prog_id) +
-        //                                 "_network" + std::to_string(net_id) +
-        //                                 "_" + get_iteration_prefix(curr_iter) +
-        //                                 layer_name + "_dst" + std::to_string(i);
-        //             auto output_mem = get_primitive(layer_name)->output_memory_ptr(i);
-        //             GPU_DEBUG_IF(debug_config->dump_layers_binary) {
-        //                 // Binary dump : raw
-        //                 auto output_layout = inst->get_output_layout(i);
-        //                 auto filename = get_file_path_for_binary_dump(output_layout, name);
+        GPU_DEBUG_IF(debug_config->dump_layers_path.length() > 0) {
+            get_stream().finish();
+            const std::string layer_name = inst->id();
+            auto prog_id = ((get_program() != nullptr) ? get_program()->get_id() : 0);
+            auto net_id = get_id();
+            GPU_DEBUG_IF(debug_config->is_target_iteration(curr_iter) &&
+                        debug_config->is_layer_for_dumping(layer_name, inst->is_output(), inst->is_input())) {
+                std::string debug_str_for_bin_load = " Command for loading : OV_GPU_LoadDumpRawBinary=\""
+                                                        + layer_name + ":";
+                for (size_t i = 0; i < get_primitive(layer_name)->outputs_memory_count(); i++) {
+                    std::string name = "program" + std::to_string(prog_id) +
+                                        "_network" + std::to_string(net_id) +
+                                        "_" + get_iteration_prefix(curr_iter) +
+                                        layer_name + "_dst" + std::to_string(i);
+                    auto output_mem = get_primitive(layer_name)->output_memory_ptr(i);
+                    GPU_DEBUG_IF(debug_config->dump_layers_binary) {
+                        // Binary dump : raw
+                        auto output_layout = inst->get_output_layout(i);
+                        auto filename = get_file_path_for_binary_dump(output_layout, name);
 
-        //                 mem_lock<char, mem_lock_type::read> lock(output_mem, get_stream());
-        //                 ov::util::save_binary(filename, lock.data(), output_mem->size());
-        //                 GPU_DEBUG_COUT  << " Dump layer dst : " << layer_name << " to " << filename << std::endl;
-        //                 debug_str_for_bin_load += (filename + ",");
-        //             } else {
-        //                 // Text dump
-        //                 log_memory_to_file(output_mem, inst->get_output_layout(i), get_stream(), name, debug_config->dump_layers_raw);
-        //             }
-        //         }
+                        mem_lock<char, mem_lock_type::read> lock(output_mem, get_stream());
+                        ov::util::save_binary(filename, lock.data(), output_mem->size());
+                        GPU_DEBUG_COUT  << " Dump layer dst : " << layer_name << " to " << filename << std::endl;
+                        debug_str_for_bin_load += (filename + ",");
+                    } else {
+                        // Text dump
+                        {
+                            mem_lock<ov::float16, mem_lock_type::read> lock(output_mem, get_stream());
+                            auto mem_ptr = lock.data();
+                            std::cout << "output[" << name << "] : " << static_cast<float>(mem_ptr[0]) 
+                                        << ", " << static_cast<float>(mem_ptr[1]) 
+                                        << ", " << static_cast<float>(mem_ptr[2]) << std::endl; 
+                        }
+                        log_memory_to_file(output_mem, inst->get_output_layout(i), get_stream(), name, debug_config->dump_layers_raw);
+                    }
+                }
 
-        //         GPU_DEBUG_IF(debug_config->dump_layers_binary && inst->is_input()) {
-        //             debug_str_for_bin_load[debug_str_for_bin_load.size()-1] = '\"';
-        //             GPU_DEBUG_COUT << debug_str_for_bin_load << std::endl;;
-        //         }
-        //     }
-        // }
+                GPU_DEBUG_IF(debug_config->dump_layers_binary && inst->is_input()) {
+                    debug_str_for_bin_load[debug_str_for_bin_load.size()-1] = '\"';
+                    GPU_DEBUG_COUT << debug_str_for_bin_load << std::endl;;
+                }
+                {
+                    bool use_slm_for_fc = true;
+                    if (const auto env_var = std::getenv("DISABLE_FC_SLM")) {
+                        auto val = std::atoi(env_var);
+                        if (val != 0) {
+                            use_slm_for_fc = false;
+                        }
+                    }
+                    if (use_slm_for_fc) {
+                        std::cout << "======= USE_SLM=ON for FC" << std::endl;
+                    } else {
+                        std::cout << "======= USE_SLM=OFF for FC" << std::endl;
+                    }
+                }
+                std::cout << "Stop to run for debugging" << std::endl;
+                exit(0);
+            }
+        }
     }
 
     // print '-data_shape' option for benchmark_app
