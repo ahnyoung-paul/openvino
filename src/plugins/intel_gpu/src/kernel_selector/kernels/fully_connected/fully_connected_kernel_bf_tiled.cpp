@@ -398,6 +398,16 @@ FullyConnected_bf_tiled::SetDefault(const fully_connected_params& params, int au
     auto kernel_type = KernelType::ANY;
     if (params.is_shape_agnostic)
         kernel_type = kernel_number == 0 ? KernelType::DEFAULT : KernelType::SLM;
+    // KernelType::DEFAULT
+    bool is_disable_slm = false;
+    if (const auto env_var = std::getenv("DISABLE_FC_SLM")) {
+        auto val = std::atoi(env_var);
+        if (val != 0) {
+            is_disable_slm = true;
+        }
+    }
+    if (is_disable_slm)
+        kernel_type = KernelType::DEFAULT;
 
     auto tparams = GetAutoTuneParams(params, kernel_type, autoTuneIndex);
 
@@ -407,7 +417,7 @@ FullyConnected_bf_tiled::SetDefault(const fully_connected_params& params, int au
 
     const size_t lws_batches = 8;
     const size_t aligned_batch = Align(batch_threads, lws_batches); // Each WG calculates 8x8 batches (TILE_B x LWS[2] size)
-    const bool can_use_slm = tparams.kernel_type == KernelType::SLM;
+    bool can_use_slm = tparams.kernel_type == KernelType::SLM;
 
     dispatchData.gws[0] = can_use_slm ? feature_threads * simd
                                       : feature_threads * batch_threads * simd;
@@ -455,7 +465,7 @@ JitConstants FullyConnected_bf_tiled::GetJitConstants(const fully_connected_para
         jit.Merge(make_int4_packed_type_jit_constant("INT4_PACKED_TYPE", weights_dt, tile_k_ofm));
         const size_t scale_group_size = params.weights.IFM().v / params.decompression_scale.Feature().v;
         // Do not use SCALE_POST_OP for SLM kernel, since it demonstrates worse performance
-        if (scale_group_size % simd == 0 && !dispatchData.use_slm)
+        if (scale_group_size % simd == 0 /*&& !dispatchData.use_slm */)
             jit.AddConstant(MakeJitConstant("DECOMPRESSION_SCALE_POST_OP", 1));
     }
     if (params.weights.GetLayout() == WeightsLayout::os_is_yx_osv32_isv2)

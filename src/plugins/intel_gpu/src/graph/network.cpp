@@ -1276,7 +1276,20 @@ void network::execute_impl(const std::vector<event::ptr>& events) {
                                         << ", " << static_cast<float>(mem_ptr[1]) 
                                         << ", " << static_cast<float>(mem_ptr[2]) << std::endl; 
                         }
-                        log_memory_to_file(output_mem, inst->get_output_layout(i), get_stream(), name, debug_config->dump_layers_raw);
+                        bool pass_dump = false;
+                        if (const auto env_var = std::getenv("PASS_DUMP")) {
+                            std::cout << "PASS_DUMP=" << std::string(env_var) << std::endl;
+                            auto val = std::atoi(env_var);
+                            if (val != 0) {
+                                pass_dump = true;
+                            }
+                        }
+                        std::cout << "PASS_DUMP=" << pass_dump << std::endl;
+                        if (!pass_dump) {
+                            log_memory_to_file(output_mem, inst->get_output_layout(i), get_stream(), name, debug_config->dump_layers_raw);
+                        } else {
+                            std::cout << "pass dump for testing ..." << std::endl;
+                        }
                     }
                 }
 

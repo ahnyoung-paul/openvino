@@ -215,6 +215,15 @@ inline void FUNC(fc_bf_tiled_kernel_default)(
     uint out_b = ((batch_mega_block * DISPATCH_BSV + batch_mini_block) * TILE_B);
 #endif
 
+#if USE_SLM
+    bool slm_used = true;
+#else
+    bool slm_used = false;
+#endif
+    OUTPUT_TYPE debug_val = 0;
+
+    uint acc_count[TILE_B][TILE_OFM] = { };
+
     ACCUMULATOR_VEC_TYPE acc[TILE_B] = { };
     INPUT_VEC_TYPE       in_0[TILE_B] = { };
 
@@ -222,7 +231,7 @@ inline void FUNC(fc_bf_tiled_kernel_default)(
     FILTER_VEC_TYPE wei = 0;
 #endif
 
-
+    uint calc_count = 0;
 #if OUTPUT_3D
     uint out_b0 = out_b / OUTPUT_FEATURE_NUM;
     uint out_b1 = out_b % OUTPUT_FEATURE_NUM;
@@ -230,6 +239,7 @@ inline void FUNC(fc_bf_tiled_kernel_default)(
 #else
     uint input_offset = out_b * TILE_IN_B_PITCH + INPUT0_OFFSET;
 #endif
+    uint output_offset = out_f * TILE_OUT_F_PITCH + out_b * TILE_OUT_B_PITCH + OUTPUT_OFFSET;
 
 #if COMPRESSED_WEIGHTS_INT4
     #if TILE_OFM == 1 && FILTER_LAYOUT_OS_IS_YX_OSV32_ISV2
@@ -299,6 +309,12 @@ inline void FUNC(fc_bf_tiled_kernel_default)(
         input_offset += 1;
     }
 #endif
+    #if DECOMPRESSION_SCALE_POST_OP
+        const bool scale_post_op = true;
+    #else
+        const bool scale_post_op = false;
+    #endif
+
     // =====================================================================================================================================
     // Main computation loop
     uint iterations = MAIN_LOOP_ELEMENTS_COUNT / (TILE_IFM * SIMD);
@@ -466,7 +482,7 @@ inline void FUNC(fc_bf_tiled_kernel_default)(
                     }
                 }
             #endif
-
+//USE_SLM cal
             unroll_for (uint kii = 0; kii < TILE_K; ++kii) {
                 const uint total_k = ki * TILE_K + kii;
                 unroll_for (uint bi = 0; bi < TILE_B; ++bi) {
@@ -475,13 +491,22 @@ inline void FUNC(fc_bf_tiled_kernel_default)(
 #if DECOMPRESSION_SCALE_POST_OP
                     half weight = ((ACCUMULATOR_TYPE*)(&wei))[W_IDX];
                     #if TILE_OFM > 1
-                        ((ACCUMULATOR_TYPE*)(&acc_tmp[bi]))[fi] += in_val * weight;
+                        // ((ACCUMULATOR_TYPE*)(&acc_tmp[bi]))[fi] += in_val * weight;
+                        ((ACCUMULATOR_TYPE*)(&acc_tmp[bi]))[fi] += in_val;
                     #else
                         acc_tmp[bi] += in_val * weight;
                     #endif
 #else
                     #if TILE_OFM > 1
-                        ((ACCUMULATOR_TYPE*)(&acc[bi]))[fi] += in_val * ((ACCUMULATOR_TYPE*)(&wei))[W_IDX];
+                        ((ACCUMULATOR_TYPE*)(&acc[bi]))[fi] += in_val;
+                        acc_count[bi][fi] += 1;
+                        // ((ACCUMULATOR_TYPE*)(&acc[bi]))[fi] += in_val * ((ACCUMULATOR_TYPE*)(&wei))[W_IDX];
+                        if (get_global_id(0) == 0 && get_global_id(1) == 0 && get_global_id(2) == 0 && bi == 0 && fi == 0 && output_offset == 0) {
+                            calc_count += 1;
+                            // debug_val += in_val;
+                            debug_val += (OUTPUT_TYPE)1.0f;
+                            // printf("acc[1st[%d][%d][%d][%d][%d]=%f, %d, slm_used:%d\n", bi, fi, ni, ki, kii, ((ACCUMULATOR_TYPE*)(&acc[bi]))[fi], calc_count, slm_used);
+                        }
                     #else
                         acc[bi] += in_val * ((ACCUMULATOR_TYPE*)(&wei))[W_IDX];
                     #endif
@@ -489,6 +514,7 @@ inline void FUNC(fc_bf_tiled_kernel_default)(
                     }
                 }
             }
+
             #if TILE_OFM == 1 && FILTER_LAYOUT_OS_IS_YX_OSV32_ISV2
             weights_offset += TILE_K_OFM_PACKED * 2 * SIMD;
             #else
@@ -496,34 +522,34 @@ inline void FUNC(fc_bf_tiled_kernel_default)(
             #endif
 
 
-#if DECOMPRESSION_SCALE_POST_OP && (TILE_IFM * SIMD > DECOMPRESSION_SCALE_GROUP_SIZE)
-            unroll_for (uint bi = 0; bi < TILE_B; ++bi) {
-                unroll_for(uint fi = 0; fi < TILE_OFM; ++fi) {
-                    const uint offset_ofm = out_f + fi*SIMD + sglid;
+// #if DECOMPRESSION_SCALE_POST_OP && (TILE_IFM * SIMD > DECOMPRESSION_SCALE_GROUP_SIZE)
+//             unroll_for (uint bi = 0; bi < TILE_B; ++bi) {
+//                 unroll_for(uint fi = 0; fi < TILE_OFM; ++fi) {
+//                     const uint offset_ofm = out_f + fi*SIMD + sglid;
 
-                    #if DECOMPRESSION_SCALE_GROUPS_NUM > 1
-                        const uint scale_offset = (offset_ofm % DECOMPRESSION_SCALE_BATCH_NUM) * DECOMPRESSION_SCALE_BATCH_PITCH +
-                                                ((ni*TILE_IFM*SIMD + ki*TILE_K) / DECOMPRESSION_SCALE_GROUP_SIZE)*DECOMPRESSION_SCALE_FEATURE_PITCH;
-                        ACCUMULATOR_TYPE ds = decompression_scale[scale_offset];
-                    #else
-                        ACCUMULATOR_TYPE ds = d_scales[fi % DECOMPRESSION_SCALE_LENGTH];
-                    #endif
-                    #if TILE_OFM > 1
-                    ((ACCUMULATOR_TYPE*)(&acc[bi]))[fi] += ((ACCUMULATOR_TYPE*)(&acc_tmp[bi]))[fi] * ds;
-                    acc_tmp[bi][fi] = 0;
-                    #else
-                    acc[bi] += acc_tmp[bi] * ds;
-                    acc_tmp[bi] = 0;
-                    #endif
-                }
-            }
-#endif
+//                     #if DECOMPRESSION_SCALE_GROUPS_NUM > 1
+//                         const uint scale_offset = (offset_ofm % DECOMPRESSION_SCALE_BATCH_NUM) * DECOMPRESSION_SCALE_BATCH_PITCH +
+//                                                 ((ni*TILE_IFM*SIMD + ki*TILE_K) / DECOMPRESSION_SCALE_GROUP_SIZE)*DECOMPRESSION_SCALE_FEATURE_PITCH;
+//                         ACCUMULATOR_TYPE ds = decompression_scale[scale_offset];
+//                     #else
+//                         ACCUMULATOR_TYPE ds = d_scales[fi % DECOMPRESSION_SCALE_LENGTH];
+//                     #endif
+//                     #if TILE_OFM > 1
+//                     ((ACCUMULATOR_TYPE*)(&acc[bi]))[fi] += ((ACCUMULATOR_TYPE*)(&acc_tmp[bi]))[fi] * ds;
+//                     acc_tmp[bi][fi] = 0;
+//                     #else
+//                     acc[bi] += acc_tmp[bi] * ds;
+//                     acc_tmp[bi] = 0;
+//                     #endif
+//                 }
+//             }
+// #endif
         }
+        //No USE_SLM cal
 #if DECOMPRESSION_SCALE_POST_OP && (TILE_IFM * SIMD <= DECOMPRESSION_SCALE_GROUP_SIZE)
         unroll_for (uint bi = 0; bi < TILE_B; ++bi) {
-            unroll_for(uint fi = 0; fi < TILE_OFM; ++fi) {
+            unroll_for (uint fi = 0; fi < TILE_OFM; ++fi) {
                 const uint offset_ofm = out_f + fi*SIMD + sglid;
-
                 #if DECOMPRESSION_SCALE_GROUPS_NUM > 1
                     const uint scale_offset = (offset_ofm % DECOMPRESSION_SCALE_BATCH_NUM) * DECOMPRESSION_SCALE_BATCH_PITCH +
                                               ((ni*TILE_IFM*SIMD) / DECOMPRESSION_SCALE_GROUP_SIZE)*DECOMPRESSION_SCALE_FEATURE_PITCH;
@@ -532,13 +558,36 @@ inline void FUNC(fc_bf_tiled_kernel_default)(
                     ACCUMULATOR_TYPE ds = d_scales[fi % DECOMPRESSION_SCALE_LENGTH];
                 #endif
                 #if TILE_OFM > 1
-                ((ACCUMULATOR_TYPE*)(&acc[bi]))[fi] += ((ACCUMULATOR_TYPE*)(&acc_tmp[bi]))[fi] * ds;
+                ((ACCUMULATOR_TYPE*)(&acc[bi]))[fi] += ((ACCUMULATOR_TYPE*)(&acc_tmp[bi]))[fi];
+                acc_count[bi][fi] += 1;
+                // ((ACCUMULATOR_TYPE*)(&acc[bi]))[fi] += ((ACCUMULATOR_TYPE*)(&acc_tmp[bi]))[fi] * ds;
+                if (get_global_id(0) == 0 && get_global_id(1) == 0 && get_global_id(2) == 0 && bi == 0 && fi == 0 && output_offset == 0) {
+                    calc_count += 1;
+                    // debug_val += ((ACCUMULATOR_TYPE*)(&acc_tmp[bi]))[fi];
+                    debug_val += (OUTPUT_TYPE)1.0f;
+                //     printf("acc[2nd[%d][%d][%d]=%f, %d\n", bi, fi, ni, ((ACCUMULATOR_TYPE*)(&acc[bi]))[fi], calc_count);
+                }
                 #else
                 acc[bi] += acc_tmp[bi] * ds;
                 #endif
             }
         }
 #endif
+        // if (get_global_id(0) == 0 && get_global_id(1) == 0 && get_global_id(2) == 0 && num > 0 && ni == 0) {
+        //     printf("[2nd calc] num:%d, TILE_K:%d, TILE_B:%d, TILE_OFM:%d, TILE_IFM:%d, SIMD:%d, iterations:%d, DECOMPRESSION_SCALE_GROUP_SIZE:%d, scale_post_op:%d, slm_used:%d, , cal_count:%d\n"
+        //             , num, TILE_K, TILE_B, TILE_OFM, TILE_IFM, SIMD, iterations, DECOMPRESSION_SCALE_GROUP_SIZE, scale_post_op, slm_used, calc_count);
+        // }
+    }
+
+    if (get_global_id(0) == 0 && get_global_id(1) == 0 && get_global_id(2) == 0) {
+        printf("[calc] calc_count:%d, TILE_K:%d, TILE_B:%d, TILE_OFM:%d, TILE_IFM:%d, SIMD:%d, "
+                "iterations:%d, DECOMPRESSION_SCALE_GROUP_SIZE:%d, scale_post_op:%d, slm_used:%d, ((ACCUMULATOR_TYPE*)(&acc[0]))[0]:%f, debug_val:%f\n"
+                , calc_count, TILE_K, TILE_B, TILE_OFM, TILE_IFM, SIMD, iterations, DECOMPRESSION_SCALE_GROUP_SIZE, scale_post_op, slm_used, ((ACCUMULATOR_TYPE*)(&acc[0]))[0], (float)debug_val);
+        unroll_for (uint bi = 0; bi < TILE_B; ++bi) {
+            unroll_for (uint fi = 0; fi < TILE_OFM; ++fi) {
+                printf("acc_count[%d][%d]=%d, acc_val:%f\n", bi, fi, acc_count[bi][fi], ((ACCUMULATOR_TYPE*)(&acc[bi]))[fi]);
+            }
+        }
     }
     // =====================================================================================================================================
     // Leftovers
@@ -628,41 +677,41 @@ inline void FUNC(fc_bf_tiled_kernel_default)(
         activated[bi] = TO_ACTIVATION_VEC_TYPE(acc[bi]);
     }
 
-#if BIAS_TERM
-    #if TILE_OUT_F_NUM % (TILE_OFM * SIMD) == 0
-        BIAS_VEC_TYPE bias = BIAS_BLOCK_READ(biases, out_f);
-    #else
-        BIAS_VEC_TYPE bias = 0;
-        unroll_for(uint fi = 0; fi < TILE_OFM; ++fi) {
-            ((BIAS_TYPE*)(&bias))[fi] = biases[out_f + sglid + fi * SIMD];
-        }
-    #endif
-    unroll_for (uint bi = 0; bi < TILE_B; ++bi) {
-        activated[bi] += TO_ACTIVATION_VEC_TYPE(bias);
-    }
-#endif
+// #if BIAS_TERM
+//     #if TILE_OUT_F_NUM % (TILE_OFM * SIMD) == 0
+//         BIAS_VEC_TYPE bias = BIAS_BLOCK_READ(biases, out_f);
+//     #else
+//         BIAS_VEC_TYPE bias = 0;
+//         unroll_for(uint fi = 0; fi < TILE_OFM; ++fi) {
+//             ((BIAS_TYPE*)(&bias))[fi] = biases[out_f + sglid + fi * SIMD];
+//         }
+//     #endif
+//     unroll_for (uint bi = 0; bi < TILE_B; ++bi) {
+//         activated[bi] += TO_ACTIVATION_VEC_TYPE(bias);
+//     }
+// #endif
 
     OUTPUT_VEC_TYPE result[TILE_B] = { };
-#if HAS_FUSED_OPS
-    unroll_for (uint bi = 0; bi < TILE_B; ++bi) {
-    #if TILE_OFM > 1
-        unroll_for(uint fi = 0; fi < TILE_OFM; ++fi) {
-            FUSED_OPS_VEC;
-            result[bi][fi] = FUSED_OPS_RESULT_VEC;
-        }
-    #else
-        FUSED_OPS_SCALAR;
-        result[bi] = FUSED_OPS_RESULT_SCALAR;
-    #endif // TILE_OFM > 1
-    }
-#else
+// #if HAS_FUSED_OPS
+//     unroll_for (uint bi = 0; bi < TILE_B; ++bi) {
+//     #if TILE_OFM > 1
+//         unroll_for(uint fi = 0; fi < TILE_OFM; ++fi) {
+//             FUSED_OPS_VEC;
+//             result[bi][fi] = FUSED_OPS_RESULT_VEC;
+//         }
+//     #else
+//         FUSED_OPS_SCALAR;
+//         result[bi] = FUSED_OPS_RESULT_SCALAR;
+//     #endif // TILE_OFM > 1
+//     }
+// #else
     unroll_for (uint bi = 0; bi < TILE_B; ++bi) {
         result[bi] = TO_OUTPUT_VEC_TYPE(ACTIVATION_TYPED(activated[bi], ACTIVATION_PARAMS_TYPED));
     }
-#endif
+// #endif
     // =====================================================================================================================================
     // Write results
-    uint output_offset = out_f * TILE_OUT_F_PITCH + out_b * TILE_OUT_B_PITCH + OUTPUT_OFFSET;
+    // uint output_offset = out_f * TILE_OUT_F_PITCH + out_b * TILE_OUT_B_PITCH + OUTPUT_OFFSET;
 
     if (USE_BLOCK_WRITE && (TILE_OUT_F_NUM % (TILE_OFM * SIMD) == 0 || out_f + (TILE_OFM * SIMD) <= TILE_OUT_F_NUM)) {
 #if IS_DYNAMIC
@@ -921,7 +970,7 @@ inline void FUNC(fc_bf_tiled_kernel_dyn_quan)(
             char4 first_weight = weight.s0123;
             char4 second_weight = weight.s4567;
             unroll_for (uint bi = 0; bi < TILE_B; ++bi) {
-                char4 input_val = as_char4(_sub_group_shuffle(packed_in_0[bi / 2], (bi % 2) * 8 + ki));
+                char4 input_val = as_char4(_sub_group_shuffle(packed_in_0[bi / 2], (bi % 2) * 8 + ki)); // TILE_K
                 acc_tmp[0][bi] = imad_SW(acc_tmp[0][bi], input_val, first_weight);
                 acc_tmp[1][bi] = imad_SW(acc_tmp[1][bi], input_val, second_weight);
             }
@@ -1009,7 +1058,7 @@ inline void FUNC(fc_bf_tiled_kernel_dyn_quan)(
 
     // =====================================================================================================================================
     // Write results
-    uint output_offset = out_f * TILE_OUT_F_PITCH + out_b * TILE_OUT_B_PITCH + OUTPUT_OFFSET;
+    // uint output_offset = out_f * TILE_OUT_F_PITCH + out_b * TILE_OUT_B_PITCH + OUTPUT_OFFSET;
 
     if (USE_BLOCK_WRITE && (TILE_OUT_F_NUM % (TILE_OFM * SIMD) == 0 || out_f + (TILE_OFM * SIMD) <= TILE_OUT_F_NUM)) {
 #if IS_DYNAMIC
