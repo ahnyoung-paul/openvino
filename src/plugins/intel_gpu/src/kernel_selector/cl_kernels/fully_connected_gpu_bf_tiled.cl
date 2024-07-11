@@ -332,9 +332,9 @@ inline void FUNC(fc_bf_tiled_kernel_default)(
         // NOTE: Manually unrolling multiplication loop leads to lower register pressure and allows for bigger block sizes,
         //       but significantly degrades readability and generality of code.
         //       It doesn't also show noticable performance improvement on tested configurations.
-        #if DECOMPRESSION_SCALE_POST_OP
+        // #if DECOMPRESSION_SCALE_POST_OP
             ACCUMULATOR_VEC_TYPE acc_tmp[TILE_B] = { };
-        #endif
+        // #endif
 
         #if USE_SLM && COMPRESSED_WEIGHTS_INT4
             #if TILE_OFM != 2
@@ -498,17 +498,17 @@ inline void FUNC(fc_bf_tiled_kernel_default)(
                     #endif
 #else
                     #if TILE_OFM > 1
-                        ((ACCUMULATOR_TYPE*)(&acc[bi]))[fi] += convert_half(in_val);
-                        acc_count[bi][fi] += 1;
-                        // ((ACCUMULATOR_TYPE*)(&acc[bi]))[fi] += in_val * ((ACCUMULATOR_TYPE*)(&wei))[W_IDX];
-                        if (get_global_id(0) == 0 && get_global_id(1) == 0 && get_global_id(2) == 0 && bi == 0 && fi == 0 && output_offset == 0) {
-                            calc_count += 1;
-                            // debug_val += in_val;
-                            debug_val += (OUTPUT_TYPE)1.0f;
-                            // printf("acc[1st[%d][%d][%d][%d][%d]=%f, %d, slm_used:%d\n", bi, fi, ni, ki, kii, ((ACCUMULATOR_TYPE*)(&acc[bi]))[fi], calc_count, slm_used);
-                        }
+                        ((ACCUMULATOR_TYPE*)(&acc_tmp[bi]))[fi] += convert_half(in_val);
+                        // acc_count[bi][fi] += 1;
+                        // // ((ACCUMULATOR_TYPE*)(&acc[bi]))[fi] += in_val * ((ACCUMULATOR_TYPE*)(&wei))[W_IDX];
+                        // if (get_global_id(0) == 0 && get_global_id(1) == 0 && get_global_id(2) == 0 && bi == 0 && fi == 0 && output_offset == 0) {
+                        //     calc_count += 1;
+                        //     // debug_val += in_val;
+                        //     debug_val += (OUTPUT_TYPE)1.0f;
+                        //     // printf("acc[1st[%d][%d][%d][%d][%d]=%f, %d, slm_used:%d\n", bi, fi, ni, ki, kii, ((ACCUMULATOR_TYPE*)(&acc[bi]))[fi], calc_count, slm_used);
+                        // }
                     #else
-                        acc[bi] += in_val * ((ACCUMULATOR_TYPE*)(&wei))[W_IDX];
+                        acc_tmp[bi] += in_val * ((ACCUMULATOR_TYPE*)(&wei))[W_IDX];
                     #endif
 #endif
                     }
@@ -569,6 +569,24 @@ inline void FUNC(fc_bf_tiled_kernel_default)(
                 }
                 #else
                 acc[bi] += acc_tmp[bi] * ds;
+                #endif
+            }
+        }
+#endif
+#if !DECOMPRESSION_SCALE_POST_OP
+        unroll_for (uint bi = 0; bi < TILE_B; ++bi) {
+            unroll_for (uint fi = 0; fi < TILE_OFM; ++fi) {
+                #if TILE_OFM > 1
+                ((ACCUMULATOR_TYPE*)(&acc[bi]))[fi] += ((ACCUMULATOR_TYPE*)(&acc_tmp[bi]))[fi];
+                acc_count[bi][fi] += 1;
+                if (get_global_id(0) == 0 && get_global_id(1) == 0 && get_global_id(2) == 0 && bi == 0 && fi == 0 && output_offset == 0) {
+                    calc_count += 1;
+                    // debug_val += ((ACCUMULATOR_TYPE*)(&acc_tmp[bi]))[fi];
+                    debug_val += (OUTPUT_TYPE)1.0f;
+                //     printf("acc[2nd[%d][%d][%d]=%f, %d\n", bi, fi, ni, ((ACCUMULATOR_TYPE*)(&acc[bi]))[fi], calc_count);
+                }
+                #else
+                acc[bi] += acc_tmp[bi];
                 #endif
             }
         }
