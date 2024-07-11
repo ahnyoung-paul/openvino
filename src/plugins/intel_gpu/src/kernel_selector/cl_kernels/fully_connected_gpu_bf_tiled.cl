@@ -498,7 +498,7 @@ inline void FUNC(fc_bf_tiled_kernel_default)(
                     #endif
 #else
                     #if TILE_OFM > 1
-                        ((ACCUMULATOR_TYPE*)(&acc[bi]))[fi] += in_val;
+                        ((ACCUMULATOR_TYPE*)(&acc[bi]))[fi] += convert_half(in_val);
                         acc_count[bi][fi] += 1;
                         // ((ACCUMULATOR_TYPE*)(&acc[bi]))[fi] += in_val * ((ACCUMULATOR_TYPE*)(&wei))[W_IDX];
                         if (get_global_id(0) == 0 && get_global_id(1) == 0 && get_global_id(2) == 0 && bi == 0 && fi == 0 && output_offset == 0) {

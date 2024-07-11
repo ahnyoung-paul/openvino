@@ -1196,7 +1196,7 @@ void network::execute_impl(const std::vector<event::ptr>& events) {
                                 debug_str_for_bin_load += (filename + ",");
                             }
                         // } else if (input_layout.to_short_string() == "f16:fbyx:18432x48:nopad") {
-                        } else if (dep.first->id() == 
+                        } else if (dep.first->id() ==
                             "constant:Constant_201561_reorder_fullyconnectedcompressed:__module.model.gpt_neox.layers.0.attention.query_key_value/aten::linear/MatMul") {
                             //  f16:fbyx:18432x48:nopad
                             std::cout << std::endl << "[3]," << dep.first->id() << ", " << input_layout.to_short_string();
@@ -1272,9 +1272,9 @@ void network::execute_impl(const std::vector<event::ptr>& events) {
                         {
                             mem_lock<ov::float16, mem_lock_type::read> lock(output_mem, get_stream());
                             auto mem_ptr = lock.data();
-                            std::cout << "output[" << name << "] : " << static_cast<float>(mem_ptr[0]) 
-                                        << ", " << static_cast<float>(mem_ptr[1]) 
-                                        << ", " << static_cast<float>(mem_ptr[2]) << std::endl; 
+                            std::cout << "output[" << name << "] : " << static_cast<float>(mem_ptr[0])
+                                        << ", " << static_cast<float>(mem_ptr[1])
+                                        << ", " << static_cast<float>(mem_ptr[2]) << std::endl;
                         }
                         bool pass_dump = false;
                         if (const auto env_var = std::getenv("PASS_DUMP")) {
@@ -1311,6 +1311,7 @@ void network::execute_impl(const std::vector<event::ptr>& events) {
                         std::cout << "======= USE_SLM=OFF for FC" << std::endl;
                     }
                 }
+                std::cout << "kernel_name : " << inst->get_impl()->get_kernels_dump_info().second << std::endl;
                 std::cout << "Stop to run for debugging" << std::endl;
                 exit(0);
             }
