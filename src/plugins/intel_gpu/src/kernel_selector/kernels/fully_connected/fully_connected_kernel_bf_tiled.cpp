@@ -398,16 +398,6 @@ FullyConnected_bf_tiled::SetDefault(const fully_connected_params& params, int au
     auto kernel_type = KernelType::ANY;
     if (params.is_shape_agnostic)
         kernel_type = kernel_number == 0 ? KernelType::DEFAULT : KernelType::SLM;
-    // KernelType::DEFAULT
-    bool is_disable_slm = false;
-    if (const auto env_var = std::getenv("DISABLE_FC_SLM")) {
-        auto val = std::atoi(env_var);
-        if (val != 0) {
-            is_disable_slm = true;
-        }
-    }
-    if (is_disable_slm)
-        kernel_type = KernelType::DEFAULT;
 
     auto tparams = GetAutoTuneParams(params, kernel_type, autoTuneIndex);
 
@@ -465,6 +455,21 @@ JitConstants FullyConnected_bf_tiled::GetJitConstants(const fully_connected_para
         jit.Merge(make_int4_packed_type_jit_constant("INT4_PACKED_TYPE", weights_dt, tile_k_ofm));
         const size_t scale_group_size = params.weights.IFM().v / params.decompression_scale.Feature().v;
         // Do not use SCALE_POST_OP for SLM kernel, since it demonstrates worse performance
+        bool is_disable_ds_post_op = false;
+        if (const auto env_var = std::getenv("DISABLE_DS_POS_OP")) {
+            auto val = std::atoi(env_var);
+            if (val != 0) {
+                is_disable_ds_post_op = true;
+            }
+        }
+        if (is_disable_ds_post_op) {
+            if (scale_group_size % simd == 0)
+                jit.AddConstant(MakeJitConstant("DECOMPRESSION_SCALE_POST_OP", 1));
+        } else {
+            if (scale_group_size % simd == 0 && !dispatchData.use_slm)
+                jit.AddConstant(MakeJitConstant("DECOMPRESSION_SCALE_POST_OP", 1));
+        }
+            
         // if (scale_group_size % simd == 0)
         if (scale_group_size % simd == 0 && !dispatchData.use_slm)
             jit.AddConstant(MakeJitConstant("DECOMPRESSION_SCALE_POST_OP", 1));

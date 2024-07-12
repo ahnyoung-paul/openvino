@@ -549,8 +549,12 @@ inline void FUNC(fc_bf_tiled_kernel_default)(
 #endif
     }
     if (get_global_id(0) == 0 && get_global_id(1) == 0 && get_global_id(2) == 0) {
-        outs[test_idx] = val;
-        test_idx += 1;
+        print("half sample_data[%d]={",NUM_DATA);
+        for (uint i = 0; i < NUM_DATA; i++) {
+            printf("%f,",outs[i]);
+            if (i != 0 && i % 200 == 0)
+                printf("\n");
+        }
     }
     // =====================================================================================================================================
     // Leftovers

@@ -1298,20 +1298,19 @@ void network::execute_impl(const std::vector<event::ptr>& events) {
                     GPU_DEBUG_COUT << debug_str_for_bin_load << std::endl;;
                 }
                 {
-                    bool use_slm_for_fc = true;
-                    if (const auto env_var = std::getenv("DISABLE_FC_SLM")) {
+                    bool is_disable_ds_post_op = true;
+                    if (const auto env_var = std::getenv("DISABLE_DS_POS_OP")) {
                         auto val = std::atoi(env_var);
                         if (val != 0) {
-                            use_slm_for_fc = false;
+                            is_disable_ds_post_op = false;
                         }
                     }
-                    if (use_slm_for_fc) {
-                        std::cout << "======= USE_SLM=ON for FC" << std::endl;
+                    if (is_disable_ds_post_op) {
+                        std::cout << "======= DECOMPRESSION_SCALE_POST_OP=ON for FC" << std::endl;
                     } else {
-                        std::cout << "======= USE_SLM=OFF for FC" << std::endl;
+                        std::cout << "======= DECOMPRESSION_SCALE_POST_OP=OFF for FC" << std::endl;
                     }
                 }
-                std::cout << "kernel_name : " << inst->get_impl()->get_kernels_dump_info().second << std::endl;
                 std::cout << "Stop to run for debugging" << std::endl;
                 exit(0);
             }
