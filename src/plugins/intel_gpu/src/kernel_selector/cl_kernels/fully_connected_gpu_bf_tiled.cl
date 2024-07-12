@@ -219,10 +219,16 @@ inline void FUNC(fc_bf_tiled_kernel_default)(
     INPUT_VEC_TYPE       in_0[TILE_B] = { };
 #define NUM_DATA 6144
     ACCUMULATOR_TYPE outs[NUM_DATA];
-    unit test_idx = 0;
+    uint test_idx = 0;
 
 #if !USE_SLM
     FILTER_VEC_TYPE wei = 0;
+#endif
+
+#if DECOMPRESSION_SCALE_POST_OP
+    bool scale_post_op = true;
+#else
+    bool scale_post_op = false;
 #endif
 
 
@@ -549,13 +555,16 @@ inline void FUNC(fc_bf_tiled_kernel_default)(
 #endif
     }
     if (get_global_id(0) == 0 && get_global_id(1) == 0 && get_global_id(2) == 0) {
-        print("half sample_data[%d]={",NUM_DATA);
+        printf("half sample_data[%d]={",NUM_DATA);
         for (uint i = 0; i < NUM_DATA; i++) {
-            printf("%f,",outs[i]);
+            printf("%ff,",outs[i]);
             if (i != 0 && i % 200 == 0)
                 printf("\n");
         }
+        printf("}\n");
+        printf("* scale_post_op : %d\n", scale_post_op);
     }
+
     // =====================================================================================================================================
     // Leftovers
 #if MAIN_LOOP_ELEMENTS_COUNT % (TILE_IFM * SIMD) != 0

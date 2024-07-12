@@ -462,7 +462,7 @@ JitConstants FullyConnected_bf_tiled::GetJitConstants(const fully_connected_para
                 is_disable_ds_post_op = true;
             }
         }
-        if (is_disable_ds_post_op) {
+        if (!is_disable_ds_post_op) {
             if (scale_group_size % simd == 0)
                 jit.AddConstant(MakeJitConstant("DECOMPRESSION_SCALE_POST_OP", 1));
         } else {
