@@ -214,8 +214,11 @@ inline void FUNC(fc_bf_tiled_kernel_default)(
     uint out_f = (feature_mega_block * DISPATCH_FSV + feature_mini_block) * (TILE_OFM * SIMD);
     uint out_b = ((batch_mega_block * DISPATCH_BSV + batch_mini_block) * TILE_B);
 #endif
-
+#if DECOMPRESSION_SCALE_POST_OP
     ACCUMULATOR_VEC_TYPE acc[TILE_B] = { };
+#else
+    MAKE_VECTOR_TYPE(float, TILE_OFM) acc[TILE_B] = { };
+#endif
     INPUT_VEC_TYPE       in_0[TILE_B] = { };
 
 #if !USE_SLM
@@ -481,9 +484,10 @@ inline void FUNC(fc_bf_tiled_kernel_default)(
                     #endif
 #else
                     #if TILE_OFM > 1
-                        ((ACCUMULATOR_TYPE*)(&acc[bi]))[fi] += in_val * ((ACCUMULATOR_TYPE*)(&wei))[W_IDX];
+                        // ((ACCUMULATOR_TYPE*)(&acc[bi]))[fi] += in_val * ((ACCUMULATOR_TYPE*)(&wei))[W_IDX];
+                        ((float*)(&acc[bi]))[fi] += convert_float(in_val * ((ACCUMULATOR_TYPE*)(&wei))[W_IDX]);
                     #else
-                        acc[bi] += in_val * ((ACCUMULATOR_TYPE*)(&wei))[W_IDX];
+                        acc[bi] += convert_float(in_val * ((ACCUMULATOR_TYPE*)(&wei))[W_IDX]);
                     #endif
 #endif
                     }
@@ -608,11 +612,19 @@ inline void FUNC(fc_bf_tiled_kernel_default)(
                         const uint total_k = ki * TILE_K + kii;
                         if (total_k < LEFTOVER_IFM) {
                             INPUT0_TYPE in_val = _sub_group_shuffle(((INPUT0_TYPE*)(&in_0[bi]))[total_k / SIMD], total_k % SIMD);
+#if DECOMPRESSION_SCALE_POST_OP
                             #if TILE_OFM > 1
                             ((ACCUMULATOR_TYPE*)(&acc[bi]))[fi] += in_val * ((ACCUMULATOR_TYPE*)(&wei))[W_IDX];
                             #else
                             acc[bi] += in_val * ((ACCUMULATOR_TYPE*)(&wei))[W_IDX];
                             #endif
+#else
+                            #if TILE_OFM > 1
+                            ((float*)(&acc[bi]))[fi] += convert_float(in_val * ((ACCUMULATOR_TYPE*)(&wei))[W_IDX]);
+                            #else
+                            acc[bi] += convert_float(in_val * ((ACCUMULATOR_TYPE*)(&wei))[W_IDX]);
+                            #endif
+#endif
                         }
                     }
                 }
@@ -624,9 +636,21 @@ inline void FUNC(fc_bf_tiled_kernel_default)(
     // =====================================================================================================================================
     // Post-processing: bias, activation, fused-ops
     ACTIVATION_VEC_TYPE activated[TILE_B] = { };
+#if DECOMPRESSION_SCALE_POST_OP
     for (uint bi = 0; bi < TILE_B; ++bi) {
         activated[bi] = TO_ACTIVATION_VEC_TYPE(acc[bi]);
     }
+#else
+    for (uint bi = 0; bi < TILE_B; ++bi) {
+        unroll_for (uint fi = 0; fi < TILE_OFM; ++fi) {
+            #if TILE_OFM > 1
+            ((ACCUMULATOR_TYPE*)(&activated[bi]))[fi] = convert_half(((float*)(&acc[bi]))[fi]);
+            #else
+            activated[bi] = convert_half(acc[bi]);
+            #endif
+        }
+    }
+#endif
 
 #if BIAS_TERM
     #if TILE_OUT_F_NUM % (TILE_OFM * SIMD) == 0
