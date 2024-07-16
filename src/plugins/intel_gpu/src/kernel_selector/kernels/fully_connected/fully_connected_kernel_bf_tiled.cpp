@@ -455,8 +455,13 @@ JitConstants FullyConnected_bf_tiled::GetJitConstants(const fully_connected_para
         jit.Merge(make_int4_packed_type_jit_constant("INT4_PACKED_TYPE", weights_dt, tile_k_ofm));
         const size_t scale_group_size = params.weights.IFM().v / params.decompression_scale.Feature().v;
         // Do not use SCALE_POST_OP for SLM kernel, since it demonstrates worse performance
-        if (scale_group_size % simd == 0 && !dispatchData.use_slm)
+        // if (scale_group_size % simd == 0 && !dispatchData.use_slm) {
+        if (scale_group_size % simd == 0) {
             jit.AddConstant(MakeJitConstant("DECOMPRESSION_SCALE_POST_OP", 1));
+            std::cout << "DECOMPRESSION_SCALE_POST_OP is ON" << std::endl;
+        } else {
+            std::cout << "DECOMPRESSION_SCALE_POST_OP is OFF" << std::endl;
+        }
     }
     if (params.weights.GetLayout() == WeightsLayout::os_is_yx_osv32_isv2)
         jit.AddConstant(MakeJitConstant("W_IDX", "fi * TILE_K + kii"));
@@ -795,7 +800,7 @@ KernelsData FullyConnected_bf_tiled::GetMultiKernelsData(const Params &params,
         quan_cldnn_jit.AddConstant(MakeJitConstant("FC_KERNEL_DYNAMIC_QUANTIZE", 1));
         auto quan_jit = CreateJit(kernelName, quan_cldnn_jit, quan_entry_point);
 
-
+        std::cout << "kernelName : " << kernelName << std::endl;
         FillCLKernelData(quan_kernel,
                         dyn_quan_dispatch,
                         params.engineInfo,
@@ -865,7 +870,7 @@ KernelsData FullyConnected_bf_tiled::GetMultiKernelsData(const Params &params,
         sa_kernel.params.workGroups.global = slm_Data.gws;
         sa_kernel.params.workGroups.local = slm_Data.lws;
         sa_kernel.skip_execution = false;
-
+        std::cout << "kernelName : " << kernelName << std::endl;
         FillCLKernelData(sa_kernel,
                         slm_Data,
                         params.engineInfo,

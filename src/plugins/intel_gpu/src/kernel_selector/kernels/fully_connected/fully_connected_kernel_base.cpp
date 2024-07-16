@@ -37,6 +37,7 @@ JitConstants FullyConnectedKernelBase::GetJitConstants(const fully_connected_par
         jit.AddConstants({MakeJitConstant("DECOMPRESSION_SCALE_GROUPS_NUM", scale_groups_num)});
         jit.AddConstants({MakeJitConstant("DECOMPRESSION_SCALE_GROUP_SIZE", scale_group_size)});
         if (params.has_decompression_zp) {
+            std::cout << "DECOMPRESSION_ZP_TERM is on " << std::endl;
             jit.AddConstants({MakeJitConstant("DECOMPRESSION_ZP_TERM", 1)});
             if (params.scalar_zp) {
                 jit.AddConstants({MakeJitConstant("DECOMPRESSION_ZP_VALUE", params.zp_value)});
@@ -48,6 +49,8 @@ JitConstants FullyConnectedKernelBase::GetJitConstants(const fully_connected_par
                 jit.AddConstants({MakeJitConstant("DECOMPRESSION_ZP_GROUPS_NUM", zp_groups_num)});
                 jit.AddConstants({MakeJitConstant("DECOMPRESSION_ZP_GROUP_SIZE", zp_group_size)});
             }
+        } else {
+            std::cout << "DECOMPRESSION_ZP_TERM is off " << std::endl;
         }
     }
 

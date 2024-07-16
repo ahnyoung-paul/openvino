@@ -1399,6 +1399,7 @@ public:
         fc_prim.decompression_zero_point_scalar = 8;
 
         auto get_ref_results = [&]() {
+            std::cout << "Run reference ..." << std::endl;
             topology topology(
                 input_layout("input", in_layout),
                 data("weights", weights_mem),
@@ -1434,7 +1435,7 @@ public:
         auto config = get_test_default_config(engine);
         config.set_property(ov::intel_gpu::allow_new_shape_infer(true));
         config.set_property(ov::intel_gpu::optimize_data(true));
-
+        std::cout << "get_network ..." << std::endl;
         network::ptr network = get_network(engine, topology, config, get_test_stream_ptr(), is_caching_test);
 
         // Impl is selected only when it is running from cldnn
@@ -1447,6 +1448,7 @@ public:
 
         network->set_input_data("input", input_mem);
 
+        std::cout << "exe_network ..." << std::endl;
         auto outputs = network->execute();
         ASSERT_EQ(outputs.size(), size_t(1));
         ASSERT_EQ(outputs.begin()->first, "fc_prim");
@@ -1459,6 +1461,113 @@ public:
 
         for (size_t i = 0; i < output_ptr_ref.size(); i++)
             ASSERT_NEAR(output_ptr_ref[i], output_ptr[i], 9.0) << "i = " << i;
+    }
+
+    void test_compressed_int4_scale_acc(bool is_caching_test, bool is_dynamic, long int batch_num, long int scales_group_size = 128) {
+        tests::random_generator rg(GET_SUITE_NAME);
+        auto& engine = get_test_engine();
+        auto supports_immad = engine.get_device_info().supports_immad;
+
+        long int ifm_num = 256;
+        long int ofm_num = 256;
+
+        auto input_mem = engine.allocate_memory({ { batch_num, ifm_num}, data_types::f16, format::bfyx });
+        auto weights_mem = engine.allocate_memory({ {ofm_num, ifm_num}, data_types::u4, format::bfyx });
+        auto scale_mem = engine.allocate_memory({ {ofm_num, ifm_num / scales_group_size}, data_types::f16, format::bfyx });
+        // auto dcomp_zp_mem = engine.allocate_memory({ {1, 1, 1, 1}, data_types::u8, format::bfyx });
+
+        // set_values(dcomp_zp_mem, {0});
+
+        auto input_data = std::vector<ov::float16>(input_mem->count());
+        std::fill(input_data.begin(), input_data.end(), ov::float16(1.f));
+        set_values(input_mem, input_data);
+
+        auto weigths_data = std::vector<uint8_t>(weights_mem->count());
+        std::fill(weigths_data.begin(), weigths_data.end(), 0x11);
+        set_values(weights_mem, weigths_data);
+
+        auto scale_data = std::vector<ov::float16>(scale_mem->count());
+        std::fill(scale_data.begin(), scale_data.end(), ov::float16(1.f));
+        set_values(scale_mem, scale_data);
+
+        auto in_layout = is_dynamic ? layout{ {-1, ifm_num}, data_types::f16, format::bfyx }
+                                    : layout{ {batch_num, ifm_num}, data_types::f16, format::bfyx };
+
+        auto dcomp_zp_name = supports_immad ? "dcomp_zp" : "";
+
+        auto fc_prim = fully_connected("fc_prim", input_info("input"), "weights", "", "scale", "", data_types::f16, padding(), 2, 2);
+
+        // fc_prim.decompression_zero_point_scalar = 8;
+
+        auto get_ref_results = [&]() {
+            std::cout << "Run reference ..." << std::endl;
+            topology topology(
+                input_layout("input", in_layout),
+                data("weights", weights_mem),
+                data("scale", scale_mem),
+                fc_prim
+            );
+
+            auto config = get_test_default_config(engine);
+            config.set_property(ov::intel_gpu::allow_new_shape_infer(true));
+
+            network network(engine, topology, config);
+            network.set_input_data("input", input_mem);
+
+            auto outputs = network.execute();
+            OPENVINO_ASSERT(outputs.size() == 1);
+            OPENVINO_ASSERT(outputs.begin()->first == "fc_prim");
+
+            auto output_layout = outputs.begin()->second.get_layout();
+            auto output_mem = outputs.begin()->second.get_memory();
+
+            return engine.reinterpret_buffer(*output_mem, output_layout);
+        };
+
+        topology topology(
+            input_layout("input", in_layout),
+            data("weights", weights_mem),
+            data("scale", scale_mem),
+            fc_prim
+        );
+
+        auto config = get_test_default_config(engine);
+        config.set_property(ov::intel_gpu::allow_new_shape_infer(true));
+        config.set_property(ov::intel_gpu::optimize_data(true));
+        std::cout << "get_network ..." << std::endl;
+        network::ptr network = get_network(engine, topology, config, get_test_stream_ptr(), is_caching_test);
+
+        // Impl is selected only when it is running from cldnn
+        if (is_dynamic && !engine.get_device_info().supports_immad) {
+            auto inst = network->get_primitive("fc_prim");
+            auto impl = inst->get_impl();
+            ASSERT_TRUE(impl != NULL);
+            ASSERT_EQ(impl->get_kernels().size(), 2);
+        }
+
+        network->set_input_data("input", input_mem);
+
+        std::cout << "exe_network ..." << std::endl;
+        auto outputs = network->execute();
+        ASSERT_EQ(outputs.size(), size_t(1));
+        ASSERT_EQ(outputs.begin()->first, "fc_prim");
+
+        auto output_mem = outputs.begin()->second.get_memory();
+        cldnn::mem_lock<ov::float16> output_ptr (output_mem, get_test_stream());
+
+        auto ref_output_mem = get_ref_results();
+        cldnn::mem_lock<ov::float16> output_ptr_ref (ref_output_mem, get_test_stream());
+
+        for (size_t i = 0; i < output_ptr.size(); i++) {
+            if (std::fabs(static_cast<float>(0.158691) static_cast<float>(output_ptr[i])) > 0.00001f) {
+                std::cout << "[" << i << "](" << output_ptr.size() << ") = " << output_ptr[i] << std::endl;
+                break;
+            }
+        }
+
+        for (size_t i = 0; i < output_ptr.size(); i++)
+            ASSERT_NEAR(output_ptr_ref[i], output_ptr[i], 9.0) << "i = " << i;
+            // ASSERT_NEAR(0.158691f, output_ptr[i], 9.0) << "i = " << i;
     }
 
     void test_compressed_int4_scale_reuse(bool is_caching_test, bool is_dynamic, long int batch_num, long int scales_group_size = 128) {
@@ -3258,6 +3367,10 @@ TEST_F(fully_connected_gpu_tests, compressed_int4_scale_cached) {
 
 TEST_F(fully_connected_gpu_tests, compressed_int4_scale_dynamic) {
     this->test_compressed_int4_scale(false, true, 260);
+}
+
+TEST_F(fully_connected_gpu_tests, compressed_int4_scale_dynamic_use_slm) {
+    this->test_compressed_int4_scale_acc(false, true, 2048);
 }
 
 TEST_F(fully_connected_gpu_tests, compressed_int4_scale_dynamic_cached) {
