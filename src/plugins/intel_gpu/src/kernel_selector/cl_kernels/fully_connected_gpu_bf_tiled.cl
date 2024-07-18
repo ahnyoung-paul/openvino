@@ -81,7 +81,7 @@ KERNEL(quantize_input)(
 #endif
 #if TILE_K == 4 && COMPRESSED_WEIGHTS_INT4 && FILTER_LAYOUT_OS_IS_YX_OSV32_ISV2
 // Data stored in memory : f0k0k1|f16k0k1|f0k2k3|f16k2k3
-// => unpack as f0k0k1|f0k2k3|f16k0k1|f16k2k3 so that the weight access order is preserved 
+// => unpack as f0k0k1|f0k2k3|f16k0k1|f16k2k3 so that the weight access order is preserved
 #define UNPACK_INT4 UNPACK_INT4x2_OSV32_ISV2
 #define UNPACK_TRANSPOSED_INT4 UNPACK_INT4x2_OSV32_ISV2
 #else
@@ -215,7 +215,11 @@ inline void FUNC(fc_bf_tiled_kernel_default)(
     uint out_b = ((batch_mega_block * DISPATCH_BSV + batch_mini_block) * TILE_B);
 #endif
 
+#if DECOMPRESSION_SCALE_POST_OP
     ACCUMULATOR_VEC_TYPE acc[TILE_B] = { };
+#else
+    MAKE_VECTOR_TYPE(float, TILE_OFM) acc[TILE_B] = { };
+#endif
     INPUT_VEC_TYPE       in_0[TILE_B] = { };
 
 #if !USE_SLM
@@ -481,9 +485,9 @@ inline void FUNC(fc_bf_tiled_kernel_default)(
                     #endif
 #else
                     #if TILE_OFM > 1
-                        ((ACCUMULATOR_TYPE*)(&acc[bi]))[fi] += in_val * ((ACCUMULATOR_TYPE*)(&wei))[W_IDX];
+                        ((float*)(&acc[bi]))[fi] += convert_float(in_val) * convert_float(((ACCUMULATOR_TYPE*)(&wei))[W_IDX]);
                     #else
-                        acc[bi] += in_val * ((ACCUMULATOR_TYPE*)(&wei))[W_IDX];
+                        acc[bi] += convert_float(in_val) * convert_float(((ACCUMULATOR_TYPE*)(&wei))[W_IDX]);
                     #endif
 #endif
                     }
@@ -607,12 +611,20 @@ inline void FUNC(fc_bf_tiled_kernel_default)(
                     unroll_for (uint bi = 0; bi < TILE_B; ++bi) {
                         const uint total_k = ki * TILE_K + kii;
                         if (total_k < LEFTOVER_IFM) {
+#if DECOMPRESSION_SCALE_POST_OP
                             INPUT0_TYPE in_val = _sub_group_shuffle(((INPUT0_TYPE*)(&in_0[bi]))[total_k / SIMD], total_k % SIMD);
                             #if TILE_OFM > 1
                             ((ACCUMULATOR_TYPE*)(&acc[bi]))[fi] += in_val * ((ACCUMULATOR_TYPE*)(&wei))[W_IDX];
                             #else
                             acc[bi] += in_val * ((ACCUMULATOR_TYPE*)(&wei))[W_IDX];
                             #endif
+#else
+                            #if TILE_OFM > 1
+                                ((float*)(&acc[bi]))[fi] += convert_float(in_val) * convert_float(((ACCUMULATOR_TYPE*)(&wei))[W_IDX]);
+                            #else
+                                acc[bi] += convert_float(in_val) * convert_float(((ACCUMULATOR_TYPE*)(&wei))[W_IDX]);
+                            #endif
+#endif
                         }
                     }
                 }
@@ -811,7 +823,7 @@ inline void FUNC(fc_bf_tiled_kernel_dyn_quan)(
     // =====================================================================================================================================
     // Main computation loop
     const uint iterations = MAIN_LOOP_ELEMENTS_COUNT / (TILE_IFM * SIMD);
-    // Each sub-group loads 2 Batch 
+    // Each sub-group loads 2 Batch
     uint idx_sglid = (sglid * TILE_K) % QUANTIZE_GROUP_SIZE;       // same index for sglid 0~7 : to tile_k direction
     uint batch_sglid = (sglid * TILE_K) / QUANTIZE_GROUP_SIZE;     // 0 to 1 : to batch direction
 
