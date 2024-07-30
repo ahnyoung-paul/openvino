@@ -38,7 +38,7 @@ if exist "%OpenVINO_DIR%\OpenVINOGenAIConfig.cmake" (
    :: If GenAI is installed, export it as well.
    set "OpenVINOGenAI_DIR=%OpenVINO_DIR%"
 )
-set "OPENVINO_LIB_PATHS=%INTEL_OPENVINO_DIR%\runtime\bin\intel64\Release;%INTEL_OPENVINO_DIR%\runtime\bin\intel64\Debug;%OPENVINO_LIB_PATHS%"
+set "OPENVINO_LIB_PATHS=%INTEL_OPENVINO_DIR%\runtime\bin\intel64\Release;%INTEL_OPENVINO_DIR%\runtime\bin\intel64\Debug;%INTEL_OPENVINO_DIR%\runtime\bin\intel64\RelWithDebInfo;%OPENVINO_LIB_PATHS%"
 
 :: TBB
 if exist %INTEL_OPENVINO_DIR%\runtime\3rdparty\tbb (
@@ -99,7 +99,7 @@ if %pyversion_major% equ %PYTHON_VERSION_MAJOR% (
       if %pyversion_minor% leq %MAX_SUPPORTED_PYTHON_VERSION_MINOR% (
          set "check_pyversion=true"
       )
-   )   
+   )
 )
 
 if not "%check_pyversion%"=="true" (

@@ -946,6 +946,11 @@ void network::execute_impl(const std::vector<event::ptr>& events) {
         GPU_DEBUG_TRACE << "Start network execution (net_id : " << get_id() << ", iter :" << curr_iter << ")" << std::endl;
     }
 
+    {// PAUL test
+        std::cout << "============================================================================" << std::endl;
+        std::cout << "[network.execute] " << "Start network execution (net_id : " << get_id() << ", iter :" << curr_iter << ")" << std::endl;
+    }
+
     std::vector<memory::ptr> in_out_mem;
     auto is_surface_lock_check_needed = [&](const shared_mem_type& shared_mem_type) {
         return shared_mem_type == shared_mem_type::shared_mem_vasurface ||
@@ -1121,8 +1126,21 @@ void network::execute_impl(const std::vector<event::ptr>& events) {
 
         execute_primitive(inst, events);
         executed_prims++;
-        if (needs_flushing && executed_prims % flush_frequency == 0)
+        if (needs_flushing && executed_prims % flush_frequency == 0) {
             get_stream().flush();
+            // PAUL test
+            std::cout << "[network.execute] " << inst->id() << " : flush is done ..." << std::endl;
+        }
+
+        if (inst->get_impl()->is_onednn()
+            && inst->id() == "fullyconnectedcompressed:__module.model.layers.2.self_attn.o_proj/aten::linear/MatMul") {
+#if 1
+            std::cout << "[network.execute] " << inst->id() << " is not called clfinish [call clfinish]" << std::endl;
+#else
+            get_stream().finish();
+            std::cout << "[network.execute] " << inst->id() << " is called clfinish [call clfinish]" << std::endl;
+#endif
+        }
 
         // Dump output buffers of 'inst'
         GPU_DEBUG_IF(debug_config->dump_layers_path.length() > 0) {

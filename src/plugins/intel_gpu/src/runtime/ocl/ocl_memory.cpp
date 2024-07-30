@@ -475,6 +475,10 @@ gpu_usm::gpu_usm(ocl_engine* engine, const layout& layout, allocation_type type)
     , memory(engine, layout, type, nullptr)
     , _buffer(engine->get_usm_helper())
     , _host_buffer(engine->get_usm_helper()) {
+    auto before_current = engine->get_used_device_memory(type);
+    std::cout << "[ocl_memory::gpu_usm] [Before allocation] "
+                    <<  " engine_info (current=" << before_current << ";"
+                    << " max=" << engine->get_max_used_device_memory(type) << ")" << std::endl;
     switch (get_allocation_type()) {
     case allocation_type::usm_host:
         _buffer.allocateHost(_bytes_count);
@@ -489,8 +493,11 @@ gpu_usm::gpu_usm(ocl_engine* engine, const layout& layout, allocation_type type)
         CLDNN_ERROR_MESSAGE("gpu_usm allocation type",
             "Unknown unified shared memory type!");
     }
-
     m_mem_tracker = std::make_shared<MemoryTracker>(engine, _buffer.get(), layout.bytes_count(), type);
+    std::cout << "[ocl_memory::gpu_usm] [After_ allocation] allocate: " << _bytes_count << " + " << before_current
+                    << " = " << (_bytes_count + before_current) << ", "
+                    << " engine_info (current=" << engine->get_used_device_memory(type) << ";"
+                    << " max=" << engine->get_max_used_device_memory(type) << ")" << std::endl;
 }
 
 void* gpu_usm::lock(const stream& stream, mem_lock_type type) {
