@@ -1539,7 +1539,8 @@ event::ptr primitive_inst::execute(const std::vector<event::ptr>& events) {
     const auto& primitive_id = id();
     OPENVINO_ASSERT(_has_valid_input, primitive_id, " has invalid/unset input");
     GPU_DEBUG_GET_INSTANCE(debug_config);
-    {// PAUL test
+    // if (id() == "result:Result_76754") {// PAUL test
+    {
         std::cout << "-----------------------------------------------------------------" << std::endl;
         std::cout << "[primite_inst::execute] Execute " << id() << " (type: " << _impl_params->desc->type_string() << "), "
                     << _impl_params->get_output_layout().to_short_string() << std::endl;
