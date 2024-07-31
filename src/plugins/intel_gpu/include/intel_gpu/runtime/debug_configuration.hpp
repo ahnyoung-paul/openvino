@@ -78,6 +78,7 @@ enum class LogLevel : int8_t {
 #define GPU_DEBUG_PROFILED_STAGE_CACHE_HIT(val)
 #define GPU_DEBUG_PROFILED_STAGE_MEMALLOC_INFO(info)
 #define GPU_DEBUG_LOG_RAW(min_verbose_level) if (0) std::cout << cldnn::debug_configuration::prefix
+#define GPU_FILENAME ""
 #endif
 
 // Macro below is inserted to avoid unused variable warning when GPU_DEBUG_CONFIG is OFF

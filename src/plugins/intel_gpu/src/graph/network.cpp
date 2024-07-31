@@ -1129,16 +1129,16 @@ void network::execute_impl(const std::vector<event::ptr>& events) {
         if (needs_flushing && executed_prims % flush_frequency == 0) {
             get_stream().flush();
             // PAUL test
-            std::cout << "[network.execute] " << inst->id() << " : flush is done ..." << std::endl;
+            std::cout << __func__ << " " << inst->id() << " : flush is done ..." << std::endl;
         }
 
         if (inst->get_impl()->is_onednn()
             && inst->id() == "fullyconnectedcompressed:__module.model.layers.2.self_attn.o_proj/aten::linear/MatMul") {
 #if 1
-            std::cout << "[network.execute] " << inst->id() << " is not called clfinish [call clfinish]" << std::endl;
+            std::cout << __func__ << " " << inst->id() << " is not called clfinish [call clfinish]" << std::endl;
 #else
             get_stream().finish();
-            std::cout << "[network.execute] " << inst->id() << " is called clfinish [call clfinish]" << std::endl;
+            std::cout << __func__ << " " << inst->id() << " is called clfinish [call clfinish]" << std::endl;
 #endif
         }
 

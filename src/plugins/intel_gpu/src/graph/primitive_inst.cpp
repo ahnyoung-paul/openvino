@@ -1539,17 +1539,6 @@ event::ptr primitive_inst::execute(const std::vector<event::ptr>& events) {
     const auto& primitive_id = id();
     OPENVINO_ASSERT(_has_valid_input, primitive_id, " has invalid/unset input");
     GPU_DEBUG_GET_INSTANCE(debug_config);
-    // if (id() == "result:Result_76754") {// PAUL test
-    {
-        std::cout << "-----------------------------------------------------------------" << std::endl;
-        std::cout << "[primite_inst::execute] Execute " << id() << " (type: " << _impl_params->desc->type_string() << "), "
-                    << _impl_params->get_output_layout().to_short_string() << std::endl;
-        for (size_t i = 0; i < _deps.size(); ++i) {
-            std::cout << "- inputs[" << i << "] : " <<  _deps[i].first->id()
-                << ", " << _impl_params->get_input_layout(i).to_short_string() << std::endl;
-        }
-        std::cout << "-----------------------------------------------------------------" << std::endl;
-    }
     GPU_DEBUG_TRACE_DETAIL << "-----------------------------------------------------------------" << std::endl;
     GPU_DEBUG_TRACE_DETAIL << "Execute " << id() << " (type: " << _impl_params->desc->type_string() << ") " << std::endl;
     for (size_t i = 0; i < _deps.size(); ++i) {
@@ -1669,6 +1658,16 @@ event::ptr primitive_inst::execute(const std::vector<event::ptr>& events) {
         }
         return false;
     };
+    {
+        std::stringstream ss;
+        ss << GPU_FILENAME << ":" <<__LINE__ << ":" << __func__ << ": " << id() << ": execute " << _impl->get_kernel_name() << ", ";
+        ss << " (type: " << _impl_params->desc->type_string() << "), "
+                    << _impl_params->get_output_layout().to_short_string() << ",";
+        for (size_t i = 0; i < _deps.size(); ++i) {
+            ss << _impl_params->get_input_layout(i).to_short_string() << ",";
+        }
+        std::cout << ss.str() << std::endl;
+    }
 
     // Output buffer may be changed under the following conditions, so we need to set args to kernel on each iteration
     if ((is_dynamic() && need_args_update) || has_mutable_input() || is_output() || has_dynamic_dependencies_insts(this)) {
