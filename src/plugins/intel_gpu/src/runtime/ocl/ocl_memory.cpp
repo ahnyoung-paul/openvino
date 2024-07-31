@@ -494,10 +494,21 @@ gpu_usm::gpu_usm(ocl_engine* engine, const layout& layout, allocation_type type)
             "Unknown unified shared memory type!");
     }
     m_mem_tracker = std::make_shared<MemoryTracker>(engine, _buffer.get(), layout.bytes_count(), type);
+    auto print_size = [&](size_t mem_size) -> std::string {
+        std::stringstream ss;
+        ss << "[" << mem_size << ", " << (static_cast<float>(mem_size) / 1024 / 1024 / 1024) << " GB]";
+        return ss.str();
+    };
     std::cout << "[ocl_memory::gpu_usm] [After_ allocation] allocate: " << _bytes_count << " + " << before_current
-                    << " = " << (_bytes_count + before_current) << ", "
-                    << " engine_info (current=" << engine->get_used_device_memory(type) << ";"
-                    << " max=" << engine->get_max_used_device_memory(type) << ")" << std::endl;
+        << " = " << (_bytes_count + before_current) << ", allocation_type: " << type
+        << ", engine_info "
+        << " (cl_mem: current=" << print_size(engine->get_used_device_memory(allocation_type::cl_mem)) << ";"
+            << " max=" << print_size(engine->get_max_used_device_memory(allocation_type::cl_mem)) << ")"
+        << ", (usm_device: current=" << print_size(engine->get_used_device_memory(allocation_type::usm_device)) << ";"
+            << " max=" << print_size(engine->get_max_used_device_memory(allocation_type::usm_device)) << ")"
+        << ", (usm_host: current=" << print_size(engine->get_used_device_memory(allocation_type::usm_host)) << ";"
+            << " max=" << print_size(engine->get_max_used_device_memory(type)) << ")"
+        << std::endl;
 }
 
 void* gpu_usm::lock(const stream& stream, mem_lock_type type) {
