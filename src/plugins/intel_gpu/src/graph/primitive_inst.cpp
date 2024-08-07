@@ -1579,6 +1579,16 @@ event::ptr primitive_inst::execute(const std::vector<event::ptr>& events) {
         if (can_skip_execution) {
             auto ev = get_network().get_stream().create_user_event(true);
             update_shape_done_by_other = false; // reset
+            {
+                std::stringstream ss;
+                ss << GPU_FILENAME << ":" <<__LINE__ << ":" << __func__ << ": " << id() << ": can_skip_execution, ";
+                ss << " (type: " << _impl_params->desc->type_string() << "), "
+                            << _impl_params->get_output_layout().to_short_string() << ",";
+                for (size_t i = 0; i < _deps.size(); ++i) {
+                    ss << _impl_params->get_input_layout(i).to_short_string() << ",";
+                }
+                std::cout << ss.str() << std::endl;
+            }
             return ev;
         }
 
@@ -1660,7 +1670,11 @@ event::ptr primitive_inst::execute(const std::vector<event::ptr>& events) {
     };
     {
         std::stringstream ss;
-        ss << GPU_FILENAME << ":" <<__LINE__ << ":" << __func__ << ": " << id() << ": execute " << _impl->get_kernel_name() << ", ";
+        if (can_be_optimized()) {
+            ss << GPU_FILENAME << ":" <<__LINE__ << ":" << __func__ << ": " << id() << ": optimized_out, ";
+        } else {
+            ss << GPU_FILENAME << ":" <<__LINE__ << ":" << __func__ << ": " << id() << ": execute " << _impl->get_kernel_name() << ", ";
+        }
         ss << " (type: " << _impl_params->desc->type_string() << "), "
                     << _impl_params->get_output_layout().to_short_string() << ",";
         for (size_t i = 0; i < _deps.size(); ++i) {
@@ -1725,11 +1739,11 @@ event::ptr primitive_inst::execute(const std::vector<event::ptr>& events) {
 
         try {
             auto ev = _impl->execute(dependencies, *this);
-            try {
-                get_network().get_stream().wait_for_events({ev});
-            } catch (std::exception& ex) {
-                std::cout << "[Mistral] Error at waif_for_events " << ex.what() << std::endl;
-            }
+            // try {
+            //     get_network().get_stream().wait_for_events({ev});
+            // } catch (std::exception& ex) {
+            //     std::cout << "[Mistral] Error at waif_for_events " << ex.what() << std::endl;
+            // }
 
             GPU_DEBUG_IF(!debug_config->dump_profiling_data.empty()) {
                 get_network().get_stream().wait_for_events({ev});
