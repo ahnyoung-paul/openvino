@@ -1726,8 +1726,14 @@ event::ptr primitive_inst::execute(const std::vector<event::ptr>& events) {
         event::ptr ev = nullptr;
         try {
             ev = _impl->execute(dependencies, *this);
+            try {
+                get_network().get_stream().finish();
+            } catch (std::exception& ex) {
+                std::cout << "[Mistral] Error at clfinish " << ex.what() << std::endl;
+                exit(0);
+            }
         } catch (std::exception& ex) {
-            std::cout << "[Mistral] Error " << ex.what() << std::endl;
+            std::cout << "[Mistral] Error at exec " << ex.what() << std::endl;
             exit(0);
         }
         GPU_DEBUG_IF(!debug_config->dump_profiling_data.empty()) {
