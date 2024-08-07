@@ -1722,8 +1722,14 @@ event::ptr primitive_inst::execute(const std::vector<event::ptr>& events) {
 
     {
         GPU_DEBUG_PROFILED_STAGE(instrumentation::pipeline_stage::inference);
-        auto ev = _impl->execute(dependencies, *this);
 
+        event::ptr ev = nullptr;
+        try {
+            ev = _impl->execute(dependencies, *this);
+        } catch (std::exception& ex) {
+            std::cout << "[Mistral] Error " << ex.what() << std::endl;
+            exit(0);
+        }
         GPU_DEBUG_IF(!debug_config->dump_profiling_data.empty()) {
             get_network().get_stream().wait_for_events({ev});
 
