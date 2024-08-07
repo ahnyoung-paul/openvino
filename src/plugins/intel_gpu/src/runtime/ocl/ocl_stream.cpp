@@ -302,12 +302,12 @@ event::ptr ocl_stream::enqueue_kernel(kernel& kernel,
 
     try {
         _command_queue.enqueueNDRangeKernel(kern, cl::NullRange, global, local, dep_events_ptr, set_output_event ? &ret_ev : nullptr);
-        // if (_queue_counter > 0 && _queue_counter % 3420 == 0) {
-        //     finish();
-        //     std::cout << "[ocl_stream::enqueue_kernel] Call finish, _queue_counter: " << _queue_counter << std::endl;
-        // } else {
+        if (_queue_counter > 0 && _queue_counter % 3420 == 0) {
+            finish();
+            std::cout << "[ocl_stream::enqueue_kernel] Call finish, _queue_counter: " << _queue_counter << std::endl;
+        } else {
             std::cout << "[ocl_stream::enqueue_kernel] _queue_counter: " << _queue_counter << std::endl;
-        // }
+        }
     } catch (cl::Error const& err) {
         ocl::rethrow_or_exit(err, _engine.get_device_info());
     }
