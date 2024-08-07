@@ -1723,33 +1723,33 @@ event::ptr primitive_inst::execute(const std::vector<event::ptr>& events) {
     {
         GPU_DEBUG_PROFILED_STAGE(instrumentation::pipeline_stage::inference);
 
-        event::ptr ev = nullptr;
         try {
-            ev = _impl->execute(dependencies, *this);
+            auto ev = _impl->execute(dependencies, *this);
             try {
-                get_network().get_stream().finish();
+                get_network().get_stream().wait_for_events({ev});
             } catch (std::exception& ex) {
-                std::cout << "[Mistral] Error at clfinish " << ex.what() << std::endl;
-                exit(0);
+                std::cout << "[Mistral] Error at waif_for_events " << ex.what() << std::endl;
             }
+
+            GPU_DEBUG_IF(!debug_config->dump_profiling_data.empty()) {
+                get_network().get_stream().wait_for_events({ev});
+
+                if (ev != nullptr) {
+                    auto profiling_info = ev->get_profiling_info();
+                    for (const auto &interval : profiling_info) {
+                        if (interval.stage == cldnn::instrumentation::profiling_stage::executing) {
+                            GPU_DEBUG_CODE(stage_prof.set_custom_stage_duration(interval.value->value()));
+                        }
+                    }
+                }
+            }
+
+            return ev;
         } catch (std::exception& ex) {
             std::cout << "[Mistral] Error at exec " << ex.what() << std::endl;
             exit(0);
         }
-        GPU_DEBUG_IF(!debug_config->dump_profiling_data.empty()) {
-            get_network().get_stream().wait_for_events({ev});
 
-            if (ev != nullptr) {
-                auto profiling_info = ev->get_profiling_info();
-                for (const auto &interval : profiling_info) {
-                    if (interval.stage == cldnn::instrumentation::profiling_stage::executing) {
-                        GPU_DEBUG_CODE(stage_prof.set_custom_stage_duration(interval.value->value()));
-                    }
-                }
-            }
-        }
-
-        return ev;
     }
 }
 
