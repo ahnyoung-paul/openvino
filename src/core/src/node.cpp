@@ -698,8 +698,16 @@ bool ov::Node::evaluate_symbol(TensorSymbolVector& output_symbols) const {
 
 bool ov::Node::constant_fold(OutputVector& output_values, const OutputVector& input_values) {
     OV_ITT_SCOPED_TASK(ov::itt::domains::core, "Node::constant_fold");
+    bool is_debug = (get_friendly_name() == "self.model.embed_tokens.weight_compressed/fq_weights_0"
+        || get_friendly_name() == "__module.model.embed_tokens/aten::embedding/Gather"
+        || get_friendly_name() == "MatMul_49243"
+        || get_friendly_name() == "Multiply_65106"
+        || get_friendly_name() == "Gather_65108"
+        || get_friendly_name() == "MatMul_69796");
 
     if (is_const_fold_disabled()) {
+        if (is_debug)
+            std::cout << "[ov::Node::constant_fold][" << get_friendly_name() << ", " << get_name() << "]" << " const fold disabled" << std::endl;
         return false;
     }
 
@@ -707,8 +715,19 @@ bool ov::Node::constant_fold(OutputVector& output_values, const OutputVector& in
     bool all_constants = std::all_of(input_values.begin(), input_values.end(), [](const Output<Node>& input) {
         return ov::as_type_ptr<ov::op::v0::Constant>(input.get_node_shared_ptr());
     });
-    if (!all_constants)
+    if (!all_constants) {
+        if (is_debug) {
+            std::stringstream ss;
+            ss << "[ov::Node::constant_fold][" << get_friendly_name() << ", " << get_name() << "]"
+                << " not all constants, num inputs : " << input_values.size() << "{";
+            for (auto& in : input_values) {
+                ss << in.get_node_shared_ptr()->get_friendly_name() << ",";
+            }
+            ss << "}";
+            std::cout << ss.str() << std::endl;
+        }
         return false;
+    }
 
     NodeVector nodes;
     TensorVector input_tensors;
@@ -737,6 +756,8 @@ bool ov::Node::constant_fold(OutputVector& output_values, const OutputVector& in
         }
         return true;
     }
+    if (is_debug)
+        std::cout << "[ov::Node::constant_fold][" << get_friendly_name() << ", " << get_name() << "]" << " fail to evaluate" << std::endl;
     return false;
 }
 

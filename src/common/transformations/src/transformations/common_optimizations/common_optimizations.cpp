@@ -118,6 +118,7 @@
 #include "transformations/op_conversions/softsign_decomposition.hpp"
 #include "transformations/op_conversions/unique_decomposition.hpp"
 #include "transformations/symbolic_transformations/symbolic_optimizations.hpp"
+#include "openvino/pass/visualize_tree.hpp"
 
 bool ov::pass::CommonOptimizations::run_on_model(const std::shared_ptr<ov::Model>& f) {
     RUN_ON_FUNCTION_SCOPE(CommonOptimizations);
@@ -126,13 +127,33 @@ bool ov::pass::CommonOptimizations::run_on_model(const std::shared_ptr<ov::Model
 
     using namespace ov::pass;
     REGISTER_PASS(manager, DisableDecompressionConvertConstantFolding)
+    // {
+    //     const std::string dump_path = "/home/ahnyoung/cldnn.01/dumps/gemma-7b/ngraphs/step07.CommonOptimizations.debug.01.svg";
+    //     manager.register_pass<ov::pass::VisualizeTree>(dump_path);
+    //     manager.run_passes(f);
+    //     std::cout << "Stop app to debug [" << dump_path << "] ...." << std::endl;
+    //     exit(0);
+    // }
     // MOCTransformations contain StridedSliceOptimization transformation,
     // so we must call SliceToStridedSlice before MOCTransformations call
     REGISTER_PASS(manager, SliceToStridedSlice, true)
+    {
+        const std::string dump_path = "/home/ahnyoung/cldnn.01/dumps/gemma-7b/ngraphs/step07.CommonOptimizations.debug.01.SliceToStridedSlice.svg";
+        manager.register_pass<ov::pass::VisualizeTree>(dump_path);
+        manager.run_passes(f);
+        std::cout << "Stop app to debug [" << dump_path << "] ...." << std::endl;
+        exit(0);
+    }
     // Disable low_precision_enabled as all plugins handle low-precision sub-graph manually
     // before CommonOptimization pipeline execution
     REGISTER_PASS(manager, MOCTransformations, true, false)
-
+    {
+        const std::string dump_path = "/home/ahnyoung/cldnn.01/dumps/gemma-7b/ngraphs/step07.CommonOptimizations.debug.01.MOCTransformations.svg";
+        manager.register_pass<ov::pass::VisualizeTree>(dump_path);
+        manager.run_passes(f);
+        std::cout << "Stop app to debug [" << dump_path << "] ...." << std::endl;
+        exit(0);
+    }
     // Enabling conversion of FP16 IR to legacy representation, each plugin have to disable it
     // after support for FP16 IR is implemented
     REGISTER_PASS(manager, ConvertCompressedOnlyToLegacy)
@@ -150,8 +171,21 @@ bool ov::pass::CommonOptimizations::run_on_model(const std::shared_ptr<ov::Model
 
     manager.register_pass<ConcatReduceFusion>();
     REGISTER_DISABLED_PASS(manager, ConvertPadToGroupConvolution)
+    {
+        const std::string dump_path = "/home/ahnyoung/cldnn.01/dumps/gemma-7b/ngraphs/step07.CommonOptimizations.debug.01.ConvertPadToGroupConvolution.svg";
+        manager.register_pass<ov::pass::VisualizeTree>(dump_path);
+        manager.run_passes(f);
+        std::cout << "Stop app to debug [" << dump_path << "] ...." << std::endl;
+        exit(0);
+    }
     REGISTER_DISABLED_PASS(manager, ConvertInterpolate1ToInterpolate4)
-
+    {
+        const std::string dump_path = "/home/ahnyoung/cldnn.01/dumps/gemma-7b/ngraphs/step07.CommonOptimizations.debug.01.ConvertInterpolate1ToInterpolate4.svg";
+        manager.register_pass<ov::pass::VisualizeTree>(dump_path);
+        manager.run_passes(f);
+        std::cout << "Stop app to debug [" << dump_path << "] ...." << std::endl;
+        exit(0);
+    }
     auto decomp = manager.register_pass<GraphRewrite>();
     ADD_MATCHER(decomp, ScaledDotProductAttentionDecomposition)
     ADD_MATCHER(decomp, Gelu7Downgrade)
@@ -201,6 +235,13 @@ bool ov::pass::CommonOptimizations::run_on_model(const std::shared_ptr<ov::Model
     ADD_MATCHER(multiply_fusions, MultiplyGroupConvolutionFusion)
     ADD_MATCHER(multiply_fusions, MultiplyConvolutionBackpropDataFusion)
     ADD_MATCHER(multiply_fusions, MultiplyGroupConvolutionBackpropDataFusion)
+    {
+        const std::string dump_path = "/home/ahnyoung/cldnn.01/dumps/gemma-7b/ngraphs/step07.CommonOptimizations.debug.01.MultiplyGroupConvolutionBackpropDataFusion.svg";
+        manager.register_pass<ov::pass::VisualizeTree>(dump_path);
+        manager.run_passes(f);
+        std::cout << "Stop app to debug [" << dump_path << "] ...." << std::endl;
+        exit(0);
+    }
     ADD_MATCHER(multiply_fusions, MatMulMultiplyFusion)
     multiply_fusions->set_name("ov::pass::MultiplyFusions");
 
@@ -251,6 +292,13 @@ bool ov::pass::CommonOptimizations::run_on_model(const std::shared_ptr<ov::Model
     // because we cannot insert any MaxPools since they may prevent
     // other optimizations
     REGISTER_PASS(manager, StridesOptimization)
+    // {
+    //     const std::string dump_path = "/home/ahnyoung/cldnn.01/dumps/gemma-7b/ngraphs/step07.CommonOptimizations.debug.01.StridesOptimization.svg";
+    //     manager.register_pass<ov::pass::VisualizeTree>(dump_path);
+    //     manager.run_passes(f);
+    //     std::cout << "Stop app to debug [" << dump_path << "] ...." << std::endl;
+    //     exit(0);
+    // }
     REGISTER_PASS(manager, Validate)
     manager.run_passes(f);
 

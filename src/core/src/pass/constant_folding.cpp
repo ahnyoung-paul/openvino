@@ -100,21 +100,51 @@ static void remove_requires_precision_conversion_attribute(const std::shared_ptr
 
 bool ov::pass::ConstantFolding::run_on_model(const std::shared_ptr<ov::Model>& model) {
     RUN_ON_MODEL_SCOPE(ConstantFolding);
-
+    std::cout << "ov::pass::ConstantFolding::run_on_model ............" << std::endl;
     bool rewritten = pre_calculated_values_folding(model);
 
+    auto check_issued_node = [&](const std::string tag) {
+        for (const auto& original_node : model->get_ordered_ops()) {
+            auto node = original_node;
+            bool is_debug = node->get_friendly_name() == "self.model.embed_tokens.weight_compressed/fq_weights_0";
+            if (is_debug) {
+                std::cout << "[ConstantFolding][" << tag << "] " << node->get_friendly_name() << ", " << node->get_name()
+                    << ", out_type: " << node->get_output_element_type(0) << std::endl;
+            }
+        }
+    };
+
+    check_issued_node("BEFORE");
+    size_t idx = 0;
     for (const auto& original_node : model->get_ordered_ops()) {
         auto node = original_node;
+        bool is_debug = (node->get_friendly_name() == "self.model.embed_tokens.weight_compressed/fq_weights_0"
+            || node->get_friendly_name() == "__module.model.embed_tokens/aten::embedding/Gather"
+            || node->get_friendly_name() ==  "MatMul_49243");
+        // bool is_debug = true;
+        if (is_debug)
+            std::cout << std::endl
+                << "[ConstantFolding][Step00][" << idx << "] " << node->get_friendly_name() << ", " << node->get_name() << std::endl;
+
         if (node_has_requires_precision_conversion_attribute(node)) {
             remove_requires_precision_conversion_attribute(node);
             node = util::convert_to_supported_precision(node.get());
+            if (is_debug)
+                std::cout << "[ConstantFolding][Step01.01][" << idx << "][convert_to_supported_precision] cloned node: "
+                    << node->get_friendly_name() << ", " << node->get_name() << std::endl;
         } else {
             rewritten = restore_original_input_precision(node) || rewritten;
+            if (is_debug)
+                std::cout << "[ConstantFolding][Step01.02][" << idx << "][restore_original_input_precision] "
+                    << node->get_friendly_name() << ", " << node->get_name() << std::endl;
         }
 
         if (rewritten) {
             node->validate_and_infer_types();
         }
+
+        if (is_debug)
+            check_issued_node("AFTER_STEP01.....");
 
         OutputVector replacements(node->get_output_size());
         if (node->constant_fold(replacements, node->input_values())) {
@@ -140,6 +170,14 @@ bool ov::pass::ConstantFolding::run_on_model(const std::shared_ptr<ov::Model>& m
                     copy_runtime_info(original_node, replacement_ptr);
 
                     rewritten = true;
+                    if (is_debug) {
+                        std::cout << "[ConstantFolding][Step02.01][" << idx << "][CF is succeed][node] "
+                                    << node->get_friendly_name() << ", " << node->get_name() << std::endl;
+                        std::cout << "[ConstantFolding][Step02.01][" << idx << "][CF is succeed][original_node] " << original_node->get_friendly_name()
+                                    << ", " << original_node->get_name() << std::endl;
+                        std::cout << "[ConstantFolding][Step02.01][" << idx << "][CF is succeed][replacement_ptr] "
+                                    << replacement_ptr->get_friendly_name() << ", " << replacement_ptr->get_name() << std::endl;
+                    }
                 }
             }
         } else {
@@ -157,9 +195,21 @@ bool ov::pass::ConstantFolding::run_on_model(const std::shared_ptr<ov::Model>& m
             if (restored) {
                 original_node->validate_and_infer_types();
                 rewritten = true;
+                if (is_debug) {
+                    std::cout << "[ConstantFolding][Step02.02][" << idx << "][CF is failed] " << node->get_friendly_name() << ", " << node->get_name() << std::endl;
+                    std::cout << "[ConstantFolding][Step02.02][" << idx << "][CF is failed][original_node] " << original_node->get_friendly_name()
+                                << ", " << original_node->get_name() << std::endl;
+                }
             }
         }
+        if (is_debug) {
+            check_issued_node("AFTER_STEP02.....");
+            std::cout << "[ConstantFolding][Step03][" << idx << "] " << node->get_friendly_name() << ", " << node->get_name() << std::endl << std::endl;
+        }
+        idx++;
     }
+
+    check_issued_node("AFTER_");
 
     return rewritten;
 }

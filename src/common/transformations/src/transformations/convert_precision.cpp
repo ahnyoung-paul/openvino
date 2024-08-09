@@ -21,6 +21,7 @@
 #include "transformations/rt_info/keep_const_precision.hpp"
 #include "transformations/rt_info/original_precision_attribute.hpp"
 #include "transformations/utils/utils.hpp"
+#include "openvino/pass/visualize_tree.hpp"
 
 using namespace ov;
 
@@ -496,7 +497,21 @@ bool ov::pass::ConvertPrecision::run_on_model(const std::shared_ptr<ov::Model>& 
     if (m_keep_precision_sensitive_in_fp32) {
         pass::Manager manager(get_pass_config(), "KeepPrecisionSensitiveInFP32:RemoveConverts");
         manager.register_pass<pass::EnableDecompressionConvertConstantFolding>();
+        // {
+        //     const std::string dump_path = "/home/ahnyoung/cldnn.01/dumps/gemma-7b/ngraphs/convert_precision.Before.ConstantFolding.debug.svg";
+        //     manager.register_pass<ov::pass::VisualizeTree>(dump_path);
+        //     manager.run_passes(f);
+        //     std::cout << "Stop app to debug [" << dump_path << "] ...." << std::endl;
+        //     exit(0);
+        // }
         manager.register_pass<pass::ConstantFolding>();
+        {
+            const std::string dump_path = "/home/ahnyoung/cldnn.01/dumps/gemma-7b/ngraphs/convert_precision.After.ConstantFolding.debug.svg";
+            manager.register_pass<ov::pass::VisualizeTree>(dump_path);
+            manager.run_passes(f);
+            std::cout << "Stop app to debug [" << dump_path << "] ...." << std::endl;
+            exit(0);
+        }
         manager.run_passes(f);
     }
 

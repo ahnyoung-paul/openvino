@@ -149,6 +149,7 @@
 #include "transformations/rt_info/fused_names_attribute.hpp"
 #include "transformations/rt_info/keep_const_precision.hpp"
 #include "transformations/smart_reshape/matmul_sr.hpp"
+#include "transformations/fp16_compression/mark_decompression_convert_constant_folding.hpp"
 
 namespace {
 template<typename T>
@@ -218,6 +219,14 @@ void TransformationsPipeline::apply(std::shared_ptr<ov::Model> func) {
             ov::disable_keep_const_precision(node);
         }
 
+        // {
+        //     const std::string dump_path = "/home/ahnyoung/cldnn.01/dumps/gemma-7b/ngraphs/step01.debug.svg";
+        //     manager.register_pass<ov::pass::VisualizeTree>(dump_path);
+        //     manager.run_passes(func);
+        //     std::cout << "Stop app to debug [" << dump_path << "] ...." << std::endl;
+        //     exit(0);
+        // }
+
         auto is_model_quantized = ov::pass::low_precision::LowPrecision::isFunctionQuantized(func);
         enableInt8 = config.get_property(ov::intel_gpu::enable_lp_transformations) && is_model_quantized;
         if (enableInt8) {
@@ -228,6 +237,13 @@ void TransformationsPipeline::apply(std::shared_ptr<ov::Model> func) {
         manager.register_pass<ov::pass::InitNodeInfo>();
         manager.register_pass<EinsumDecomposition>();
 
+        // {
+        //     const std::string dump_path = "/home/ahnyoung/cldnn.01/dumps/gemma-7b/ngraphs/step02.debug.svg";
+        //     manager.register_pass<ov::pass::VisualizeTree>(dump_path);
+        //     manager.run_passes(func);
+        //     std::cout << "Stop app to debug [" << dump_path << "] ...." << std::endl;
+        //     exit(0);
+        // }
         precisions_map fp_convert_precision_map = {
                 {ov::element::f64, ov::element::f32}
         };
@@ -286,6 +302,14 @@ void TransformationsPipeline::apply(std::shared_ptr<ov::Model> func) {
         manager.register_pass<ov::pass::BroadcastElementwiseFusion>();
         manager.register_pass<ov::pass::BroadcastTransition>();
 
+        // {
+        //     const std::string dump_path = "/home/ahnyoung/cldnn.01/dumps/gemma-7b/ngraphs/step03.debug.svg";
+        //     manager.register_pass<ov::pass::VisualizeTree>(dump_path);
+        //     manager.run_passes(func);
+        //     std::cout << "Stop app to debug [" << dump_path << "] ...." << std::endl;
+        //     exit(0);
+        // }
+
         manager.register_pass<ov::pass::KeepConstantsPrecisionAndAddConverts>();
         pass_config->set_callback<ov::pass::KeepConstantsPrecisionAndAddConverts>(
             [](const_node_ptr& node) -> bool {
@@ -295,6 +319,14 @@ void TransformationsPipeline::apply(std::shared_ptr<ov::Model> func) {
                 }
                 return !is_type<ov::op::v0::MatMul>(next_node);
             });
+
+        // {
+        //     const std::string dump_path = "/home/ahnyoung/cldnn.01/dumps/gemma-7b/ngraphs/step04.debug.svg";
+        //     manager.register_pass<ov::pass::VisualizeTree>(dump_path);
+        //     manager.run_passes(func);
+        //     std::cout << "Stop app to debug [" << dump_path << "] ...." << std::endl;
+        //     exit(0);
+        // }
 
         manager.register_pass<ov::intel_gpu::GroupNormComposition>();
 
@@ -307,6 +339,14 @@ void TransformationsPipeline::apply(std::shared_ptr<ov::Model> func) {
         if (!is_model_quantized)
             pass_config->set_callback<ov::pass::MarkDequantizationSubgraph>(is_non_supported_decompression_op);
 
+        // {
+        //     const std::string dump_path = "/home/ahnyoung/cldnn.01/dumps/gemma-7b/ngraphs/step06.Before.ConvertPrecision.debug.svg";
+        //     manager.register_pass<ov::pass::VisualizeTree>(dump_path);
+        //     manager.run_passes(func);
+        //     std::cout << "Stop app to debug [" << dump_path << "] ...." << std::endl;
+        //     exit(0);
+        // }
+
         const bool keep_precision_sensitive_in_fp32_1 = true;
         const bool convert_input_output_precision = false;
         const bool store_original_precision_as_rt_attribute = true;
@@ -315,8 +355,37 @@ void TransformationsPipeline::apply(std::shared_ptr<ov::Model> func) {
                                                           keep_precision_sensitive_in_fp32_1,
                                                           convert_input_output_precision,
                                                           store_original_precision_as_rt_attribute);
+        // manager.register_pass<ov::pass::KeepConstAndDecompression>();
+        // pass_config->set_callback<ov::pass::KeepConstAndDecompression>([](const_node_ptr &node) -> bool {
+        //     const auto consumers = node->get_output_target_inputs(0);
+        //     return std::all_of(consumers.begin(), consumers.end(), [](const ov::Input<ov::Node>& consumer) {
+        //         return !ov::is_type<ov::op::v0::MatMul>(consumer.get_node());
+        //     });
+        // });
+        // {
+        //     const std::string dump_path = "/home/ahnyoung/cldnn.01/dumps/gemma-7b/ngraphs/step06.After.KeepConstAndDecompression.debug.svg";
+        //     manager.register_pass<ov::pass::VisualizeTree>(dump_path);
+        //     manager.run_passes(func);
+        //     std::cout << "Stop app to debug [" << dump_path << "] ...." << std::endl;
+        //     exit(0);
+        // }
+        // {
+        //     const std::string dump_path = "/home/ahnyoung/cldnn.01/dumps/gemma-7b/ngraphs/step06.After.ConvertPrecision.debug.svg";
+        //     manager.register_pass<ov::pass::VisualizeTree>(dump_path);
+        //     manager.run_passes(func);
+        //     std::cout << "Stop app to debug [" << dump_path << "] ...." << std::endl;
+        //     exit(0);
+        // }
 
         manager.register_pass<ov::pass::CommonOptimizations>();
+
+        // {
+        //     const std::string dump_path = "/home/ahnyoung/cldnn.01/dumps/gemma-7b/ngraphs/step07.debug.svg";
+        //     manager.register_pass<ov::pass::VisualizeTree>(dump_path);
+        //     manager.run_passes(func);
+        //     std::cout << "Stop app to debug [" << dump_path << "] ...." << std::endl;
+        //     exit(0);
+        // }
 
         pass_config->set_callback<ov::pass::ScaledDotProductAttentionDecomposition>([&](const std::shared_ptr<const ov::Node> node){
             GPU_DEBUG_IF(cldnn::debug_configuration::get_instance()->enable_sdpa != -1) {
@@ -368,6 +437,14 @@ void TransformationsPipeline::apply(std::shared_ptr<ov::Model> func) {
             return true;
         });
 
+        {
+            const std::string dump_path = "/home/ahnyoung/cldnn.01/dumps/gemma-7b/ngraphs/step08.debug.svg";
+            manager.register_pass<ov::pass::VisualizeTree>(dump_path);
+            manager.run_passes(func);
+            std::cout << "Stop app to debug [" << dump_path << "] ...." << std::endl;
+            exit(0);
+        }
+
         manager.register_pass<ov::pass::WrapInterpolateIntoTransposes>();
         manager.register_pass<ov::pass::TransposeSinking>();
 
@@ -381,6 +458,14 @@ void TransformationsPipeline::apply(std::shared_ptr<ov::Model> func) {
         manager.register_pass<ov::pass::ConvertSequenceToTensorIterator>();
         manager.register_pass<ov::pass::ConvertOpSet3ToOpSet2>();
         manager.register_pass<ov::pass::ConvertOpSet2ToOpSet1>();
+
+        {
+            const std::string dump_path = "/home/ahnyoung/cldnn.01/dumps/gemma-7b/ngraphs/step09.debug.svg";
+            manager.register_pass<ov::pass::VisualizeTree>(dump_path);
+            manager.run_passes(func);
+            std::cout << "Stop app to debug [" << dump_path << "] ...." << std::endl;
+            exit(0);
+        }
 
         manager.register_pass<ov::pass::LSTMCellDecomposition>();
         manager.register_pass<ov::pass::GRUCellDecomposition>();
@@ -406,6 +491,14 @@ void TransformationsPipeline::apply(std::shared_ptr<ov::Model> func) {
         manager.register_pass<ov::pass::ConvertMulticlassNmsToMulticlassNmsIE>();
         manager.register_pass<ov::pass::TransposeMatMul>();
         manager.register_pass<ov::pass::ConvertPad12ToPad1, false>();
+
+        {
+            const std::string dump_path = "/home/ahnyoung/cldnn.01/dumps/gemma-7b/ngraphs/step10.debug.svg";
+            manager.register_pass<ov::pass::VisualizeTree>(dump_path);
+            manager.run_passes(func);
+            std::cout << "Stop app to debug [" << dump_path << "] ...." << std::endl;
+            exit(0);
+        }
 
         precisions_map int_convert_precision_map {
                 {ov::element::i64, ov::element::i32},
@@ -638,6 +731,7 @@ void TransformationsPipeline::apply(std::shared_ptr<ov::Model> func) {
             });
         }
 
+        manager.register_pass<ov::pass::VisualizeTree>("/home/ahnyoung/cldnn.01/dumps/gemma-7b/ngraphs/step02.svg");
         manager.run_passes(func);
     }
 
@@ -751,6 +845,7 @@ void TransformationsPipeline::apply(std::shared_ptr<ov::Model> func) {
             reshapeIgnorePerTensorQuantizationCheck = true;
         auto params = LayerTransformation::Params(true, element::f32, defaultPrecisions, reshapeIgnorePerTensorQuantizationCheck);
         lptManager.register_pass<LowPrecision>(supportedPrecisions, perTensorQuantization, params);
+        lptManager.register_pass<ov::pass::VisualizeTree>("/home/ahnyoung/cldnn.01/dumps/gemma-7b/ngraphs/step03.svg");
         lptManager.run_passes(func);
     }
 
@@ -772,6 +867,7 @@ void TransformationsPipeline::apply(std::shared_ptr<ov::Model> func) {
                 return num_iter >= 16;
             });
 
+        manager.register_pass<ov::pass::VisualizeTree>("/home/ahnyoung/cldnn.01/dumps/gemma-7b/ngraphs/step04.svg");
         manager.run_passes(func);
     }
 
@@ -855,8 +951,12 @@ void TransformationsPipeline::apply(std::shared_ptr<ov::Model> func) {
             manager.register_pass<ov::intel_gpu::PrintModelStatistics>();
         }
 
+        manager.register_pass<ov::pass::VisualizeTree>("/home/ahnyoung/cldnn.01/dumps/gemma-7b/ngraphs/step05.svg");
         manager.run_passes(func);
     }
+
+    std::cout << "Exit for debug ...." << std::endl;
+    exit(0);
 }
 }  // namespace intel_gpu
 }  // namespace ov
