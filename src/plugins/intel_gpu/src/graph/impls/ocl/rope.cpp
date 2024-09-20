@@ -44,8 +44,9 @@ struct rope_impl : typed_primitive_impl_ocl<rope> {
         params.slice_start = primitive->config.slice_start;
         params.slice_stop = primitive->config.slice_stop;
 
-        params.axis = primitive->config.is_qwen || primitive->config.is_chatglm ? 2 : 3;
-        params.num_of_inputs = primitive->config.is_chatglm || primitive->config.is_interleaved ? 2 : 3;
+        // TODO: PAUL_ROPE check
+        params.axis = primitive->config.is_qwen  || primitive->config.is_chatglm || primitive->config.is_chatglm4 ? 2 : 3;
+        params.num_of_inputs = primitive->config.is_chatglm4 ||primitive->config.is_chatglm || primitive->config.is_interleaved ? 2 : 3;
 
         if (params.gather_rank > 0) {
             params.num_of_inputs++;
@@ -53,6 +54,7 @@ struct rope_impl : typed_primitive_impl_ocl<rope> {
 
         params.is_qwen = primitive->config.is_qwen;
         params.is_chatglm = primitive->config.is_chatglm;
+        params.is_chatglm4 = primitive->config.is_chatglm4;
         params.transposed_input = primitive->config.input_trans0213;
 
         for (size_t i = 1; i < impl_param.input_layouts.size(); ++i) {
@@ -64,7 +66,8 @@ struct rope_impl : typed_primitive_impl_ocl<rope> {
     static kernel_impl_params static_canonicalize_shapes(const kernel_impl_params& impl_params) {
         const auto& primitive = impl_params.typed_desc<rope>();
 
-        if (primitive->config.is_chatglm || primitive->config.is_qwen) {
+        // TODO: PAUL_ROPE check
+        if (primitive->config.is_chatglm4 || primitive->config.is_chatglm || primitive->config.is_qwen) {
             return primitive_impl::static_canonicalize_shapes(impl_params);
         } else {
             auto updated_impl_params = canonicalize_fused_shapes(impl_params);

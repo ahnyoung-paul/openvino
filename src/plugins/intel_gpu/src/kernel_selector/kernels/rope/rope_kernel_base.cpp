@@ -63,7 +63,7 @@ JitConstants RoPEKernelBase::GetJitConstants(const rope_params& params, RoPEKern
         jit.AddConstant(MakeJitConstant("TRANSPOSED_INPUT0_BATCH_PITCH", "INPUT0_BATCH_PITCH"));
     }
 
-    if (!params.is_chatglm && (params.inputs[1].has_dynamic_pad() || params.inputs[2].has_dynamic_pad())) {
+    if (!params.is_chatglm && !params.is_chatglm4 && (params.inputs[1].has_dynamic_pad() || params.inputs[2].has_dynamic_pad())) {
         jit.AddConstant(MakeJitConstant("SIN_COS_HAVE_DYNAMIC_PADDINGS", true));
     }
 
@@ -71,6 +71,8 @@ JitConstants RoPEKernelBase::GetJitConstants(const rope_params& params, RoPEKern
         jit.AddConstant(MakeJitConstant("QWEN", true));
     } else if (params.is_chatglm) {
         jit.AddConstant(MakeJitConstant("CHATGLM", true));
+    } else if (params.is_chatglm4) {
+        jit.AddConstant(MakeJitConstant("CHATGLM4", true));
     } else {
         jit.AddConstant(MakeJitConstant("RotateHalf", true));
     }
@@ -86,6 +88,11 @@ RoPEKernelBase::DispatchData RoPEKernelBase::SetDefault(const rope_params& param
     std::vector<std::vector<Tensor::DataChannelName>> dims_by_gws = {{ Tensor::DataChannelName::BATCH }, { Tensor::DataChannelName::FEATURE },
                                                                      { Tensor::DataChannelName::Y, Tensor::DataChannelName::X }};
     if (params.is_chatglm || params.is_qwen) {
+        dispatchData.gws = {input.Batch().v,
+                            input.Feature().v,
+                            params.head_cnt * std::max(params.rotary_ndims / 2ul, params.head_size - params.rotary_ndims)};
+    // TODO PAUL_ROPE
+    } else if (params.is_chatglm4) {
         dispatchData.gws = {input.Batch().v,
                             input.Feature().v,
                             params.head_cnt * std::max(params.rotary_ndims / 2ul, params.head_size - params.rotary_ndims)};
