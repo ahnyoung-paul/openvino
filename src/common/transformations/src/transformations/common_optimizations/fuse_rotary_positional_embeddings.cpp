@@ -707,7 +707,7 @@ ov::pass::RoPEFusionChatGLM4::RoPEFusionChatGLM4(int split_output_id) {
         op::internal::RoPE::Config config;
         OutputVector new_args;
         config.rotary_ndims = static_cast<size_t>(validator["ndims"]);
-        config.is_chatglm = true;
+        config.is_chatglm4 = true;
         config.head_cnt = static_cast<size_t>(validator["head_cnt"]);
         config.head_size = static_cast<size_t>(validator["head_size"]);
 
