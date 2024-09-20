@@ -36,9 +36,9 @@ std::vector<layout> rope_inst::calc_output_layouts(rope_node const& node, kernel
                          ov::Dimension(desc->config.head_cnt),
                          ov::Dimension(desc->config.head_size) };
     } else if (desc->config.is_chatglm4) {
-        output_shape = { input0_shape[1],
+        output_shape = { input0_shape[0],
                          ov::Dimension(desc->config.head_cnt),
-                         input0_shape[0],
+                         input0_shape[1],
                          ov::Dimension(desc->config.head_size) };
     } else {
         auto input_slice_size = desc->config.slice_stop - desc->config.slice_start;
