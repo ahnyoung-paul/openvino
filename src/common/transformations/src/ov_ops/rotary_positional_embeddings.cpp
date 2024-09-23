@@ -62,7 +62,7 @@ void RoPE::validate_and_infer_types() {
         set_output_type(
             0,
             get_input_element_type(0),
-            {input_pshape[1], ov::Dimension(m_config.head_cnt), input_pshape[0], ov::Dimension(m_config.head_size)});
+            {input_pshape[0], ov::Dimension(m_config.head_cnt), input_pshape[1], ov::Dimension(m_config.head_size)});
         return;
     }
 
