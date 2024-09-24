@@ -4,33 +4,39 @@
 
 #include "include/fetch_utils.cl"
 
-#ifdef CHATGLM
+#ifdef CHATGLM4
 KERNEL(rope_ref)(
     OPTIONAL_SHAPE_INFO_ARG
     const __global INPUT0_TYPE* input,
     const __global INPUT1_TYPE* cos_sin,
     __global OUTPUT_TYPE* output)
 {
-    const uint p = get_global_id(0);
-    const uint b = get_global_id(1);
-    const uint h = (uint)get_global_id(2) % HEAD_COUNT;
-    const uint rf = (uint)get_global_id(2) / HEAD_COUNT;
+    const uint out_b = get_global_id(0) / HEAD_COUNT;
+    const uint out_f = get_global_id(0) % HEAD_COUNT;
+    const uint out_y = get_global_id(1);//sequence length
+    const uint rf    = get_global_id(2);//max(HALF_ROTARY_NDIMS, HEAD_SIZE - ROTARY_NDIMS)
     uint r = rf < HALF_ROTARY_NDIMS ? rf * 2 : 0;
     uint f = rf < HEAD_SIZE - ROTARY_NDIMS ? rf : 0;
 
 #ifdef ENABLE_SLICE
-    uint input_idx = GET_DATA_INDEX(SLICED_INPUT0, p, b, h * HEAD_SIZE, 0);
+    uint input_idx = GET_DATA_INDEX(SLICED_INPUT0, out_b, out_y, out_f * HEAD_SIZE, 0);
 
-    input_idx += SLICED_FROM_START * (p * INPUT0_FEATURE_NUM + b + 1)
-              + SLICED_FROM_END * (p * INPUT0_FEATURE_NUM + b);
+    input_idx += SLICED_FROM_START * (out_b * INPUT0_FEATURE_NUM + out_y + 1)
+              + SLICED_FROM_END * (out_b * INPUT0_FEATURE_NUM + out_y);
 #else
-    uint input_idx = INPUT0_GET_INDEX(p, b, h * HEAD_SIZE, 0);
+    uint input_idx = INPUT0_GET_INDEX(out_b, out_y, out_f * HEAD_SIZE, 0);
 #endif
-    uint cos_sin_p = p < INPUT1_BATCH_NUM ? p : 0;
-    uint cos_sin_b = b < INPUT1_FEATURE_NUM ? b : 0;
-    uint cos_sin_idx = INPUT1_GET_INDEX(cos_sin_p, cos_sin_b, 0, 0);
+    // uint out_b = batch;
+    // uint out_f = h;
+    // uint out_y = b;
+    // uint out_x = 0;
+    // uint input_idx = INPUT0_GET_INDEX(out_b, out_y, out_f, out_x);
 
-    uint output_idx = OUTPUT_GET_INDEX(p, b, h, 0);
+    uint cos_sin_b = out_b < INPUT1_BATCH_NUM ? out_b : 0;
+    uint cos_sin_y = out_y < INPUT1_SIZE_Y ? out_y : 0;
+    uint cos_sin_idx = INPUT1_GET_INDEX(cos_sin_b, 0, cos_sin_y, 0);
+
+    uint output_idx = OUTPUT_GET_INDEX(out_b, out_f, out_y, 0);
 
     INPUT1_TYPE cosv = cos_sin[cos_sin_idx + r];
     INPUT1_TYPE sinv = cos_sin[cos_sin_idx + r + 1];
@@ -47,7 +53,7 @@ KERNEL(rope_ref)(
 }
 #endif
 
-#ifdef CHATGLM4
+#ifdef CHATGLM
 KERNEL(rope_ref)(
     OPTIONAL_SHAPE_INFO_ARG
     const __global INPUT0_TYPE* input,
