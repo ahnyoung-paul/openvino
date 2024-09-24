@@ -16,7 +16,7 @@ KERNEL(rope_ref)(
     const uint out_y = get_global_id(1);//sequence length
     const uint rf    = get_global_id(2);//max(HALF_ROTARY_NDIMS, HEAD_SIZE - ROTARY_NDIMS)
     uint r = rf < HALF_ROTARY_NDIMS ? rf * 2 : 0;
-    uint f = rf < HEAD_SIZE - ROTARY_NDIMS ? rf : 0;
+    uint f = rf < HEAD_SIZE - ROTARY_NDIMS ? rf * 2 : 0;
 
 #ifdef ENABLE_SLICE
     uint input_idx = GET_DATA_INDEX(SLICED_INPUT0, out_b, out_y, out_f * HEAD_SIZE, 0);
@@ -26,11 +26,6 @@ KERNEL(rope_ref)(
 #else
     uint input_idx = INPUT0_GET_INDEX(out_b, out_y, out_f * HEAD_SIZE, 0);
 #endif
-    // uint out_b = batch;
-    // uint out_f = h;
-    // uint out_y = b;
-    // uint out_x = 0;
-    // uint input_idx = INPUT0_GET_INDEX(out_b, out_y, out_f, out_x);
 
     uint cos_sin_b = out_b < INPUT1_BATCH_NUM ? out_b : 0;
     uint cos_sin_y = out_y < INPUT1_SIZE_Y ? out_y : 0;
@@ -44,11 +39,26 @@ KERNEL(rope_ref)(
     INPUT0_TYPE in1 = input[input_idx + r];
     INPUT0_TYPE in2 = input[input_idx + r + 1];
 
-    output[output_idx + r] = cosv * in1 - sinv * in2;
-    output[output_idx + r + 1] = sinv * in1 + cosv * in2;
+    // INPUT0_TYPE s_in1 = 0.023132f;
+    // INPUT0_TYPE s_in2 = -0.293457f;
+    // OUTPUT_TYPE e_val = 0.023132f;
+
+    // if (output_idx + r == 128 && get_global_size(0) == 32 && get_global_id(2) == 0) {
+    //     printf("%d, %d, %d, idx: %d, %f, %f, %f, %f, %f\n", out_b, out_y, out_f, cos_sin_idx, cosv, sinv, in1, in2, (cosv * in1 - sinv * in2));
+    // }
+
+    // if ((s_in1 * cosv - sinv * s_in2) == e_val) {
+    //     printf("found consv[%f] sinv[%f] cos_sin_idx[%d] = [%d, %d, %d]\n", cosv, sinv, cos_sin_idx, out_b, out_y, out_f);
+    // }
+
+    // output[output_idx + r] = cosv * in1 - sinv * in2;
+    // output[output_idx + r + 1] = sinv * in1 + cosv * in2;
+    output[output_idx + r] = in1;
+    output[output_idx + r + 1] = in2;
 
 #ifdef ENABLE_IO_COPY
     output[output_idx + ROTARY_NDIMS + f] = input[input_idx + ROTARY_NDIMS + f];
+    output[output_idx + ROTARY_NDIMS + f + 1] = input[input_idx + ROTARY_NDIMS + f + 1];
 #endif
 }
 #endif

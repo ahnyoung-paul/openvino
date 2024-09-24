@@ -97,7 +97,8 @@ RoPEKernelBase::DispatchData RoPEKernelBase::SetDefault(const rope_params& param
         // output [batch_size, head_count, seq_length, ...]
         dispatchData.gws = {input.Batch().v * params.head_cnt,
                             input.Feature().v,
-                            std::max(params.rotary_ndims / 2ul, params.head_size - params.rotary_ndims)};
+                            params.rotary_ndims / 2ul};
+                            // std::max(params.rotary_ndims / 2ul, params.head_size - params.rotary_ndims)};
     } else {
         dispatchData.gws = {output.Batch().v,
                             output.Feature().v,
