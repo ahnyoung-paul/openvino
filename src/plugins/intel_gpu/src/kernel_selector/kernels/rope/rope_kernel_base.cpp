@@ -94,7 +94,7 @@ RoPEKernelBase::DispatchData RoPEKernelBase::SetDefault(const rope_params& param
     // TODO PAUL_ROPE
     } else if (params.is_chatglm4) {
         // input  [batch_size, seq_length]
-        // output [batch_size, head_count, seq_length, ...]
+        // output [batch_size, head_count, seq_length, half_rotary_ndims]
         dispatchData.gws = {input.Batch().v * params.head_cnt,
                             input.Feature().v,
                             params.rotary_ndims / 2ul};
