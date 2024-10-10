@@ -6,6 +6,7 @@
 
 #include "openvino/pass/graph_rewrite.hpp"
 #include "transformations_visibility.hpp"
+#include "openvino/util/env_util.hpp"
 
 namespace ov {
 namespace pass {
@@ -93,10 +94,17 @@ public:
         add_matcher<ov::pass::RoPEFusionIOSlicing>();
         add_matcher<ov::pass::RoPEFusionPreprocess>();
 
-        add_matcher<ov::pass::RoPEFusionChatGLM>(0);
-        add_matcher<ov::pass::RoPEFusionChatGLM>(1);
-        add_matcher<ov::pass::RoPEFusionChatGLM>(0, true);
-        add_matcher<ov::pass::RoPEFusionChatGLM>(1, true);
+        // TODO PAUL_ROPE
+        static const bool enable_chatglm_rope = ov::util::getenv_bool("OV_GPU_ENABLE_RoPEFusionChatGLM", true);
+        if (enable_chatglm_rope) {
+            std::cout << "Enable chatglm RoPEFusion : Please remove this debug code ...." << std::endl;
+            add_matcher<ov::pass::RoPEFusionChatGLM>(0);
+            add_matcher<ov::pass::RoPEFusionChatGLM>(1);
+            add_matcher<ov::pass::RoPEFusionChatGLM>(0, true);
+            add_matcher<ov::pass::RoPEFusionChatGLM>(1, true);
+        } else {
+            std::cout << "Disable chatglm RoPEFusion : Please remove this debug code ...." << std::endl;
+        }
 
         add_matcher<ov::pass::RoPEFusionQwen>(0);
         add_matcher<ov::pass::RoPEFusionQwen>(1);
