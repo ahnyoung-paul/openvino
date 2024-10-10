@@ -23,7 +23,7 @@ pytest-dependency==0.5.1
 pytest-html==4.1.1
 pytest-timeout==2.3.1
 jax<=0.4.33
-jaxlib<=0.4.33
+jaxlib<=0.4.34
 kornia==0.7.0
 networkx<=3.3
 flax<=0.9.0
