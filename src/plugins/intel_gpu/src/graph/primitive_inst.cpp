@@ -34,6 +34,7 @@
 #include "gather_inst.h"
 #include "broadcast_inst.h"
 #include "dynamic_quantize_inst.h"
+#include "scatter_elements_update_inst.h"
 #include "experimental_detectron_roi_feature_extractor_inst.hpp"
 #include "impls/registry/implementation_manager.hpp"
 #include "impls/registry/registry.hpp"
@@ -265,6 +266,12 @@ event::ptr primitive_inst::set_output_memory(memory::ptr mem_new, bool check, si
     } else {
         ev = get_network().get_stream().create_user_event(true);
         _outputs[idx] = mem_new;
+        if (_outputs[idx] != nullptr) {
+            GPU_DEBUG_TRACE_DETAIL << id() << " set outputs to output: " << _outputs[idx]
+                << ", buffer_ptr: " << _outputs[idx]->buffer_ptr() << std::endl;
+        } else {
+            GPU_DEBUG_TRACE_DETAIL << id() << " set outputs to nullptr " << std::endl;
+        }
     }
     return ev;
 }
@@ -739,6 +746,23 @@ event::ptr primitive_inst::realloc_if_needed() {
             updated_params.output_layouts[i] = updated_layouts[i];
         }
 
+        // if (_outputs[i] && _node->is_type<scatter_elements_update>() && can_reuse_buffer) {
+        if (_outputs[i] && can_reuse_buffer) {
+            for (size_t d = 0; d < _deps.size(); ++d) {
+                size_t port = _deps[d].second;
+                auto dep = _deps[d].first;
+                if (dep->get_node().is_type<broadcast>() && dep->outputs_memory_count() > port) {
+                    if (_network.get_engine().is_the_same_buffer(dep->output_memory(port), *_outputs[i])) {
+                        _outputs[i] = nullptr;
+                        can_reuse_buffer = false;
+                        GPU_DEBUG_TRACE_DETAIL << id() << " is reusable but it should not be reusbable "
+                                                << "because input and output have same memory" << std::endl;
+                        break;
+                    }
+                }
+            }
+        }
+
         if (can_reuse_buffer) {
             GPU_DEBUG_TRACE_DETAIL << id() << ": reuse previously allocated output buffer[" << i << "] - "
                                    << actual_layouts[i].get_linear_size() << "/" << _max_output_layout_count[i]
@@ -760,6 +784,9 @@ event::ptr primitive_inst::realloc_if_needed() {
             } else {
                 _outputs[i] = _network.get_engine().reinterpret_buffer(*_outputs[i], actual_layouts[i]);
             }
+            GPU_DEBUG_TRACE_DETAIL << id() << ": resued output buffer[" << i << "] - "
+                                   << _outputs[i] << ", " << _outputs[i]->buffer_ptr()
+                                   << std::endl;
             // TODO: check need_reset_output_memory per output
             if (need_reset_output_memory() && !can_be_optimized()) {
                 GPU_DEBUG_TRACE_DETAIL << id() << " : Need reset output memory considering user" << std::endl;
@@ -784,6 +811,9 @@ event::ptr primitive_inst::realloc_if_needed() {
                                           is_output_buffer(this, true),
                                           output_memory_ptr(i).get(),
                                           true);
+            GPU_DEBUG_TRACE_DETAIL << id() << ": allocate_output[" << i << "] - "
+                                   << _outputs[i] << ", " << _outputs[i]->buffer_ptr()
+                                   << std::endl;
             _max_output_layout_count[i] = updated_params.output_layouts[i].get_linear_size();
             GPU_DEBUG_CODE(std::string memalloc_info = "");
             GPU_DEBUG_CODE(memalloc_info += (((_outputs.size() > 1) ? ("o" + to_string(i) + ":") : "") +
@@ -1238,6 +1268,7 @@ void primitive_inst::do_runtime_skip_gather() {
 
 void primitive_inst::do_runtime_skip_permute() {
     OV_ITT_SCOPED_TASK(ov::intel_gpu::itt::domains::intel_gpu_plugin, openvino::itt::handle("do_runtime_skip_permute: " + id()));
+    GPU_DEBUG_GET_INSTANCE(debug_config);
     // Check pattern
     if (!get_node().is_type<permute>()
         || is_output()
@@ -1251,6 +1282,17 @@ void primitive_inst::do_runtime_skip_permute() {
     auto desc = _node->as<permute>().get_primitive();
     auto input_shape = _impl_params->get_input_layout(0).get_shape();
     const auto& permute_order = desc->permute_order;
+    GPU_DEBUG_TRACE_DETAIL << "[do_runtime_skip_permute] " << id() << " : input_shape " << input_shape.to_string() << std::endl;
+    {
+        std::stringstream ss;
+        ss << "permute_order [" << permute_order.size() << "] {";
+        for (auto& p : permute_order) {
+            ss << p << ",";
+        }
+        ss << "}";
+        GPU_DEBUG_TRACE_DETAIL << "[do_runtime_skip_permute] " << id() << " : " << ss.str() << std::endl;
+    }
+
     // Check runtime shape
     // Optimize when the largest value among the actual dim values in case where the permute order
     // is different from the shape index is equal to the multiplied value
@@ -1490,7 +1532,8 @@ event::ptr primitive_inst::execute(const std::vector<event::ptr>& events) {
     OPENVINO_ASSERT(_has_valid_input, primitive_id, " has invalid/unset input");
     GPU_DEBUG_GET_INSTANCE(debug_config);
     GPU_DEBUG_TRACE_DETAIL << "-----------------------------------------------------------------" << std::endl;
-    GPU_DEBUG_TRACE_DETAIL << "Execute " << id() << " (type: " << _impl_params->desc->type_string() << ") " << std::endl;
+    GPU_DEBUG_TRACE_DETAIL << "Execute " << id() << " (type: " << _impl_params->desc->type_string() << "), net_id: "
+                            << get_network_id() << ", iter: " << get_network().get_current_iteration_num() << std::endl;
     for (size_t i = 0; i < _deps.size(); ++i) {
         GPU_DEBUG_TRACE_DETAIL << "- inputs[" << i << "] : " <<  _deps[i].first->id() << std::endl;
     }
@@ -1573,6 +1616,12 @@ event::ptr primitive_inst::execute(const std::vector<event::ptr>& events) {
             OPENVINO_ASSERT(outputs.find(last_prim_id) != outputs.end(), "[GPU] Can't find output primitive ", last_prim_id, " for unfused subgraph");
 
             _outputs[0] = outputs.at(last_prim_id).get_memory();
+            if (_outputs[0]) {
+                GPU_DEBUG_TRACE_DETAIL << "[unfused_subgraph] " << id() << ", _outputs[0]: " << _outputs[0]
+                                        << ", buffer_ptr: " << _outputs[0]->buffer_ptr() << std::endl;
+            } else {
+                GPU_DEBUG_TRACE_DETAIL << "[unfused_subgraph] " << id() << " nullptr " << std::endl;
+            }
 
             _impl_params->output_layouts[0] = subgraph->get_output_layout(last_prim_id);
             return outputs.at(last_prim_id).get_event();
@@ -1682,6 +1731,26 @@ event::ptr primitive_inst::execute(const std::vector<event::ptr>& events) {
     }
 
     {
+        GPU_DEBUG_TRACE_DETAIL << "[PAUL] Execute " << id() << " (type: " << _impl_params->desc->type_string() << "), net_id: "
+                                << get_network_id() << ", iter: " << get_network().get_current_iteration_num()
+                                << ", output: " << output_memory_ptr(0) << ", output.buffer_ptr(): " << output_memory_ptr(0)->buffer_ptr()
+                                << std::endl;
+        for (size_t i = 0; i < _deps.size(); ++i) {
+            if (_deps[i].first->outputs_memory_count() > 0 && _deps[i].first->outputs_memory_count() > static_cast<size_t>(_deps[i].second)) {
+                if (_deps[i].first->output_memory_ptr(_deps[i].second) != nullptr) {
+                    GPU_DEBUG_TRACE_DETAIL << "[PAUL] - inputs[" << i << "] : " <<  _deps[i].first->id() << ", output: "
+                                                << _deps[i].first->output_memory_ptr(_deps[i].second) <<  ", output.buffer_ptr(): "
+                                                << _deps[i].first->output_memory_ptr(_deps[i].second)->buffer_ptr()
+                                                << std::endl;
+                } else {
+                    GPU_DEBUG_TRACE_DETAIL << "[PAUL] - inputs[" << i << "] : " <<  _deps[i].first->id() << ", output is emptry "
+                                                << std::endl;
+                }
+            } else {
+                GPU_DEBUG_TRACE_DETAIL << "[PAUL] - inputs[" << i << "] : " <<  _deps[i].first->id() << ", output: invalid output index "
+                    << _deps[i].second << " > " << _deps[i].first->outputs_memory_count() << std::endl;
+            }
+        }
         GPU_DEBUG_PROFILED_STAGE(instrumentation::pipeline_stage::inference);
         auto ev = _impl->execute(dependencies, *this);
 
