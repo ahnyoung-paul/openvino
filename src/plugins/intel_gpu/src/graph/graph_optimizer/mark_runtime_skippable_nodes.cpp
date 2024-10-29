@@ -91,10 +91,19 @@ void mark_runtime_skippable_nodes::run(program& p) {
                 // If the user is concatenation, priority should be given to in place concat optimization at runtime
                 if (node.have_user_with_type<concatenation>() && node.get_users().size() == 1)
                     return;
-                node.can_be_optimized(true);
+                auto order = node.get_permute_order();
+                bool is_optimized = true;
+                for (size_t i = 0; i < order.size(); i++) {
+                    if (i != order[i]) {
+                        is_optimized = false;
+                        break;
+                    }
+                }
+                node.can_be_optimized(is_optimized);
                 // Set runtime skippable only when the node is set as can_be_optimized finally.
-                node.set_runtime_skippable(true);
-                GPU_DEBUG_TRACE_DETAIL << "[mark_runtime_skippable_nodes] : " << node.id() << " can_be_optimized" << std::endl;
+                node.set_runtime_skippable(is_optimized);
+                GPU_DEBUG_TRACE_DETAIL << "[mark_runtime_skippable_nodes] : " << node.id()
+                        << (is_optimized ? " can_be_optimized" : " cannot be optimized") << std::endl;
             }
         });
         program_helpers::do_for_types<strided_slice>(*node, [](strided_slice_node& node){
