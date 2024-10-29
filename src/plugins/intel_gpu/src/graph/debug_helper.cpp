@@ -332,7 +332,7 @@ NodeDebugHelper::NodeDebugHelper(const primitive_inst& inst)
 
 NodeDebugHelper::~NodeDebugHelper() {
     // Dump output buffers of 'inst'
-    if (debug_config->dump_layers_path.length() > 0) {
+    if (debug_config->dump_layers_path.length() > 0 && !m_inst.is_constant()) {
         m_stream.finish();
         const std::string layer_name = m_inst.id();
 

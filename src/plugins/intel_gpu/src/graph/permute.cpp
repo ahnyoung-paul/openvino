@@ -49,6 +49,17 @@ layout permute_inst::calc_output_layout(permute_node const& node, kernel_impl_pa
 template<typename ShapeType>
 std::vector<layout> permute_inst::calc_output_layouts(permute_node const& node, kernel_impl_params const& impl_param) {
     auto desc = impl_param.typed_desc<permute>();
+    {
+        GPU_DEBUG_TRACE_DETAIL << "============================================================================" << std::endl;
+        std::stringstream ss;
+        ss << "[Paul] permute order [" << desc->permute_order.size() << "] {";
+        for (auto po : desc->permute_order) {
+            ss << po << ",";
+        }
+        ss << "}";
+        GPU_DEBUG_TRACE_DETAIL << ss.str() << std::endl;
+        GPU_DEBUG_TRACE_DETAIL << "============================================================================" << std::endl;
+    }
     auto input_layout = impl_param.get_input_layout();
 
     auto output_type = desc->output_data_types[0].value_or(input_layout.data_type);

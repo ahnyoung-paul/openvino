@@ -26,6 +26,21 @@ static void formatNodeName(std::string& name) {
 static bool shouldBeDumped(const NodePtr& node, const DebugCapsConfig& config, const std::string& portsKind) {
     const auto& dumpFilters = config.blobDumpFilters;
 
+    std::string constant_str = "Constant";
+    std::string readvalue_str = "ReadValue";
+    std::string sdpa_str = "ScaledDotProductAttentionWithKVCache";
+    if (node->getTypeStr() == constant_str
+        || node->getTypeStr() == readvalue_str
+        || node->getTypeStr() == sdpa_str) {
+        // std::cout << "[SHOULD NOT BE DUMPED] " << node->getName() << ", " << node->getTypeStr() << std::endl;
+        return false;
+    }
+
+    if (node->getName().find(constant_str) != std::string::npos) {
+        // std::cout << "[SHOULD NOT BE DUMPED] " << node->getName() << ", " << node->getTypeStr() << std::endl;
+        return false;
+    }
+
     if (dumpFilters.empty())
         return false;
 
@@ -131,9 +146,11 @@ void dumpInputBlobs(const NodePtr& node, const DebugCapsConfig& config, int coun
             file_name = file_name.substr(file_name.size() - 240);
 
         auto dump_file = config.blobDumpDir + "/#" + exec_order + "_" + file_name;
-        std::cout << "Dump inputs: " << dump_file << std::endl;
 
         auto& desc = prEdge->getMemory().getDesc();
+        std::cout << "Dump inputs: " << dump_file << "," << nodeName << " [" << node->getTypeStr()
+                    << "] -IN: " << pr->getName()
+                    << ", " << desc.getShape().toString()  << std::endl;
         if (desc.getPrecision() == ov::element::u1)
             continue;
 
@@ -163,10 +180,11 @@ void dumpOutputBlobs(const NodePtr& node, const DebugCapsConfig& config, int cou
         if (file_name.size() > 240)
             file_name = file_name.substr(file_name.size() - 240);
 
-        auto dump_file = config.blobDumpDir + "/#" + exec_order + "_" + file_name;
-        std::cout << "Dump outputs:  " << dump_file << std::endl;
-
         auto& desc = childEdge->getMemory().getDesc();
+        auto dump_file = config.blobDumpDir + "/#" + exec_order + "_" + file_name;
+        std::cout << "Dump outputs:  " << dump_file << ", " <<  nodeName << " [" << node->getTypeStr() << "],"
+                << desc.getShape().toString()  << std::endl;
+
         if (desc.getPrecision() == ov::element::u1)
             continue;
 
