@@ -746,12 +746,11 @@ event::ptr primitive_inst::realloc_if_needed() {
             updated_params.output_layouts[i] = updated_layouts[i];
         }
 
-        // if (_outputs[i] && _node->is_type<scatter_elements_update>() && can_reuse_buffer) {
         if (_outputs[i] && can_reuse_buffer) {
             for (size_t d = 0; d < _deps.size(); ++d) {
                 size_t port = _deps[d].second;
                 auto dep = _deps[d].first;
-                if (dep->get_node().is_type<broadcast>() && dep->outputs_memory_count() > port) {
+                if (dep->outputs_memory_count() > port && dep->output_memory_ptr(port) != nullptr) {
                     if (_network.get_engine().is_the_same_buffer(dep->output_memory(port), *_outputs[i])) {
                         _outputs[i] = nullptr;
                         can_reuse_buffer = false;
