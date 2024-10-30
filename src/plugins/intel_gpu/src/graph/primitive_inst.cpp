@@ -663,7 +663,7 @@ event::ptr primitive_inst::realloc_if_needed() {
     }
 
     // Clear out memory if was previously reused, but now primitive can't be optimized
-    if (!_node->is_type<concatenation>() && (_node->is_runtime_skippable() || _node->is_type<crop>())) {
+    if ((!_node->is_type<concatenation>() && (_node->is_runtime_skippable() || _node->is_type<crop>())) || _node->is_type<scatter_elements_update>()) {
         if (can_be_optimized()) {
             _max_output_layout_count = _deps[0].first->_max_output_layout_count;
             GPU_DEBUG_PROFILED_STAGE_MEMALLOC_INFO("can_be_optimized");
@@ -746,21 +746,21 @@ event::ptr primitive_inst::realloc_if_needed() {
             updated_params.output_layouts[i] = updated_layouts[i];
         }
 
-        if (_outputs[i] && can_reuse_buffer) {
-            for (size_t d = 0; d < _deps.size(); ++d) {
-                size_t port = _deps[d].second;
-                auto dep = _deps[d].first;
-                if (dep->outputs_memory_count() > port && dep->output_memory_ptr(port) != nullptr) {
-                    if (_network.get_engine().is_the_same_buffer(dep->output_memory(port), *_outputs[i])) {
-                        _outputs[i] = nullptr;
-                        can_reuse_buffer = false;
-                        GPU_DEBUG_TRACE_DETAIL << id() << " is reusable but it should not be reusbable "
-                                                << "because input and output have same memory" << std::endl;
-                        break;
-                    }
-                }
-            }
-        }
+        // if (_outputs[i] && can_reuse_buffer) {
+        //     for (size_t d = 0; d < _deps.size(); ++d) {
+        //         size_t port = _deps[d].second;
+        //         auto dep = _deps[d].first;
+        //         if (dep->outputs_memory_count() > port && dep->output_memory_ptr(port) != nullptr) {
+        //             if (_network.get_engine().is_the_same_buffer(dep->output_memory(port), *_outputs[i])) {
+        //                 _outputs[i] = nullptr;
+        //                 can_reuse_buffer = false;
+        //                 GPU_DEBUG_TRACE_DETAIL << id() << " is reusable but it should not be reusbable "
+        //                                         << "because input and output have same memory" << std::endl;
+        //                 break;
+        //             }
+        //         }
+        //     }
+        // }
 
         if (can_reuse_buffer) {
             GPU_DEBUG_TRACE_DETAIL << id() << ": reuse previously allocated output buffer[" << i << "] - "
