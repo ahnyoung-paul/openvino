@@ -28,26 +28,26 @@ void mark_runtime_skippable_nodes::run(program& p) {
         if (node->is_type<data>() || node->is_constant())
             continue;
 
-        std::function<bool(const program_node& node)> all_users_are_shape_of = [&](const program_node& node) {
-            if (node.is_input() || node.is_output())
-                return false;
-            for (auto& u : node.get_users()) {
-                if (!u->is_type<shape_of>())
-                    return false;
-            }
-            return true;
-        };
-
-        if (all_users_are_shape_of(*node) &&
-            // primitives that should be executed to know output shapes
-            !node->is_type<gather_nonzero>() && !node->is_type<unique_gather>() &&
-            !node->is_type<non_max_suppression_gather>()) {
-            // always to skip, no runtime execution
-            node->can_be_optimized(true);
-            GPU_DEBUG_TRACE_DETAIL << "[mark_runtime_skippable_nodes] : " << node->id() << " has only shape_of as users. Set can_be_optimized always"
-                                   << std::endl;
-            continue;
-        }
+//        std::function<bool(const program_node& node)> all_users_are_shape_of = [&](const program_node& node) {
+//            if (node.is_input() || node.is_output())
+//                return false;
+//            for (auto& u : node.get_users()) {
+//                if (!u->is_type<shape_of>())
+//                    return false;
+//            }
+//            return true;
+//        };
+//
+//        if (all_users_are_shape_of(*node) &&
+//            // primitives that should be executed to know output shapes
+//            !node->is_type<gather_nonzero>() && !node->is_type<unique_gather>() &&
+//            !node->is_type<non_max_suppression_gather>()) {
+//            // always to skip, no runtime execution
+//            node->can_be_optimized(true);
+//            GPU_DEBUG_TRACE_DETAIL << "[mark_runtime_skippable_nodes] : " << node->id() << " has only shape_of as users. Set can_be_optimized always"
+//                                   << std::endl;
+//            continue;
+//        }
 
         program_helpers::do_for_types<gather>(*node, [](gather_node& node) {
             // Check pattern

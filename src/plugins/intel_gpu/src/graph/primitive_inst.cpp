@@ -8,6 +8,7 @@
 #include "primitive_inst.h"
 #include "data_inst.h"
 #include "mutable_data_inst.h"
+#include "scatter_update_inst.h"
 #include "reorder_inst.h"
 #include "input_layout_inst.h"
 #include "arg_max_min_inst.h"
@@ -346,21 +347,21 @@ void primitive_inst::update_shape() {
         return;
     }
 
-    // Do not update shapes in shape_of subraph if shape_of's input shape is not changed
-    if (_node->is_in_shape_of_subgraph()) {
-        bool subgraph_input_changed = false;
-        for (size_t i = 0; i < dependant_shape_of_insts.size(); i++) {
-            if (dependant_shape_of_insts[i]->shape_changed()) {
-                subgraph_input_changed = true;
-                break;
-            }
-        }
-        if (!subgraph_input_changed) {
-            GPU_DEBUG_TRACE_DETAIL << id() << ": skip shape_update, because it is in shape_of_subgraph and input shape is not changed\n";
-            reset_shape_change();
-            return;
-        }
-    }
+//    // Do not update shapes in shape_of subraph if shape_of's input shape is not changed
+//    if (_node->is_in_shape_of_subgraph()) {
+//        bool subgraph_input_changed = false;
+//        for (size_t i = 0; i < dependant_shape_of_insts.size(); i++) {
+//            if (dependant_shape_of_insts[i]->shape_changed()) {
+//                subgraph_input_changed = true;
+//                break;
+//            }
+//        }
+//        if (!subgraph_input_changed) {
+//            GPU_DEBUG_TRACE_DETAIL << id() << ": skip shape_update, because it is in shape_of_subgraph and input shape is not changed\n";
+//            reset_shape_change();
+//            return;
+//        }
+//    }
 
     // Even though the predecessors' shapes are not changed, the output shape might be updated by the mem_dep
     auto memory_deps = _node->get_const_memory_deps();
@@ -371,15 +372,15 @@ void primitive_inst::update_shape() {
         if (i >= _deps.size())
             continue;
 
-        if (_deps[i].first->get_node().is_in_shape_of_subgraph()) {
-            bool can_skip = true;
-            const auto& insts = _deps[i].first->dependant_shape_of_insts;
-            for (auto& inst : insts) {
-                can_skip &= !inst->shape_changed();
-            }
-            if (can_skip)
-                continue;
-        }
+//        if (_deps[i].first->get_node().is_in_shape_of_subgraph()) {
+//            bool can_skip = true;
+//            const auto& insts = _deps[i].first->dependant_shape_of_insts;
+//            for (auto& inst : insts) {
+//                can_skip &= !inst->shape_changed();
+//            }
+//            if (can_skip)
+//                continue;
+//        }
 
         input_shape_changed = true;
     }
@@ -481,12 +482,14 @@ void primitive_inst::update_shape() {
 }
 
 kernel_impl_params primitive_inst::get_fake_aligned_params_if_possible(kernel_impl_params const& orig_impl_param) {
+
     auto updated_params = _node->type()->get_fake_aligned_params(orig_impl_param);
 
-    const auto &dev_info = get_node().get_program().get_engine().get_device_info();
+//    const auto &dev_info = get_node().get_program().get_engine().get_device_info();
 
     // The target HW of this patch is limited because of performance concern
-    if (dev_info.supports_immad && dev_info.dev_type == device_type::integrated_gpu) {
+//    if (dev_info.supports_immad && dev_info.dev_type == device_type::integrated_gpu) {
+    if (1) {
         // Check whether the input node has enough space for output data. Otherwise, fake alignment is not possible due to page fault
         // i.e. predecessor node was supposed be increased already
         if (get_node().is_type<fully_connected>() && dependencies().size() > 0 && dep_memory(0).get_layout().is_static()
@@ -603,67 +606,68 @@ event::ptr primitive_inst::realloc_if_needed() {
         OPENVINO_ASSERT(user_insts.size() == user_insts_origin.size(), "Should have same size between ",
                         user_insts.size(), " and ", user_insts_origin.size());
     }
-    for (auto user : user_insts) {
-        auto is_fused_prim_of_user = [&](primitive_id id) -> bool {
-            for (auto& p : user->get_node().get_fused_primitives()) {
-                if (p.has_outer_dep()) {
-                    const auto start_idx = p.outer_dep_start_idx;
-                    // exclude fused_node from total_num_deps
-                    const auto end_idx = p.outer_dep_start_idx + p.total_num_deps -1;
-                    for (size_t idx = start_idx; idx < end_idx; idx++) {
-                        if (user->get_node().get_dependency(idx).id() == id) {
-                            return true;
-                        }
-                    }
-                }
-            }
-            return false;
-        };
+//    for (auto user : user_insts) {
+//        auto is_fused_prim_of_user = [&](primitive_id id) -> bool {
+//            for (auto& p : user->get_node().get_fused_primitives()) {
+//                if (p.has_outer_dep()) {
+//                    const auto start_idx = p.outer_dep_start_idx;
+//                    // exclude fused_node from total_num_deps
+//                    const auto end_idx = p.outer_dep_start_idx + p.total_num_deps -1;
+//                    for (size_t idx = start_idx; idx < end_idx; idx++) {
+//                        if (user->get_node().get_dependency(idx).id() == id) {
+//                            return true;
+//                        }
+//                    }
+//                }
+//            }
+//            return false;
+//        };
         // Since fake alignment is applicable for input tensor as well, make sure we allocate enough memory
         // to prevent reading beyond the allocated memory bounds
-        if (user->get_node().is_type<fully_connected>() && user->is_dynamic()) {
-            if (user->_deps[0].first == this || (is_fused_prim_of_user(id()) && user->update_shape_done_by_other)) {
-                size_t dep_idx = 0;
-                for (const auto& dep : user->_deps) {
-                    if (dep.first->id() == id()) {
-                        dep_idx = dep.second;
-                        break;
-                    }
-                }
-                GPU_DEBUG_TRACE_DETAIL << id() <<"'s " << dep_idx << "-th output is " << user->id() << "'s input" << std::endl;
-                GPU_DEBUG_TRACE_DETAIL << "Check fc user " << user->id() << "'s fake alignment-ed input size" << std::endl;
-                // Setting update_shape_done_by_other to false before running update_shape,
-                // since update_Shape is already called in realloc_if_needed of current node's dep node
-                // but current node's output layout is not updated to the this user node yet.
-                user->update_shape_done_by_other = false;
-                bool prev_shape_changed = user->shape_changed();
-                user->update_shape();
-                // Set again shape_change status if shape is changed in the prev udpate_shape() for this user node.
-                if (prev_shape_changed)
-                    user->set_shape_change();
-                user->update_shape_done_by_other = true;
-                auto fc_impl_params = *user->_impl_params;
-                auto fc_input_layout = user->get_node().type()->get_fake_aligned_params(fc_impl_params).input_layouts[0];
-                if (fc_input_layout.bytes_count() > updated_layouts[dep_idx].bytes_count()) {
-                    GPU_DEBUG_TRACE_DETAIL << id() << ": increase output layout allocation size from "
-                                        << actual_layouts[dep_idx].to_short_string() << " -> "
-                                        << fc_input_layout.to_short_string() << " to meet the input buffer alignment requirements for FC\n";
-                    updated_layouts[dep_idx] = fc_input_layout;
-                }
 
-                // dynamic quantization is only applied to activation of FC
-                if (get_node().is_type<dynamic_quantize>()) {
-                    auto dyn_quan_scale_layout = dynamic_quantize_inst::__calc_output_layouts<ov::PartialShape>(updated_layouts[dep_idx], 0);
-                    GPU_DEBUG_TRACE_DETAIL << "update layout of dynamic quantize scale parameter layout "
-                                        << dyn_quan_scale_layout[1].to_short_string() << std::endl;
-                    updated_params.output_layouts[1] = dyn_quan_scale_layout[1];
-                }
-            }
-        }
+        if (user->get_node().is_type<fully_connected>() && user->is_dynamic()) {
+        //     if (user->_deps[0].first == this || (is_fused_prim_of_user(id()) && user->update_shape_done_by_other)) {
+        //         size_t dep_idx = 0;
+        //         for (const auto& dep : user->_deps) {
+        //             if (dep.first->id() == id()) {
+        //                 dep_idx = dep.second;
+        //                 break;
+        //             }
+        //         }
+        //         GPU_DEBUG_TRACE_DETAIL << id() <<"'s " << dep_idx << "-th output is " << user->id() << "'s input" << std::endl;
+        //         GPU_DEBUG_TRACE_DETAIL << "Check fc user " << user->id() << "'s fake alignment-ed input size" << std::endl;
+        //         // Setting update_shape_done_by_other to false before running update_shape,
+        //         // since update_Shape is already called in realloc_if_needed of current node's dep node
+        //         // but current node's output layout is not updated to the this user node yet.
+        //         user->update_shape_done_by_other = false;
+        //         bool prev_shape_changed = user->shape_changed();
+        //         user->update_shape();
+        //         // Set again shape_change status if shape is changed in the prev udpate_shape() for this user node.
+        //         if (prev_shape_changed)
+        //             user->set_shape_change();
+        //         user->update_shape_done_by_other = true;
+        //         auto fc_impl_params = *user->_impl_params;
+        //         auto fc_input_layout = user->get_node().type()->get_fake_aligned_params(fc_impl_params).input_layouts[0];
+        //         if (fc_input_layout.bytes_count() > updated_layouts[dep_idx].bytes_count()) {
+        //             GPU_DEBUG_TRACE_DETAIL << id() << ": increase output layout allocation size from "
+        //                                 << actual_layouts[dep_idx].to_short_string() << " -> "
+        //                                 << fc_input_layout.to_short_string() << " to meet the input buffer alignment requirements for FC\n";
+        //             updated_layouts[dep_idx] = fc_input_layout;
+        //         }
+
+        //         // dynamic quantization is only applied to activation of FC
+        //         if (get_node().is_type<dynamic_quantize>()) {
+        //             auto dyn_quan_scale_layout = dynamic_quantize_inst::__calc_output_layouts<ov::PartialShape>(updated_layouts[dep_idx], 0);
+        //             GPU_DEBUG_TRACE_DETAIL << "update layout of dynamic quantize scale parameter layout "
+        //                                 << dyn_quan_scale_layout[1].to_short_string() << std::endl;
+        //             updated_params.output_layouts[1] = dyn_quan_scale_layout[1];
+        //         }
+        //     }
+        // }
     }
 
     // Clear out memory if was previously reused, but now primitive can't be optimized
-    if ((!_node->is_type<concatenation>() && (_node->is_runtime_skippable() || _node->is_type<crop>())) || _node->is_type<scatter_elements_update>()) {
+    if (!_node->is_type<concatenation>() && (_node->is_runtime_skippable() || _node->is_type<crop>() || _node->is_type<scatter_elements_update>())) {
         if (can_be_optimized()) {
             _max_output_layout_count = _deps[0].first->_max_output_layout_count;
             GPU_DEBUG_PROFILED_STAGE_MEMALLOC_INFO("can_be_optimized");
@@ -787,7 +791,8 @@ event::ptr primitive_inst::realloc_if_needed() {
                                    << _outputs[i] << ", " << _outputs[i]->buffer_ptr()
                                    << std::endl;
             // TODO: check need_reset_output_memory per output
-            if (need_reset_output_memory() && !can_be_optimized()) {
+//            if (need_reset_output_memory() && !can_be_optimized()) {
+            if (1) {
                 GPU_DEBUG_TRACE_DETAIL << id() << " : Need reset output memory considering user" << std::endl;
                 ev = _outputs[i]->fill(_network.get_stream());
             }
@@ -1542,7 +1547,7 @@ event::ptr primitive_inst::execute(const std::vector<event::ptr>& events) {
     const auto orig_outputs = _outputs;
     std::vector<event::ptr> dependencies;
     if ((is_dynamic() || _node->is_in_shape_of_subgraph()) && !has_inner_networks()) {
-        do_runtime_in_place_concat();
+//        do_runtime_in_place_concat();
         OPENVINO_ASSERT(_node != nullptr, "[GPU] Invalid primitive_inst object for dynamic shapes case: program_node can't be null");
         update_shape();
 
@@ -1551,22 +1556,22 @@ event::ptr primitive_inst::execute(const std::vector<event::ptr>& events) {
             GPU_DEBUG_TRACE_DETAIL << id() << " : Skipping because output data is empty " << std::endl;
             can_skip_execution = true;
         }
-
-        // subgraph_input_changed can be available only shape_of is dynamic.
-        // shape_of_subgraph for static shape_of could be run every inference if constant propagation does not work.
-        if (_node->is_in_shape_of_subgraph() && dependant_shape_of_insts.front()->is_dynamic()) {
-            bool subgraph_input_changed = false;
-            for (size_t i = 0; i < dependant_shape_of_insts.size(); i++) {
-                if (dependant_shape_of_insts[i]->shape_changed()) {
-                    subgraph_input_changed = true;
-                    break;
-                }
-            }
-            if (!subgraph_input_changed) {
-                GPU_DEBUG_TRACE_DETAIL << id() << " : Skipping execution because dependent shapeof node is not changed " << std::endl;
-                can_skip_execution = true;
-            }
-        }
+//
+//        // subgraph_input_changed can be available only shape_of is dynamic.
+//        // shape_of_subgraph for static shape_of could be run every inference if constant propagation does not work.
+//        if (_node->is_in_shape_of_subgraph() && dependant_shape_of_insts.front()->is_dynamic()) {
+//            bool subgraph_input_changed = false;
+//            for (size_t i = 0; i < dependant_shape_of_insts.size(); i++) {
+//                if (dependant_shape_of_insts[i]->shape_changed()) {
+//                    subgraph_input_changed = true;
+//                    break;
+//                }
+//            }
+//            if (!subgraph_input_changed) {
+//                GPU_DEBUG_TRACE_DETAIL << id() << " : Skipping execution because dependent shapeof node is not changed " << std::endl;
+//                can_skip_execution = true;
+//            }
+//        }
 
         if (can_skip_execution) {
             auto ev = get_network().get_stream().aggregate_events(events);
@@ -1577,14 +1582,14 @@ event::ptr primitive_inst::execute(const std::vector<event::ptr>& events) {
         // Check successor reorder if layouts are same
         // Need to set can_be_optimized for user reorder at predecessor because
         // if the user is can_be_optimized and output node then current nodes' output should be allocated to host.
-        do_runtime_skip_reorder();
-        do_runtime_skip_gather();
+        //do_runtime_skip_reorder();
+        //do_runtime_skip_gather();
         update_paddings();
-        do_runtime_in_place_kv_cache();
-        do_runtime_skip_permute();
-        do_runtime_skip_strided_slice();
-        do_runtime_skip_broadcast();
-        do_runtime_in_place_crop();
+        //do_runtime_in_place_kv_cache();
+        //do_runtime_skip_permute();
+        //do_runtime_skip_strided_slice();
+        //do_runtime_skip_broadcast();
+        //do_runtime_in_place_crop();
 
         if (!is_valid_fusion()) {
             OV_ITT_SCOPED_TASK(ov::intel_gpu::itt::domains::intel_gpu_plugin, openvino::itt::handle("unfused_subgraph_exec: " + id()));
@@ -2196,7 +2201,8 @@ memory::ptr primitive_inst::allocate_output(engine& _engine,
             GPU_DEBUG_LOG << "[" << _node.id() << ": constant]" << std::endl;
             return ov::intel_gpu::allocate_memory_evenif_zero_bytes(_engine, layout, alloc_type, reset);
         }
-    } else if (!_node.can_share_buffer() || impl_params.can_be_optimized() || _node.is_output()) {
+//    } else if (!_node.can_share_buffer() || impl_params.can_be_optimized() || _node.is_output()) {
+    } else if (!_node.can_share_buffer() || _node.can_be_optimized() || _node.is_output()) {
         GPU_DEBUG_LOG << "[" << _node.id() << ": output]" << std::endl;
         return ov::intel_gpu::allocate_memory_evenif_zero_bytes(_engine, layout, alloc_type, reset);
     } else {
@@ -2623,7 +2629,7 @@ std::shared_ptr<primitive_impl> ImplementationsFactory::get_primitive_impl_for_p
         }
     }
 
-    // 4. If we have any dynamic impl, do adjustment for new shape before returning in back
+    //// 4. If we have any dynamic impl, do adjustment for new shape before returning in back
     if (dynamic_impl) {
         dynamic_impl->update(inst, params);
         return dynamic_impl;

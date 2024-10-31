@@ -586,9 +586,9 @@ void program::pre_optimize_graph(bool is_internal) {
     apply_opt_pass<remove_redundant_reorders>(optimize_data);
 
     // try to fuse buffers (i.e. depth_concat in bfyx format) after padding calculations
-    if (optimize_data) {
-        apply_opt_pass<prepare_buffer_fusing>();
-    }
+//    if (optimize_data) {
+//        apply_opt_pass<prepare_buffer_fusing>();
+//    }
 
     // check if there exists some layout incompatibilities and add an reorder node if required
     apply_opt_pass<add_required_reorders>();
@@ -606,7 +606,7 @@ void program::pre_optimize_graph(bool is_internal) {
     apply_opt_pass<mark_shape_of_subgraphs>();
 
     // Mark operations that might be skipped at runtime as can_be_optimized.
-    apply_opt_pass<mark_runtime_skippable_nodes>();
+//    apply_opt_pass<mark_runtime_skippable_nodes>();
 }
 
 void program::post_optimize_graph(bool is_internal) {
