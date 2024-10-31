@@ -27,19 +27,16 @@ static bool shouldBeDumped(const NodePtr& node, const DebugCapsConfig& config, c
     const auto& dumpFilters = config.blobDumpFilters;
 
     std::string constant_str = "Constant";
-    std::string readvalue_str = "ReadValue";
     std::string sdpa_str = "ScaledDotProductAttentionWithKVCache";
     if (node->getTypeStr() == constant_str
-        || node->getTypeStr() == readvalue_str
         || node->getTypeStr() == sdpa_str) {
-        // std::cout << "[SHOULD NOT BE DUMPED] " << node->getName() << ", " << node->getTypeStr() << std::endl;
         return false;
     }
 
-    if (node->getName().find(constant_str) != std::string::npos) {
-        // std::cout << "[SHOULD NOT BE DUMPED] " << node->getName() << ", " << node->getTypeStr() << std::endl;
-        return false;
-    }
+    // if (node->getName().find(constant_str) != std::string::npos) {
+    //     // std::cout << "[SHOULD NOT BE DUMPED] " << node->getName() << ", " << node->getTypeStr() << std::endl;
+    //     return false;
+    // }
 
     if (dumpFilters.empty())
         return false;
