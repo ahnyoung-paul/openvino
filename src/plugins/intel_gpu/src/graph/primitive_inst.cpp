@@ -36,6 +36,7 @@
 #include "dynamic_quantize_inst.h"
 #include "scatter_elements_update_inst.h"
 #include "experimental_detectron_roi_feature_extractor_inst.hpp"
+#include "reduce_inst.h"
 #include "impls/registry/implementation_manager.hpp"
 #include "impls/registry/registry.hpp"
 #include "graph_optimizer/prepare_buffer_fusing.h"
@@ -1554,7 +1555,12 @@ event::ptr primitive_inst::execute(const std::vector<event::ptr>& events) {
 
         // subgraph_input_changed can be available only shape_of is dynamic.
         // shape_of_subgraph for static shape_of could be run every inference if constant propagation does not work.
+#if 1
+        if (_node->is_in_shape_of_subgraph() && dependant_shape_of_insts.front()->is_dynamic()
+            && !(_node->is_type<broadcast>())) {
+#else
         if (_node->is_in_shape_of_subgraph() && dependant_shape_of_insts.front()->is_dynamic()) {
+#endif
             bool subgraph_input_changed = false;
             for (size_t i = 0; i < dependant_shape_of_insts.size(); i++) {
                 if (dependant_shape_of_insts[i]->shape_changed()) {
@@ -1562,8 +1568,10 @@ event::ptr primitive_inst::execute(const std::vector<event::ptr>& events) {
                     break;
                 }
             }
+
             if (!subgraph_input_changed) {
-                GPU_DEBUG_TRACE_DETAIL << id() << " : Skipping execution because dependent shapeof node is not changed " << std::endl;
+                GPU_DEBUG_TRACE_DETAIL << id() << ", " << _node->get_primitive()->type_string()
+                    << " : Skipping execution because dependent shapeof node is not changed " << std::endl;
                 can_skip_execution = true;
             }
         }
