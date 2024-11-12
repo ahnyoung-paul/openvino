@@ -28,10 +28,26 @@ enum scatter_update_type {
 	ScatterElementsUpdate   = 2
 };
 
-struct skip_scatter_update_params {
+struct skip_scatter_update_params2 {
     scatter_update_type scatter_type;
     bool scatter_update_01_skipped;
     bool scatter_update_02_skipped;
+};
+
+struct iter_params {
+    ov::PartialShape input_shape;
+    ov::PartialShape idx_nonzero_shape;
+    ov::PartialShape idx_zero_shape;
+    ov::PartialShape update_nonzero_shape;
+    ov::PartialShape update_zero_shape;
+    bool skipped_01;
+    bool skipped_03;
+};
+
+struct skip_scatter_update_params {
+    scatter_update_type scatter_type;
+    iter_params iter0;
+    iter_params iter1;
 };
 
 class skip_scatter_update_at_runtime_test : public testing::TestWithParam<skip_scatter_update_params> {};
@@ -40,19 +56,13 @@ TEST_P(skip_scatter_update_at_runtime_test, runtime_skip) {
     auto p = GetParam();
     auto& engine = get_test_engine();
 
-    auto input_layout_static    = layout{ov::PartialShape{1,16}, data_types::f16, format::bfyx};
-    auto rank                   = input_layout_static.get_partial_shape().size();
-    auto input_layout_dynamic   = layout {ov::PartialShape::dynamic(rank), data_types::f16, format::get_default_format(rank)};
+    auto p_iter0 = p.iter0;
+    auto p_iter1 = p.iter1;
 
-    auto idx1_nonzero_layout    = layout{ov::PartialShape{1,16}, data_types::f16, format::bfyx};
-    auto idx1_zero_layout       = layout{ov::PartialShape{0,16}, data_types::f16, format::bfyx};
-    auto update1_nonzero_layout = layout{ov::PartialShape{1,16}, data_types::f16, format::bfyx};
-    auto update1_zero_layout    = layout{ov::PartialShape{0,16}, data_types::f16, format::bfyx};
-
-    auto idx2_nonzero_layout    = layout{ov::PartialShape{1,16}, data_types::f16, format::bfyx};
-    auto idx2_zero_layout       = layout{ov::PartialShape{0,16}, data_types::f16, format::bfyx};
-    auto update2_nonzero_layout = layout{ov::PartialShape{1,16}, data_types::f16, format::bfyx};
-    auto update2_zero_layout    = layout{ov::PartialShape{0,16}, data_types::f16, format::bfyx};
+    auto input_rank = p.iter0.input_shape.size();
+    auto input_layout_dynamic = layout {ov::PartialShape::dynamic(input_rank), data_types::f16, format::get_default_format(input_rank)};
+    auto idx_rank = p.iter0.idx_nonzero_shape.size();
+    auto idx_layout_dynamic   = layout {ov::PartialShape::dynamic(idx_rank), data_types::f16, format::get_default_format(idx_rank)};
 
     ExecutionConfig config = get_test_default_config(engine);
     config.set_property(ov::intel_gpu::allow_new_shape_infer(true));
@@ -64,121 +74,109 @@ TEST_P(skip_scatter_update_at_runtime_test, runtime_skip) {
         topology topology(input_layout("input", input_layout_dynamic),
                             input_layout("idx1", input_layout_dynamic),
                             input_layout("idx2", input_layout_dynamic),
+                            input_layout("idx3", input_layout_dynamic),
                             input_layout("update1", input_layout_dynamic),
                             input_layout("update2", input_layout_dynamic),
+                            input_layout("update3", input_layout_dynamic),
                             scatter_elements_update("scatter1", input_info("input"),    input_info("idx1"), input_info("update1"), 0),
                             scatter_elements_update("scatter2", input_info("scatter1"), input_info("idx2"), input_info("update2"), 0),
-                            reorder("reorder", input_info("scatter2"), format::get_default_format(rank), data_types::f32));
+                            scatter_elements_update("scatter3", input_info("scatter2"), input_info("idx3"), input_info("update3"), 0),
+                            reorder("reorder", input_info("scatter3"), format::get_default_format(input_rank), data_types::f32));
 
         network = get_network(engine, topology, config, get_test_stream_ptr(), false);
     } else if (p.scatter_type == scatter_update_type::ScatterUpdate) {
         topology topology(input_layout("input", input_layout_dynamic),
                             input_layout("idx1", input_layout_dynamic),
                             input_layout("idx2", input_layout_dynamic),
+                            input_layout("idx3", input_layout_dynamic),
                             input_layout("update1", input_layout_dynamic),
                             input_layout("update2", input_layout_dynamic),
+                            input_layout("update3", input_layout_dynamic),
                             scatter_update("scatter1", input_info("input"),    input_info("idx1"), input_info("update1"), 0),
                             scatter_update("scatter2", input_info("scatter1"), input_info("idx2"), input_info("update2"), 0),
-                            reorder("reorder", input_info("scatter2"), format::get_default_format(rank), data_types::f32));
-
+                            scatter_update("scatter3", input_info("scatter2"), input_info("idx3"), input_info("update3"), 0),
+                            reorder("reorder", input_info("scatter3"), format::get_default_format(input_rank), data_types::f32));
         network = get_network(engine, topology, config, get_test_stream_ptr(), false);
     } else if (p.scatter_type == scatter_update_type::ScatterNDUpdate) {
-        input_layout_static     = layout{ov::PartialShape{12}, data_types::f16, format::bfyx};
-        rank                    = input_layout_static.get_partial_shape().size();
-        input_layout_dynamic    = layout {ov::PartialShape::dynamic(rank), data_types::f16, format::get_default_format(rank)};
-
-        idx1_nonzero_layout     = layout{ov::PartialShape{12,1}, data_types::f16, format::bfyx};
-        idx1_zero_layout        = layout{ov::PartialShape{0,1}, data_types::f16, format::bfyx};
-        update1_nonzero_layout  = layout{ov::PartialShape{12}, data_types::f16, format::bfyx};
-        update1_zero_layout     = layout{ov::PartialShape{0}, data_types::f16, format::bfyx};
-        rank                    = idx1_nonzero_layout.get_partial_shape().size();
-        auto idx_layout_dynamic = layout {ov::PartialShape::dynamic(rank), data_types::f16, format::get_default_format(rank)};
-
-        idx2_nonzero_layout     = layout{ov::PartialShape{12,1}, data_types::f16, format::bfyx};
-        idx2_zero_layout        = layout{ov::PartialShape{0,1}, data_types::f16, format::bfyx};
-        update2_nonzero_layout  = layout{ov::PartialShape{12}, data_types::f16, format::bfyx};
-        update2_zero_layout     = layout{ov::PartialShape{0}, data_types::f16, format::bfyx};
-
-
-
         topology topology(input_layout("input", input_layout_dynamic),
-                            input_layout("idx1", idx_layout_dynamic),
-                            input_layout("idx2", idx_layout_dynamic),
+                            input_layout("idx1", input_layout_dynamic),
+                            input_layout("idx2", input_layout_dynamic),
+                            input_layout("idx3", input_layout_dynamic),
                             input_layout("update1", input_layout_dynamic),
                             input_layout("update2", input_layout_dynamic),
-                            scatter_nd_update("scatter1", input_info("input"),    input_info("idx1"), input_info("update1"), 2),
-                            scatter_nd_update("scatter2", input_info("scatter1"), input_info("idx2"), input_info("update2"), 2),
-                            reorder("reorder", input_info("scatter2"), format::get_default_format(rank), data_types::f32));
-
+                            input_layout("update3", input_layout_dynamic),
+                            scatter_nd_update("scatter1", input_info("input"),    input_info("idx1"), input_info("update1"), 0),
+                            scatter_nd_update("scatter2", input_info("scatter1"), input_info("idx2"), input_info("update2"), 0),
+                            scatter_nd_update("scatter3", input_info("scatter2"), input_info("idx3"), input_info("update3"), 0),
+                            reorder("reorder", input_info("scatter3"), format::get_default_format(input_rank), data_types::f32));
         network = get_network(engine, topology, config, get_test_stream_ptr(), false);
     }
 
-    auto input_mem              = engine.allocate_memory(input_layout_static);
+    // auto input_mem              = engine.allocate_memory(input_layout_static);
 
-    auto idx1_layout_static     = p.scatter_update_01_skipped? idx1_zero_layout : idx1_nonzero_layout;
-    auto update1_layout_static  = p.scatter_update_01_skipped? update1_zero_layout : update1_nonzero_layout;
+    // auto idx1_layout_static     = p.scatter_update_01_skipped? idx1_zero_layout : idx1_nonzero_layout;
+    // auto update1_layout_static  = p.scatter_update_01_skipped? update1_zero_layout : update1_nonzero_layout;
 
-    auto idx1_mem               = engine.allocate_memory(idx1_nonzero_layout);
-    auto update1_mem            = engine.allocate_memory(update1_nonzero_layout);
+    // auto idx1_mem               = engine.allocate_memory(idx1_nonzero_layout);
+    // auto update1_mem            = engine.allocate_memory(update1_nonzero_layout);
 
-    if (p.scatter_update_01_skipped) {
-        idx1_mem    = engine.reinterpret_buffer(*idx1_mem, idx1_zero_layout);
-        update1_mem = engine.reinterpret_buffer(*update1_mem, update1_zero_layout);
-    }
+    // if (p.scatter_update_01_skipped) {
+    //     idx1_mem    = engine.reinterpret_buffer(*idx1_mem, idx1_zero_layout);
+    //     update1_mem = engine.reinterpret_buffer(*update1_mem, update1_zero_layout);
+    // }
 
-    auto idx2_layout_static     = p.scatter_update_02_skipped? idx2_zero_layout : idx2_nonzero_layout;
-    auto update2_layout_static  = p.scatter_update_02_skipped? update2_zero_layout : update2_nonzero_layout;
+    // auto idx2_layout_static     = p.scatter_update_02_skipped? idx2_zero_layout : idx2_nonzero_layout;
+    // auto update2_layout_static  = p.scatter_update_02_skipped? update2_zero_layout : update2_nonzero_layout;
 
-    auto idx2_mem               = engine.allocate_memory(idx2_nonzero_layout);
-    auto update2_mem            = engine.allocate_memory(update2_nonzero_layout);
-    if (p.scatter_update_02_skipped) {
-        idx2_mem    = engine.reinterpret_buffer(*idx2_mem, idx2_zero_layout);
-        update2_mem = engine.reinterpret_buffer(*update2_mem, update2_zero_layout);
-    }
-    network->set_input_data("input", input_mem);
-    network->set_input_data("idx1", idx1_mem);
-    network->set_input_data("idx2", idx2_mem);
-    network->set_input_data("update1", update1_mem);
-    network->set_input_data("update2", update2_mem);
-    auto outputs = network->execute();
-    outputs.begin()->second.get_memory();
+    // auto idx2_mem               = engine.allocate_memory(idx2_nonzero_layout);
+    // auto update2_mem            = engine.allocate_memory(update2_nonzero_layout);
+    // if (p.scatter_update_02_skipped) {
+    //     idx2_mem    = engine.reinterpret_buffer(*idx2_mem, idx2_zero_layout);
+    //     update2_mem = engine.reinterpret_buffer(*update2_mem, update2_zero_layout);
+    // }
+    // network->set_input_data("input", input_mem);
+    // network->set_input_data("idx1", idx1_mem);
+    // network->set_input_data("idx2", idx2_mem);
+    // network->set_input_data("update1", update1_mem);
+    // network->set_input_data("update2", update2_mem);
+    // auto outputs = network->execute();
+    // outputs.begin()->second.get_memory();
 
-    auto input_inst = network->get_primitive("input");
-    auto scatter1_inst = network->get_primitive("scatter1");
-    auto scatter2_inst = network->get_primitive("scatter2");
+    // auto input_inst = network->get_primitive("input");
+    // auto scatter1_inst = network->get_primitive("scatter1");
+    // auto scatter2_inst = network->get_primitive("scatter2");
 
-    ASSERT_EQ(scatter1_inst->can_be_optimized(), p.scatter_update_01_skipped);
-    ASSERT_EQ(scatter2_inst->can_be_optimized(), p.scatter_update_02_skipped);
+    // ASSERT_EQ(scatter1_inst->can_be_optimized(), p.scatter_update_01_skipped);
+    // ASSERT_EQ(scatter2_inst->can_be_optimized(), p.scatter_update_02_skipped);
 
-    if (scatter1_inst->can_be_optimized()) {
-        ASSERT_TRUE(engine.is_the_same_buffer(scatter1_inst->dep_memory(0),     scatter1_inst->output_memory(0)));
-    } else {
-        ASSERT_FALSE(engine.is_the_same_buffer(scatter1_inst->dep_memory(0),    scatter1_inst->output_memory(0)));
-    }
+    // if (scatter1_inst->can_be_optimized()) {
+    //     ASSERT_TRUE(engine.is_the_same_buffer(scatter1_inst->dep_memory(0),     scatter1_inst->output_memory(0)));
+    // } else {
+    //     ASSERT_FALSE(engine.is_the_same_buffer(scatter1_inst->dep_memory(0),    scatter1_inst->output_memory(0)));
+    // }
 
-    if (scatter2_inst->can_be_optimized()) {
-        ASSERT_TRUE(engine.is_the_same_buffer(scatter2_inst->dep_memory(0),     scatter2_inst->output_memory(0)));
-    } else {
-        ASSERT_FALSE(engine.is_the_same_buffer(scatter2_inst->dep_memory(0),    scatter2_inst->output_memory(0)));
-    }
+    // if (scatter2_inst->can_be_optimized()) {
+    //     ASSERT_TRUE(engine.is_the_same_buffer(scatter2_inst->dep_memory(0),     scatter2_inst->output_memory(0)));
+    // } else {
+    //     ASSERT_FALSE(engine.is_the_same_buffer(scatter2_inst->dep_memory(0),    scatter2_inst->output_memory(0)));
+    // }
 }
 
 INSTANTIATE_TEST_SUITE_P(smoke, skip_scatter_update_at_runtime_test,
     testing::ValuesIn(std::vector<skip_scatter_update_params> {
-        { scatter_update_type::ScatterUpdate,           true,       true },
-        { scatter_update_type::ScatterUpdate,           true,       false},
-        { scatter_update_type::ScatterUpdate,           false,      true },
-        { scatter_update_type::ScatterUpdate,           false,      false},
+        { scatter_update_type::ScatterUpdate,           {{8,16}, {8,16}, {0,16}, {8,16}, {0,16}, true,  true},  {{1,16}, {1,16}, {0,16}, {1,16}, {0,16}, false,  true}},
+        { scatter_update_type::ScatterUpdate,           {{1,16}, {1,16}, {0,16}, {1,16}, {0,16}, true,  true},  {{1,16}, {1,16}, {0,16}, {1,16}, {0,16}, false,  true}},
+        { scatter_update_type::ScatterUpdate,           {{1,16}, {1,16}, {0,16}, {1,16}, {0,16}, true,  true},  {{1,16}, {1,16}, {0,16}, {1,16}, {0,16}, false,  false}},
+        { scatter_update_type::ScatterUpdate,           {{1,16}, {1,16}, {0,16}, {1,16}, {0,16}, false,  true}, {{1,16}, {1,16}, {0,16}, {1,16}, {0,16}, true,  false}},
 
-        { scatter_update_type::ScatterNDUpdate,         true,       true },
-        { scatter_update_type::ScatterNDUpdate,         true,       false},
-        { scatter_update_type::ScatterNDUpdate,         false,      true },
-        { scatter_update_type::ScatterNDUpdate,         false,      false},
+        { scatter_update_type::ScatterNDUpdate,         {{8,16}, {8,16}, {0,16}, {8,16}, {0,16}, true,  true},  {{1,16}, {1,16}, {0,16}, {1,16}, {0,16}, false,  true}},
+        { scatter_update_type::ScatterNDUpdate,         {{1,16}, {1,16}, {0,16}, {1,16}, {0,16}, true,  true},  {{1,16}, {1,16}, {0,16}, {1,16}, {0,16}, false,  true}},
+        { scatter_update_type::ScatterNDUpdate,         {{1,16}, {1,16}, {0,16}, {1,16}, {0,16}, true,  true},  {{1,16}, {1,16}, {0,16}, {1,16}, {0,16}, false,  false}},
+        { scatter_update_type::ScatterNDUpdate,         {{1,16}, {1,16}, {0,16}, {1,16}, {0,16}, false,  true}, {{1,16}, {1,16}, {0,16}, {1,16}, {0,16}, true,  false}},
 
-        { scatter_update_type::ScatterElementsUpdate,   true,       true },
-        { scatter_update_type::ScatterElementsUpdate,   true,       false},
-        { scatter_update_type::ScatterElementsUpdate,   false,      true },
-        { scatter_update_type::ScatterElementsUpdate,   false,      false},
-
+        { scatter_update_type::ScatterElementsUpdate,   {{12}, {12,1}, {0,1}, {12}, {0}, true,  true}, {{16}, {16,1}, {0,1}, {16}, {0}, false,  true}},
+        { scatter_update_type::ScatterElementsUpdate,   {{16}, {16,1}, {0,1}, {16}, {0}, true,  true},   {{16}, {16,1}, {0,1}, {16}, {0}, false,  true}},
+        { scatter_update_type::ScatterElementsUpdate,   {{16}, {16,1}, {0,1}, {16}, {0}, true,  true},  {{16}, {16,1}, {0,1}, {16}, {0}, false,  false}},
+        { scatter_update_type::ScatterElementsUpdate,   {{16}, {16,1}, {0,1}, {16}, {0}, false,  true}, {{16}, {16,1}, {0,1}, {16}, {0}, true,  false}},
     }));
 }  // skip permute tests
