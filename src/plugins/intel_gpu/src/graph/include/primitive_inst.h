@@ -245,6 +245,7 @@ public:
     void reset_events();
 
     void prepare_primitive();
+    void print_status();
     void execute();
     void init_kernels(const kernels_cache& kernels_cache) {
         _impl->init_kernels(kernels_cache, *_impl_params);
