@@ -135,7 +135,22 @@ static bool should_dynamic_quantize(const fully_connected_params& params, bool p
             }
         return true;
     }
-
+    // {
+    //     std::stringstream ss;
+    //     ss << "scale_group_size: " << scale_group_size << ",";
+    //     ss << "simd: " << simd << ",";
+    //     ss << "scale_group_size \% simd: " << (scale_group_size % simd) << ",";
+    //     ss << "input_f: " << input_f << ",";
+    //     ss << "dynamic_quantization_group_size: " << dynamic_quantization_group_size << ",";
+    //     ss << "input_f \% dynamic_quantization_group_size: " << (input_f % dynamic_quantization_group_size) << ",";
+    //     ss << "params.is_shape_agnostic: " << params.is_shape_agnostic << ",";
+    //     ss << "params.inputs[0].Batch().v: " << params.inputs[0].Batch().v << ",";
+    //     ss << "input_b: " << input_b << ",";
+    //     ss << "min_slm_size: " << min_slm_size << ",";
+    //     ss << "params.inputs[0].GetDType(): " << kernel_selector::toString(params.inputs[0].GetDType()) << ",";
+    //     ss << "is_weight_dyn_quantizable(params): " << is_weight_dyn_quantizable(params);
+    //     GPU_DEBUG_COUT << "Fail to check dynamic quantize: " << ss.str() << std::endl;
+    // }
     return false;
 }
 

@@ -1772,6 +1772,7 @@ void primitive_inst::reset_flags() {
 }
 
 void primitive_inst::prepare_primitive() {
+    _can_use_async_compilation = false;
     OV_ITT_SCOPED_TASK(ov::intel_gpu::itt::domains::intel_gpu_plugin, openvino::itt::handle("primitive_inst::execute: " + id()));
     const auto& primitive_id = id();
     OPENVINO_ASSERT(_has_valid_input, primitive_id, " has invalid/unset input");
@@ -1839,10 +1840,10 @@ void primitive_inst::prepare_primitive() {
 
         // Try update impl if current impl is dynamic because opt kernel may be added to impl cache through async compilation.
         // Only try update weight and realloc when impl is updated.
-        const bool can_use_async_compilation = use_async_compilation();
+        _can_use_async_compilation = use_async_compilation();
         const bool shape_changed = get_flag(ExecutionFlags::SHAPE_CHANGED);
-        if (shape_changed || !_impl || (!shape_changed && _impl->is_dynamic() && can_use_async_compilation)) {
-            update_impl(can_use_async_compilation);
+        if (shape_changed || !_impl || (!shape_changed && _impl->is_dynamic() && _can_use_async_compilation)) {
+            update_impl(_can_use_async_compilation);
             if (get_flag(ExecutionFlags::IMPL_CHANGED)) {
                 update_weights();
                 realloc_if_needed(prev_execution_skipped);
@@ -1921,10 +1922,86 @@ void primitive_inst::prepare_primitive() {
     }
 }
 
+void primitive_inst::print_status() {
+    bool is_print_status = false;
+    const char* print_status_config = std::getenv("OV_GPU_DEBUG_PRINT_STATUS");
+    if (print_status_config && std::atoi(print_status_config) != 0) is_print_status = true;
+    if (!is_print_status)
+        return;
+    // if (!_can_use_async_compilation)
+    //     return;
+    auto n_iter = get_network().get_current_iteration_num();
+    if ((2 < n_iter && n_iter < 512) || (n_iter > 514))
+        return;
+
+    if (!_node->is_type<fully_connected>())
+        return;
+
+    // if (id() != "fullyconnectedcompressed:__module.model.layers.0.self_attn.q_proj/ov_ext::linear/MatMul_fused_3FCs"
+    //     && id() != "fullyconnectedcompressed:__module.model.layers.0.self_attn.o_proj/ov_ext::linear/MatMul"
+    //     && id() != "fullyconnectedcompressed:__module.model.layers.0.mlp.up_proj/ov_ext::linear/MatMul"
+    //     && id() != "fullyconnectedcompressed:__module.model.layers.0.mlp.gate_proj/ov_ext::linear/MatMul"
+    //     && id() != "fullyconnectedcompressed:__module.model.layers.0.mlp.down_proj/ov_ext::linear/MatMul")
+    //     return;
+    if (id() != "fullyconnectedcompressed:__module.model.layers.1.self_attn.q_proj/ov_ext::linear/MatMul_fused_3FCs")
+        return;
+
+    std::string exec_status = "executed";
+    if (get_flag(ExecutionFlags::SKIP)) {
+        exec_status = can_be_optimized() ? "skipped(optimized_out)" : "skipped";
+    } else if (can_be_optimized()) {
+        exec_status = "optimized_out";
+    }
+    std::stringstream ss;
+    ss << std::setw(4)  << n_iter << ",";
+    ss << std::setw(100) << id() << ",";
+    ss << std::setw(20) << _impl_params->desc->type_string() << ",";
+    ss << std::setw(30) << get_output_layout().to_short_string() << ",";
+    ss << std::setw(20) << exec_status << ",";
+    if (output_memory_ptr()) {
+        ss << std::setw(18) << output_memory_ptr()->buffer_ptr() << ",";
+    } else {
+        ss << std::setw(18) << "0000000000000000" << ",";
+    }
+    // if (_can_use_async_compilation) {
+    //     ss << "async_compilation_" << ",";
+    // } else {
+    //     ss << "static_compilation" << ",";
+    // }
+    if (get_impl()->is_dynamic()) {
+        ss << "dynamic_impl" << ",";
+    } else {
+        ss << "static__impl" << ",";
+    }
+    if (get_impl()->get_kernel_name() != "" && !get_impl()->get_kernels().empty()) {
+        ss << "{" << get_impl()->get_executed_kernel_name() << "},";
+        // const auto& kernels = get_impl()->get_kernels();
+        // for (auto k : get_impl()->get_kernels()) {
+        //     ss << k->get_id() << ",";
+        // }
+        // ss << "],";
+    }
+    ss << std::endl;
+
+    // for (size_t i = 0; i < _deps.size(); ++i) {
+    //     auto p_dep = _deps[i].first;
+    //     ss << "- inputs[" << i << "] : "
+    //         << std::setw(30) <<  p_dep->id() << ","
+    //         << std::setw(20) << p_dep->get_output_layout().to_short_string() << ",";
+    //         if (p_dep->output_memory_ptr()) {
+    //             ss << p_dep->output_memory_ptr()->buffer_ptr() << std::endl;
+    //         } else {
+    //             ss << "nullptr" << std::endl;
+    //         }
+    // }
+    std::cout << ss.str();
+}
+
 void primitive_inst::execute() {
     GPU_DEBUG_PROFILED_STAGE(instrumentation::pipeline_stage::inference);
     if (get_flag(ExecutionFlags::SKIP)) {
         set_out_event(get_network().get_stream().aggregate_events(_impl_params->dep_events));
+        print_status();
         return;
     }
 
@@ -1961,6 +2038,7 @@ void primitive_inst::execute() {
     }
 
     set_out_event(_impl->execute(_impl_params->dep_events, *this));
+    print_status();
 
     GPU_DEBUG_GET_INSTANCE(debug_config);
     GPU_DEBUG_IF(!debug_config->dump_profiling_data.empty()) {

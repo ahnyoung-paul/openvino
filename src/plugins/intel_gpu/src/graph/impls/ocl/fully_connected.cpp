@@ -48,6 +48,17 @@ struct fully_connected_impl : typed_primitive_impl_ocl<fully_connected> {
         return make_deep_copy<fully_connected_impl, kernel_params_t>(*this);
     }
 
+    virtual std::string get_executed_kernel_name() const override {
+        std::stringstream ss;
+        ss << "kernel[" << _kernel_data.kernels.size() << "] - ";
+        for (size_t kd_idx = 0; kd_idx < _kernel_data.kernels.size(); ++kd_idx) {
+            if (_kernel_data.kernels[kd_idx].skip_execution)
+                continue;
+            ss << kd_idx << "::" << _kernels[kd_idx]->get_id() << ",";
+        }
+        return ss.str();
+    }
+
     void load(BinaryInputBuffer& ib) override {
         parent::load(ib);
         if (is_dynamic() && _kernel_data.kernelName.length() != 0) {

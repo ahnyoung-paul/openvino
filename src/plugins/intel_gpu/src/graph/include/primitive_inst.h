@@ -129,6 +129,8 @@ struct primitive_impl {
 
     std::shared_ptr<kernel_impl_params> get_weights_reorder_kernel_params() const;
 
+    virtual std::string get_executed_kernel_name() const { return ""; }
+
     const ImplementationManager* m_manager = nullptr;
 
 protected:
@@ -245,6 +247,7 @@ public:
     void reset_events();
 
     void prepare_primitive();
+    void print_status();
     void execute();
     void init_kernels(const kernels_cache& kernels_cache) {
         _impl->init_kernels(kernels_cache, *_impl_params);
@@ -403,6 +406,7 @@ protected:
     bool _can_share_buffer = true;
     bool _is_constant = false;
     bool _needs_completion_event = false;
+    bool _can_use_async_compilation = false;
 
     std::vector<size_t> _max_output_layout_count;
     std::vector<size_t> max_intermediates_memory_sizes;

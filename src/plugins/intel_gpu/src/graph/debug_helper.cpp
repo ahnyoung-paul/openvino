@@ -10,6 +10,7 @@
 #include "to_string_utils.h"
 #include "loop_inst.h"
 #include "condition_inst.h"
+#include "read_value_inst.h"
 #include "program_dump_graph.h"
 
 #include <iomanip>
@@ -161,9 +162,10 @@ void dump_i4u4(cldnn::data_types type, memory::ptr mem, stream& stream, std::ofs
 }
 
 void log_memory_to_file(memory::ptr mem, layout data_layout, stream& stream, std::string layerName, bool dump_raw) {
-    std::cout << "Dump " << (dump_raw ? "raw " : "") << layerName << std::endl;
+    // std::cout << "Dump " << (dump_raw ? "raw " : "") << layerName << std::endl;
     GPU_DEBUG_GET_INSTANCE(debug_config);
     std::string filename = debug_config->get_name_for_dump(layerName);
+    std::cout << filename << std::endl;
     filename = debug_config->dump_layers_path + filename + ".txt";
     std::ofstream file_stream(filename);
     if (!mem) {
@@ -337,6 +339,8 @@ NodeDebugHelper::~NodeDebugHelper() {
     if (debug_config->dump_layers_path.length() > 0) {
         m_stream.finish();
         const std::string layer_name = m_inst.id();
+        if (m_inst.is_constant() || m_inst.get_node().is_type<read_value>())
+            return;
 
         GPU_DEBUG_IF(debug_config->is_target_iteration(m_iter) &&
                     debug_config->is_layer_for_dumping(layer_name, m_inst.is_output(), m_inst.is_input())) {
