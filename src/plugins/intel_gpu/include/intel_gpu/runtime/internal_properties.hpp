@@ -57,6 +57,7 @@ static constexpr Property<bool, PropertyMutability::RW> nv12_two_inputs{"GPU_NV1
 static constexpr Property<float, PropertyMutability::RW> buffers_preallocation_ratio{"GPU_BUFFERS_PREALLOCATION_RATIO"};
 static constexpr Property<size_t, PropertyMutability::RW> max_kernels_per_batch{"GPU_MAX_KERNELS_PER_BATCH"};
 static constexpr Property<bool, PropertyMutability::RW> use_onednn{"USE_ONEDNN"};
+static constexpr Property<bool, PropertyMutability::RW> disable_async_compilation{"GPU_DISABLE_ASYNC_COMPILATION"};
 
 }  // namespace intel_gpu
 }  // namespace ov
