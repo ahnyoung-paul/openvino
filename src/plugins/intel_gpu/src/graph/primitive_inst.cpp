@@ -1931,7 +1931,9 @@ void primitive_inst::print_status() {
     // if (!_can_use_async_compilation)
     //     return;
     auto n_iter = get_network().get_current_iteration_num();
-    if ((2 < n_iter && n_iter < 512) || (n_iter > 514))
+    // if ((2 < n_iter && n_iter < 512) || (n_iter > 514))
+    //     return;
+    if (2 < n_iter)
         return;
 
     if (!_node->is_type<fully_connected>())
@@ -1943,7 +1945,7 @@ void primitive_inst::print_status() {
     //     && id() != "fullyconnectedcompressed:__module.model.layers.0.mlp.gate_proj/ov_ext::linear/MatMul"
     //     && id() != "fullyconnectedcompressed:__module.model.layers.0.mlp.down_proj/ov_ext::linear/MatMul")
     //     return;
-    if (id() != "fullyconnectedcompressed:__module.model.layers.1.self_attn.q_proj/ov_ext::linear/MatMul_fused_3FCs")
+    if (id() != "fullyconnectedcompressed:__module.model.layers.0.self_attn.q_proj/ov_ext::linear/MatMul_fused_3FCs")
         return;
 
     std::string exec_status = "executed";
@@ -1963,11 +1965,6 @@ void primitive_inst::print_status() {
     } else {
         ss << std::setw(18) << "0000000000000000" << ",";
     }
-    // if (_can_use_async_compilation) {
-    //     ss << "async_compilation_" << ",";
-    // } else {
-    //     ss << "static_compilation" << ",";
-    // }
     if (get_impl()->is_dynamic()) {
         ss << "dynamic_impl" << ",";
     } else {
@@ -1975,25 +1972,41 @@ void primitive_inst::print_status() {
     }
     if (get_impl()->get_kernel_name() != "" && !get_impl()->get_kernels().empty()) {
         ss << "{" << get_impl()->get_executed_kernel_name() << "},";
-        // const auto& kernels = get_impl()->get_kernels();
-        // for (auto k : get_impl()->get_kernels()) {
-        //     ss << k->get_id() << ",";
-        // }
-        // ss << "],";
     }
     ss << std::endl;
 
-    // for (size_t i = 0; i < _deps.size(); ++i) {
-    //     auto p_dep = _deps[i].first;
-    //     ss << "- inputs[" << i << "] : "
-    //         << std::setw(30) <<  p_dep->id() << ","
-    //         << std::setw(20) << p_dep->get_output_layout().to_short_string() << ",";
-    //         if (p_dep->output_memory_ptr()) {
-    //             ss << p_dep->output_memory_ptr()->buffer_ptr() << std::endl;
-    //         } else {
-    //             ss << "nullptr" << std::endl;
-    //         }
-    // }
+    auto& fc_node = get_node().as<fully_connected>();
+    ss << "* activation_scale               : " << fc_node.get_primitive()->activation_scale.to_string() << std::endl;
+    ss << "* weights_rank                   : " << fc_node.get_primitive()->weights_rank << std::endl;
+    ss << "* compressed_weights             : " << fc_node.get_primitive()->compressed_weights << std::endl;
+    ss << "* dynamic_quantized_activation   : " << fc_node.get_primitive()->dynamic_quantized_activation << std::endl;
+    ss << "* input_size                     : " <<  fc_node.get_primitive()->input_size << std::endl;
+    ss << "* decompression_zero_point_scalar: " << fc_node.get_primitive()->decompression_zero_point_scalar.value_or(0) << std::endl;
+    ss << "* weights                        : " << fc_node.get_primitive()->weights << std::endl;
+    ss << "* bias                           : " << fc_node.get_primitive()->bias << std::endl;
+    ss << "* decompression_scale            : " << fc_node.get_primitive()->decompression_scale << std::endl;
+    ss << "* decompression_zero_point       : " << fc_node.get_primitive()->decompression_zero_point << std::endl;
+
+    auto fused_prims = get_node().get_fused_primitives();
+    ss << "fused prim [" << fused_prims.size() << "]" << std::endl;
+    for (size_t i = 0; i < fused_prims.size(); i++) {
+        auto& fp = fused_prims[i];
+        ss << "- fused_prims[" << i << "] " << fp.desc->id
+            << "," << fp.desc->type_string() << "," << fp.output_layout.to_short_string() << std::endl;
+    }
+    ss << "input [" << _deps.size() << "]" << std::endl;
+    for (size_t i = 0; i < _deps.size(); ++i) {
+        auto p_dep = _deps[i].first;
+        ss << "- inputs[" << i << "] : "
+            << std::setw(30) <<  p_dep->id() << ","
+            << std::setw(20) << p_dep->get_node().get_output_layouts().front().to_short_string() << ","
+            << std::setw(20) << p_dep->get_output_layout().to_short_string() << ",";
+            if (p_dep->output_memory_ptr()) {
+                ss << p_dep->output_memory_ptr()->buffer_ptr() << std::endl;
+            } else {
+                ss << "nullptr" << std::endl;
+            }
+    }
     std::cout << ss.str();
 }
 
