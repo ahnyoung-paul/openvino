@@ -1077,6 +1077,8 @@ bool primitive_inst::use_async_compilation() {
     GPU_DEBUG_IF(debug_config->disable_async_compilation) {
         return false;
     }
+    if (get_network().get_program()->get_config().get_property(ov::intel_gpu::disable_async_compilation))
+        return false;
 
     bool compile_fc_impls = _node->is_type<fully_connected>();
     if (compile_fc_impls) {
