@@ -240,8 +240,8 @@ TEST(fully_connected_gpu, compare_static_dynamic) {
     // float dcomp_zp_min_random = -4.0f;
 
     // uint8_t weight_max_random = 0;  //0x00010001;
-    float input_max_random = 0.f;
-    float input_min_random = 0.f;
+    float input_max_random = 10.f;
+    float input_min_random = -10.f;
     // unsigned int weight_max_random = 0x00010001;
     // unsigned int weight_min_random = 0x00010001;
     unsigned int weight_max_random = 10;
@@ -271,9 +271,10 @@ TEST(fully_connected_gpu, compare_static_dynamic) {
         size_t d = weights_rnd[0][0][0].size();
         std::cout << "weights_rnd: " << a << " x " << b << " x " << c << " x " << d << std::endl;
         {
-            size_t target_a = 7;
-            for (size_t b_idx = 0; b_idx < b; b_idx++) {
-                weights_rnd[target_a][b_idx][0][0] = static_cast<uint8_t>(0x00010001);
+            for (size_t a_idx = 0; a_idx < 3; a_idx++) {
+                for (size_t b_idx = 0; b_idx < b; b_idx++) {
+                    weights_rnd[a_idx][b_idx][0][0] = static_cast<uint8_t>(0x00010001);
+                }
             }
         }
     }

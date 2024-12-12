@@ -972,7 +972,7 @@ inline void FUNC(fc_bf_tiled_kernel_dyn_quan)(
     // =====================================================================================================================================
     // Main computation loop
     const uint iterations = MAIN_LOOP_ELEMENTS_COUNT / TILE_IFM_ELEMENTS_SIZE;  // TILE_IFM_ELEMENTS_SIZE : (TILE_IFM * SIMD)
-    // Each sub-group loads 2 Batch 
+    // Each sub-group loads 2 Batch
     uint idx_sglid = (sglid * TILE_K) % TILE_IFM_ELEMENTS_SIZE;       // same index for sglid 0~7 : to tile_k direction
     uint batch_sglid = (sglid * TILE_K) / TILE_IFM_ELEMENTS_SIZE;     // 0 to 1 : to batch direction
 
@@ -1377,189 +1377,6 @@ KERNEL(fc)(
         __local ACCUMULATOR_TYPE wei_local_mem[TILE_IFM * SIMD * TILE_OFM * SIMD];
     #endif
 #endif
-#if IS_DYNAMIC && COMPRESSED_WEIGHTS_INT4
-    const int batch_size = BATCH_SIZE;
-    if (batch_size == 1) {
-        FUNC_CALL(fc_bf_tiled_kernel_forced_tile_b1)(
-            OPTIONAL_SHAPE_INFO_TENSOR
-            input,
-        #if DECOMPRESSION_SCALE_TERM
-            decompression_scale,
-        #endif
-        #if DECOMPRESSION_ZP_TERM && !DECOMPRESSION_ZP_SCALAR
-            decompression_zp,
-        #endif
-            output,
-            weights
-        #if BIAS_TERM
-            , biases
-        #endif
-        #if HAS_FUSED_OPS_DECLS
-            , FUSED_OPS_ARGS
-        #endif
-        );
-    } else if (batch_size == 2) {
-        FUNC_CALL(fc_bf_tiled_kernel_forced_tile_b2)(
-            OPTIONAL_SHAPE_INFO_TENSOR
-            input,
-        #if DECOMPRESSION_SCALE_TERM
-            decompression_scale,
-        #endif
-        #if DECOMPRESSION_ZP_TERM && !DECOMPRESSION_ZP_SCALAR
-            decompression_zp,
-        #endif
-            output,
-            weights
-        #if BIAS_TERM
-            , biases
-        #endif
-        #if HAS_FUSED_OPS_DECLS
-            , FUSED_OPS_ARGS
-        #endif
-        );
-    } else if (batch_size == 3) {
-        FUNC_CALL(fc_bf_tiled_kernel_forced_tile_b3)(
-            OPTIONAL_SHAPE_INFO_TENSOR
-            input,
-        #if DECOMPRESSION_SCALE_TERM
-            decompression_scale,
-        #endif
-        #if DECOMPRESSION_ZP_TERM && !DECOMPRESSION_ZP_SCALAR
-            decompression_zp,
-        #endif
-            output,
-            weights
-        #if BIAS_TERM
-            , biases
-        #endif
-        #if HAS_FUSED_OPS_DECLS
-            , FUSED_OPS_ARGS
-        #endif
-        );
-    } else if (batch_size == 4) {
-        FUNC_CALL(fc_bf_tiled_kernel_forced_tile_b4)(
-            OPTIONAL_SHAPE_INFO_TENSOR
-            input,
-        #if DECOMPRESSION_SCALE_TERM
-            decompression_scale,
-        #endif
-        #if DECOMPRESSION_ZP_TERM && !DECOMPRESSION_ZP_SCALAR
-            decompression_zp,
-        #endif
-            output,
-            weights
-        #if BIAS_TERM
-            , biases
-        #endif
-        #if HAS_FUSED_OPS_DECLS
-            , FUSED_OPS_ARGS
-        #endif
-        );
-    } else if (batch_size == 5) {
-        FUNC_CALL(fc_bf_tiled_kernel_forced_tile_b5)(
-            OPTIONAL_SHAPE_INFO_TENSOR
-            input,
-        #if DECOMPRESSION_SCALE_TERM
-            decompression_scale,
-        #endif
-        #if DECOMPRESSION_ZP_TERM && !DECOMPRESSION_ZP_SCALAR
-            decompression_zp,
-        #endif
-            output,
-            weights
-        #if BIAS_TERM
-            , biases
-        #endif
-        #if HAS_FUSED_OPS_DECLS
-            , FUSED_OPS_ARGS
-        #endif
-        );
-    } else if (batch_size == 6) {
-        FUNC_CALL(fc_bf_tiled_kernel_forced_tile_b6)(
-            OPTIONAL_SHAPE_INFO_TENSOR
-            input,
-        #if DECOMPRESSION_SCALE_TERM
-            decompression_scale,
-        #endif
-        #if DECOMPRESSION_ZP_TERM && !DECOMPRESSION_ZP_SCALAR
-            decompression_zp,
-        #endif
-            output,
-            weights
-        #if BIAS_TERM
-            , biases
-        #endif
-        #if HAS_FUSED_OPS_DECLS
-            , FUSED_OPS_ARGS
-        #endif
-        );
-    } else if (batch_size == 7) {
-        FUNC_CALL(fc_bf_tiled_kernel_forced_tile_b7)(
-            OPTIONAL_SHAPE_INFO_TENSOR
-            input,
-        #if DECOMPRESSION_SCALE_TERM
-            decompression_scale,
-        #endif
-        #if DECOMPRESSION_ZP_TERM && !DECOMPRESSION_ZP_SCALAR
-            decompression_zp,
-        #endif
-            output,
-            weights
-        #if BIAS_TERM
-            , biases
-        #endif
-        #if HAS_FUSED_OPS_DECLS
-            , FUSED_OPS_ARGS
-        #endif
-        );
-    } else {
-        #if USE_SLM && DYNAMIC_QUANTIZE
-            FUNC_CALL(fc_bf_tiled_kernel_dyn_quan)(
-                OPTIONAL_SHAPE_INFO_TENSOR
-                input,
-                quantized_input,
-                quan_var,
-            #if DECOMPRESSION_SCALE_TERM
-                decompression_scale,
-            #endif
-            #if DECOMPRESSION_ZP_TERM && !DECOMPRESSION_ZP_SCALAR
-                decompression_zp,
-            #endif
-                output,
-                weights
-                , dq_wei_local_mem
-            #if BIAS_TERM
-                , biases
-            #endif
-            #if HAS_FUSED_OPS_DECLS
-                , FUSED_OPS_ARGS
-            #endif
-            );
-        #else
-            FUNC_CALL(fc_bf_tiled_kernel_default)(
-                OPTIONAL_SHAPE_INFO_TENSOR
-                input,
-            #if DECOMPRESSION_SCALE_TERM
-                decompression_scale,
-            #endif
-            #if DECOMPRESSION_ZP_TERM && !DECOMPRESSION_ZP_SCALAR
-                decompression_zp,
-            #endif
-                output,
-                weights
-            #if USE_SLM
-                , wei_local_mem
-            #endif
-            #if BIAS_TERM
-                , biases
-            #endif
-            #if HAS_FUSED_OPS_DECLS
-                , FUSED_OPS_ARGS
-            #endif
-            );
-        #endif
-    }
-#else
     #if USE_SLM && DYNAMIC_QUANTIZE
         FUNC_CALL(fc_bf_tiled_kernel_dyn_quan)(
             OPTIONAL_SHAPE_INFO_TENSOR
@@ -1605,7 +1422,6 @@ KERNEL(fc)(
         #endif
         );
     #endif
-#endif
 }
 #endif  // !FC_KERNEL_DYNAMIC_QUANTIZE
 
