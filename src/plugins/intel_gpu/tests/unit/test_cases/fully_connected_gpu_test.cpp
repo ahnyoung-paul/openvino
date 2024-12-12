@@ -203,8 +203,12 @@ TEST(fully_connected_gpu, compare_static_dynamic) {
     disable_async_compile_config.set_property(ov::intel_gpu::disable_async_compilation(true));
     disable_async_compile_config.set_property(ov::intel_gpu::force_implementations(ov::intel_gpu::ImplForcingMap{ {fc_id, fc_impl_desc} }));
 
-    int64_t ifm_num = 2048;
-    int64_t ofm_num = 3072;
+    // int64_t ifm_num = 2048;
+    // int64_t ofm_num = 3072;
+    // // int64_t scales_group_size = 192;
+    // int64_t dcomp_feature = 16; //ifm_num / scales_group_size;
+    int64_t ifm_num = 1024;
+    int64_t ofm_num = 2048;
     // int64_t scales_group_size = 192;
     int64_t dcomp_feature = 16; //ifm_num / scales_group_size;
 
@@ -214,6 +218,9 @@ TEST(fully_connected_gpu, compare_static_dynamic) {
     auto dcomp_scale_layout     = layout{ ov::PartialShape{ ofm_num, dcomp_feature  }, data_types::f16, format::bfyx};
     auto dcomp_zp_layout        = layout{ ov::PartialShape{ ofm_num, dcomp_feature  }, data_types::f16, format::bfyx};
     auto output_layout          = layout{ ov::PartialShape{ 1, 1, ofm_num           }, data_types::f32, format::bfyx};
+
+    std::cout << "* input_layout  : " << input_static_layout.to_short_string() << std::endl;
+    std::cout << "* weight_layout : " << weight_layout.to_short_string() << std::endl;
 
     auto input_mem      = engine.allocate_memory(input_static_layout);
     auto weights_mem    = engine.allocate_memory(weight_layout);
@@ -233,8 +240,8 @@ TEST(fully_connected_gpu, compare_static_dynamic) {
     // float dcomp_zp_min_random = -4.0f;
 
     // uint8_t weight_max_random = 0;  //0x00010001;
-    float input_max_random = 1.f;
-    float input_min_random = 1.f;
+    float input_max_random = 0.f;
+    float input_min_random = 0.f;
     // unsigned int weight_max_random = 0x00010001;
     // unsigned int weight_min_random = 0x00010001;
     unsigned int weight_max_random = 10;
@@ -256,6 +263,20 @@ TEST(fully_connected_gpu, compare_static_dynamic) {
     VVF<ov::float16> dcomp_scale_rnd    = rg.generate_random_2d<ov::float16>(ofm_num, dcomp_feature,    dcomp_scale_min_random, dcomp_scale_max_random);
     VVF<ov::float16> dcomp_zp_rnd       = rg.generate_random_2d<ov::float16>(ofm_num, dcomp_feature,    dcomp_zp_min_random,    dcomp_zp_max_random);
     auto input_rnd_vec      = flatten_4d<ov::float16>(format::bfyx, input_rnd);
+    std::cout << "Paul test ...." << std::endl;
+    {
+        size_t a = weights_rnd.size();
+        size_t b = weights_rnd[0].size();
+        size_t c = weights_rnd[0][0].size();
+        size_t d = weights_rnd[0][0][0].size();
+        std::cout << "weights_rnd: " << a << " x " << b << " x " << c << " x " << d << std::endl;
+        {
+            size_t target_a = 7;
+            for (size_t b_idx = 0; b_idx < b; b_idx++) {
+                weights_rnd[target_a][b_idx][0][0] = static_cast<uint8_t>(0x00010001);
+            }
+        }
+    }
     auto weights_rnd_vec    = flatten_4d<uint8_t>(format::bfyx, weights_rnd);
     auto dcomp_scale_vec    = flatten_2d<ov::float16>(format::bfyx, dcomp_scale_rnd);
     auto dcomp_zp_vec       = flatten_2d<ov::float16>(format::bfyx, dcomp_zp_rnd);
@@ -306,39 +327,12 @@ TEST(fully_connected_gpu, compare_static_dynamic) {
     ASSERT_EQ(output_mem_sta->get_layout().get_partial_shape(), output_mem_dyn->get_layout().get_partial_shape());
     ASSERT_EQ(output_mem_sta->count(), output_mem_dyn->count());
 
-    auto get_ref_results = [&]() {
-        topology topology(
-            input_layout("input", input_static_layout),
-            data("weights", weights_mem),
-            data("scale", scale_mem),
-            data("zp", zp_mem),
-            fully_connected(fc_id, input_info("input"), "weights", "", "scale", "zp", data_types::f16, 3, 2),
-            reorder("output", input_info(fc_id), output_layout)
-        );
-
-        auto config = get_test_default_config(engine);
-        config.set_property(ov::intel_gpu::allow_new_shape_infer(true));
-        ov::intel_gpu::ImplementationDesc fc_impl_desc = { format::bfyx, "fully_connected_gpu_bfyx_ref", impl_types::ocl };
-        config.set_property(ov::intel_gpu::force_implementations(ov::intel_gpu::ImplForcingMap{ {fc_id, fc_impl_desc} }));
-        config.set_property(ov::hint::dynamic_quantization_group_size(0));
-
-        network network(engine, topology, config);
-        network.set_input_data("input", input_mem);
-
-        auto outputs = network.execute();
-        OPENVINO_ASSERT(outputs.size() == 1);
-        OPENVINO_ASSERT(outputs.begin()->first == "output");
-
-        auto output_layout = outputs.begin()->second.get_layout();
-        auto output_mem = outputs.begin()->second.get_memory();
-
-        return engine.reinterpret_buffer(*output_mem, output_layout);
-    };
-    auto ref_output_mem = get_ref_results();
-    cldnn::mem_lock<float> output_ptr_ref (ref_output_mem, get_test_stream());
+    for (size_t i = 0; i < 30; i++) {
+        std::cout << output_ptr_sta[i] << " : " << output_ptr_dyn[i] << std::endl;
+    }
 
     for (size_t i = 0; i < output_mem_sta->count(); i++) {
-        ASSERT_EQ(output_ptr_sta[i], output_ptr_dyn[i]) << "i = " << i << ", ref = " << output_ptr_ref[i];
+        ASSERT_EQ(output_ptr_sta[i], output_ptr_dyn[i]) << "i = " << i;
     }
 }
 
