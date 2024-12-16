@@ -601,8 +601,10 @@ inline void FUNC(fc_bf_tiled_kernel_default)(
                 #endif
                 #if TILE_OFM > 1
                 ((ACCUMULATOR_TYPE*)(&acc[bi]))[fi] += ((ACCUMULATOR_TYPE*)(&acc_tmp[bi]))[fi] * ds;
+                acc_tmp[bi][fi] = 0;
                 #else
                 acc[bi] += acc_tmp[bi] * ds;
+                acc_tmp[bi] = 0;
                 #endif
             }
         }

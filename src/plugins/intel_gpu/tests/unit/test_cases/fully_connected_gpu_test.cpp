@@ -203,13 +203,16 @@ TEST(fully_connected_gpu, compare_static_dynamic) {
     disable_async_compile_config.set_property(ov::intel_gpu::disable_async_compilation(true));
     disable_async_compile_config.set_property(ov::intel_gpu::force_implementations(ov::intel_gpu::ImplForcingMap{ {fc_id, fc_impl_desc} }));
 
-    // int64_t ifm_num = 2048;
-    // int64_t ofm_num = 3072;
+    int64_t ifm_num = 2048;
+    int64_t ofm_num = 3072;
+    // int64_t ofm_num = 2048;
+    // int64_t ofm_num = 128;
     // // int64_t scales_group_size = 192;
     // int64_t dcomp_feature = 16; //ifm_num / scales_group_size;
-    int64_t ifm_num = 1024;
-    int64_t ofm_num = 2048;
+    // int64_t ifm_num = 512;
     // int64_t scales_group_size = 192;
+    // int64_t ifm_num = 512;
+    // int64_t ofm_num = 64;
     int64_t dcomp_feature = 16; //ifm_num / scales_group_size;
 
     auto input_static_layout    = layout{ ov::PartialShape{  1,  1, ifm_num         }, data_types::f16, format::bfyx};
@@ -240,8 +243,8 @@ TEST(fully_connected_gpu, compare_static_dynamic) {
     // float dcomp_zp_min_random = -4.0f;
 
     // uint8_t weight_max_random = 0;  //0x00010001;
-    float input_max_random = 10.f;
-    float input_min_random = -10.f;
+    float input_max_random = 1.f;
+    float input_min_random = 1.f;
     // unsigned int weight_max_random = 0x00010001;
     // unsigned int weight_min_random = 0x00010001;
     unsigned int weight_max_random = 10;
@@ -263,24 +266,37 @@ TEST(fully_connected_gpu, compare_static_dynamic) {
     VVF<ov::float16> dcomp_scale_rnd    = rg.generate_random_2d<ov::float16>(ofm_num, dcomp_feature,    dcomp_scale_min_random, dcomp_scale_max_random);
     VVF<ov::float16> dcomp_zp_rnd       = rg.generate_random_2d<ov::float16>(ofm_num, dcomp_feature,    dcomp_zp_min_random,    dcomp_zp_max_random);
     auto input_rnd_vec      = flatten_4d<ov::float16>(format::bfyx, input_rnd);
-    std::cout << "Paul test ...." << std::endl;
-    {
-        size_t a = weights_rnd.size();
-        size_t b = weights_rnd[0].size();
-        size_t c = weights_rnd[0][0].size();
-        size_t d = weights_rnd[0][0][0].size();
-        std::cout << "weights_rnd: " << a << " x " << b << " x " << c << " x " << d << std::endl;
-        {
-            for (size_t a_idx = 0; a_idx < 3; a_idx++) {
-                for (size_t b_idx = 0; b_idx < b; b_idx++) {
-                    weights_rnd[a_idx][b_idx][0][0] = static_cast<uint8_t>(0x00010001);
-                }
-            }
-        }
-    }
     auto weights_rnd_vec    = flatten_4d<uint8_t>(format::bfyx, weights_rnd);
     auto dcomp_scale_vec    = flatten_2d<ov::float16>(format::bfyx, dcomp_scale_rnd);
     auto dcomp_zp_vec       = flatten_2d<ov::float16>(format::bfyx, dcomp_zp_rnd);
+
+    std::cout << "Paul test ...." << std::endl;
+    // {
+    //     size_t a = input_rnd.size();
+    //     size_t b = input_rnd[0].size();
+    //     size_t c = input_rnd[0][0].size();
+    //     size_t d = input_rnd[0][0][0].size();
+    //     std::cout << "input_rnd: " << a << " x " << b << " x " << c << " x " << d << std::endl;
+    //     {
+    //         for (size_t c_idx = 0; c_idx < c; c_idx++) {
+    //             input_rnd[0][0][c_idx][0] = static_cast<ov::float16>(c_idx);
+    //         }
+    //     }
+    // }
+    // {
+    //     size_t a = weights_rnd.size();
+    //     size_t b = weights_rnd[0].size();
+    //     size_t c = weights_rnd[0][0].size();
+    //     size_t d = weights_rnd[0][0][0].size();
+    //     std::cout << "weights_rnd: " << a << " x " << b << " x " << c << " x " << d << std::endl;
+    //     {
+    //         for (size_t a_idx = 0; a_idx < 3; a_idx++) {
+    //             for (size_t b_idx = 0; b_idx < b; b_idx++) {
+    //                 weights_rnd[a_idx][b_idx][0][0] = static_cast<uint8_t>(0x00010001);
+    //             }
+    //         }
+    //     }
+    // }
 
     set_values(input_mem, input_rnd_vec);
     set_values(weights_mem, weights_rnd_vec);
@@ -328,9 +344,10 @@ TEST(fully_connected_gpu, compare_static_dynamic) {
     ASSERT_EQ(output_mem_sta->get_layout().get_partial_shape(), output_mem_dyn->get_layout().get_partial_shape());
     ASSERT_EQ(output_mem_sta->count(), output_mem_dyn->count());
 
-    for (size_t i = 0; i < 30; i++) {
-        std::cout << output_ptr_sta[i] << " : " << output_ptr_dyn[i] << std::endl;
-    }
+    // std::cout << "static impl, dynamic impl" << std::endl;
+    // for (size_t i = 0; i < static_cast<size_t>(ofm_num); i++) {
+    //     std::cout << output_ptr_sta[i] << ", " << output_ptr_dyn[i] << std::endl;
+    // }
 
     for (size_t i = 0; i < output_mem_sta->count(); i++) {
         ASSERT_EQ(output_ptr_sta[i], output_ptr_dyn[i]) << "i = " << i;
