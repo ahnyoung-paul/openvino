@@ -10,6 +10,8 @@
 #include "to_string_utils.h"
 #include "loop_inst.h"
 #include "condition_inst.h"
+#include "gemm_inst.h"
+#include "fully_connected_inst.h"
 #include "program_dump_graph.h"
 
 #include <iomanip>
@@ -292,40 +294,41 @@ NodeDebugHelper::NodeDebugHelper(const primitive_inst& inst)
     // Dump input buffers of 'inst'
     if (debug_config->dump_layers_path.length() > 0) {
         const std::string layer_name = inst.id();
+        if (m_inst.get_node().is_type<gemm>() || m_inst.get_node().is_type<fully_connected>() || m_inst.is_output()) {
+            if (debug_config->is_target_iteration(m_iter) &&
+                debug_config->dump_layers_dst_only == 0 && debug_config->is_layer_for_dumping(layer_name)) {
+                std::string debug_str_for_bin_load = " Command for loading : OV_GPU_LoadDumpRawBinary=\"" + layer_name + ":";
+                for (size_t i = 0; i < m_inst.dependencies().size(); i++) {
+                    std::string name = get_file_prefix() + "_src" + std::to_string(i);
+                    auto input_mem = m_inst.dep_memory_ptr(i);
+                    if (input_mem == nullptr) {
+                        GPU_DEBUG_COUT  << " input_mem_" << i << " is nullptr. Nothing to dump." << std::endl;
+                        continue;
+                    }
 
-        if (debug_config->is_target_iteration(m_iter) &&
-            debug_config->dump_layers_dst_only == 0 && debug_config->is_layer_for_dumping(layer_name)) {
-            std::string debug_str_for_bin_load = " Command for loading : OV_GPU_LoadDumpRawBinary=\"" + layer_name + ":";
-            for (size_t i = 0; i < m_inst.dependencies().size(); i++) {
-                std::string name = get_file_prefix() + "_src" + std::to_string(i);
-                auto input_mem = m_inst.dep_memory_ptr(i);
-                if (input_mem == nullptr) {
-                    GPU_DEBUG_COUT  << " input_mem_" << i << " is nullptr. Nothing to dump." << std::endl;
-                    continue;
+                    auto dep = m_inst.dependencies().at(i);
+                    auto input_layout = dep.first->get_output_layout(dep.second);
+                    GPU_DEBUG_IF(debug_config->dump_layers_binary) {
+                        // Binary dump : raw
+                        auto filename = get_file_path_for_binary_dump(input_layout, name);
+
+                        mem_lock<char, mem_lock_type::read> lock(input_mem, m_stream);
+                        ov::util::save_binary(filename, lock.data(), input_mem->size());
+                        GPU_DEBUG_COUT  << " Dump layer src : " << layer_name << " to " << filename << std::endl;
+                        debug_str_for_bin_load += (filename + ",");
+                    } else {
+                        log_memory_to_file(input_mem,
+                                        input_layout,
+                                        m_stream,
+                                        name,
+                                        debug_config->dump_layers_raw);
+                    }
                 }
 
-                auto dep = m_inst.dependencies().at(i);
-                auto input_layout = dep.first->get_output_layout(dep.second);
-                GPU_DEBUG_IF(debug_config->dump_layers_binary) {
-                    // Binary dump : raw
-                    auto filename = get_file_path_for_binary_dump(input_layout, name);
-
-                    mem_lock<char, mem_lock_type::read> lock(input_mem, m_stream);
-                    ov::util::save_binary(filename, lock.data(), input_mem->size());
-                    GPU_DEBUG_COUT  << " Dump layer src : " << layer_name << " to " << filename << std::endl;
-                    debug_str_for_bin_load += (filename + ",");
-                } else {
-                    log_memory_to_file(input_mem,
-                                       input_layout,
-                                       m_stream,
-                                       name,
-                                       debug_config->dump_layers_raw);
+                if (debug_config->dump_layers_binary && !inst.is_input()) {
+                    debug_str_for_bin_load[debug_str_for_bin_load.size()-1] = '\"';
+                    GPU_DEBUG_COUT << debug_str_for_bin_load << std::endl;
                 }
-            }
-
-            if (debug_config->dump_layers_binary && !inst.is_input()) {
-                debug_str_for_bin_load[debug_str_for_bin_load.size()-1] = '\"';
-                GPU_DEBUG_COUT << debug_str_for_bin_load << std::endl;
             }
         }
     }
@@ -340,34 +343,36 @@ NodeDebugHelper::~NodeDebugHelper() {
 
         GPU_DEBUG_IF(debug_config->is_target_iteration(m_iter) &&
                     debug_config->is_layer_for_dumping(layer_name, m_inst.is_output(), m_inst.is_input())) {
-            std::string debug_str_for_bin_load = " Command for loading : OV_GPU_LoadDumpRawBinary=\""
-                                                    + layer_name + ":";
-            for (size_t i = 0; i < m_inst.outputs_memory_count(); i++) {
-                std::string name = get_file_prefix() + "_dst" + std::to_string(i);
-                auto output_mem = m_inst.output_memory_ptr(i);
-                if (output_mem == nullptr) {
-                    GPU_DEBUG_COUT  << " output_mem is nullptr. Nothing to dump." << std::endl;
-                    continue;
+            if (m_inst.get_node().is_type<gemm>() || m_inst.get_node().is_type<fully_connected>() || m_inst.is_output()) {
+                std::string debug_str_for_bin_load = " Command for loading : OV_GPU_LoadDumpRawBinary=\""
+                                                        + layer_name + ":";
+                for (size_t i = 0; i < m_inst.outputs_memory_count(); i++) {
+                    std::string name = get_file_prefix() + "_dst" + std::to_string(i);
+                    auto output_mem = m_inst.output_memory_ptr(i);
+                    if (output_mem == nullptr) {
+                        GPU_DEBUG_COUT  << " output_mem is nullptr. Nothing to dump." << std::endl;
+                        continue;
+                    }
+
+                    GPU_DEBUG_IF(debug_config->dump_layers_binary) {
+                        // Binary dump : raw
+                        auto output_layout = m_inst.get_output_layout(i);
+                        auto filename = get_file_path_for_binary_dump(output_layout, name);
+
+                        mem_lock<char, mem_lock_type::read> lock(output_mem, m_stream);
+                        ov::util::save_binary(filename, lock.data(), output_mem->size());
+                        GPU_DEBUG_COUT  << " Dump layer dst : " << layer_name << " to " << filename << std::endl;
+                        debug_str_for_bin_load += (filename + ",");
+                    } else {
+                        // Text dump
+                        log_memory_to_file(output_mem, m_inst.get_output_layout(i), m_stream, name, debug_config->dump_layers_raw);
+                    }
                 }
 
-                GPU_DEBUG_IF(debug_config->dump_layers_binary) {
-                    // Binary dump : raw
-                    auto output_layout = m_inst.get_output_layout(i);
-                    auto filename = get_file_path_for_binary_dump(output_layout, name);
-
-                    mem_lock<char, mem_lock_type::read> lock(output_mem, m_stream);
-                    ov::util::save_binary(filename, lock.data(), output_mem->size());
-                    GPU_DEBUG_COUT  << " Dump layer dst : " << layer_name << " to " << filename << std::endl;
-                    debug_str_for_bin_load += (filename + ",");
-                } else {
-                    // Text dump
-                    log_memory_to_file(output_mem, m_inst.get_output_layout(i), m_stream, name, debug_config->dump_layers_raw);
+                GPU_DEBUG_IF(debug_config->dump_layers_binary && m_inst.is_input()) {
+                    debug_str_for_bin_load[debug_str_for_bin_load.size()-1] = '\"';
+                    GPU_DEBUG_COUT << debug_str_for_bin_load << std::endl;;
                 }
-            }
-
-            GPU_DEBUG_IF(debug_config->dump_layers_binary && m_inst.is_input()) {
-                debug_str_for_bin_load[debug_str_for_bin_load.size()-1] = '\"';
-                GPU_DEBUG_COUT << debug_str_for_bin_load << std::endl;;
             }
         }
     }

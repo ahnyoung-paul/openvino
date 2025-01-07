@@ -292,6 +292,7 @@ event::ptr ocl_stream::enqueue_kernel(kernel& kernel,
         ocl::rethrow_or_exit(err, _engine.get_device_info());
     }
 
+    finish();
     return std::make_shared<ocl_event>(ret_ev, ++_queue_counter);
 }
 
