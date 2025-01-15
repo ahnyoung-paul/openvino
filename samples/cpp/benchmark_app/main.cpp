@@ -35,9 +35,22 @@
 #include "remote_tensors_filling.hpp"
 #include "statistics_report.hpp"
 #include "utils.hpp"
+#include <ctime>
 // clang-format on
 
 namespace {
+
+std::string get_current_time_str() {
+    auto now = std::chrono::system_clock::now();
+    std::time_t current_time = std::chrono::system_clock::to_time_t(now);
+    std::tm* local_time = std::localtime(&current_time);
+
+    std::stringstream ss;
+    ss << std::put_time(local_time, "%Y-%m-%d %H:%M:%S");
+
+    return ss.str();
+}
+
 bool parse_and_check_command_line(int argc, char* argv[]) {
     // ---------------------------Parsing and validating input
     // arguments--------------------------------------
@@ -1027,7 +1040,7 @@ int main(int argc, char* argv[]) {
             slog::info << "Benchmarking in inference only mode (inputs filling are not included in measurement loop)."
                        << slog::endl;
         } else {
-            slog::info << "Benchmarking in full mode (inputs filling are included in measurement loop)." << slog::endl;
+            slog::info << "Benchmarking in full mode (inputs filling are included in measurement loop). " << get_current_time_str() << slog::endl;
         }
 
         // copy prepared data straight into inferRequest->getTensor()
@@ -1099,7 +1112,7 @@ int main(int argc, char* argv[]) {
         inferRequestsQueue.wait_all();
 
         auto duration_ms = inferRequestsQueue.get_latencies()[0];
-        slog::info << "First inference took " << double_to_string(duration_ms) << " ms" << slog::endl;
+        slog::info << "First inference took " << double_to_string(duration_ms) << " ms, " << get_current_time_str() << slog::endl;
 
         if (statistics) {
             statistics->add_parameters(
