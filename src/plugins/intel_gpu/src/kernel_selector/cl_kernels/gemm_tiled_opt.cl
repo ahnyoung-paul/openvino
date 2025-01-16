@@ -413,10 +413,6 @@ KERNEL(gemm_tiled_opt)(
 #endif // IS_DYNAMIC
             a_ptr += input0_offset;
 
-            #if B_VEC_SIZE > 1 && TRANSPOSE_INPUT1 == TRANSPOSE_Y_LAST
-                B_FLOATN b_tile_tmp = (B_FLOATN)(0.0f, 0.0f);
-            #endif
-
             unroll_for (uint subtile_k_id = 0; subtile_k_id < TILE_K / SIMD_WIDTH; subtile_k_id++) {
                 unroll_for (uint simd_local_id = 0; simd_local_id < SIMD_WIDTH; simd_local_id++) {
     #if TILE_K > SIMD_WIDTH
@@ -425,22 +421,9 @@ KERNEL(gemm_tiled_opt)(
     #else // TILE_K > SIMD_WIDTH
                 // working
                 #if B_VEC_SIZE > 1 && TRANSPOSE_INPUT1 == TRANSPOSE_Y_LAST
-                    // MAKE_VECTOR_TYPE(INPUT1_TYPE, B_VEC_SIZE) b_tile_tmp_issue;
-                    // unroll_for (uint b_elem = 0; b_elem < B_VEC_SIZE; ++b_elem) {
-                    //     b_tile_tmp_issue[b_elem] = b_tile[b_elem][simd_local_id];
-                    // }
-
-                    // B_FLOATN b_tile_tmp = (B_FLOATN)(0.0f, 0.0f);
-                    // B_FLOATN b_tile_tmp = b_tile[simd_local_id];
-                    // B_FLOATN b_tile_tmp = (B_FLOATN)(1.0f);
-
-                    b_tile_tmp.s0 = 1.0f;
-                    b_tile_tmp.s1 = 1.0f;
-
-                    INPUT1_TYPE* b_tile_tmp_ptr = (INPUT1_TYPE*)(&b_tile_tmp);
+                    MAKE_VECTOR_TYPE(INPUT1_TYPE, B_VEC_SIZE) b_tile_tmp;
                     unroll_for (uint b_elem = 0; b_elem < B_VEC_SIZE; ++b_elem) {
-                        INPUT1_TYPE* b_tile_ptr = (INPUT1_TYPE*)(&b_tile[b_elem]);
-                        b_tile_tmp_ptr[b_elem] = b_tile_ptr[simd_local_id];
+                        b_tile_tmp[b_elem] = b_tile[b_elem][simd_local_id];
                     }
 
                     c_tile[dot_id] = mad((INPUT0_TYPE)(sub_group_broadcast(a_read, simd_local_id)), b_tile_tmp, c_tile[dot_id]);
