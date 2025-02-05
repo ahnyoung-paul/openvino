@@ -1179,9 +1179,25 @@ void primitive_inst::update_shape_info_tensor(const kernel_impl_params& params) 
 }
 
 void primitive_inst::update_impl(bool use_async_compilation) {
+    if (get_node().is_type<fully_connected>()) {
+        GPU_DEBUG_COUT<< "-----------------------------------------------------------------" << std::endl;
+        GPU_DEBUG_COUT << "Update_impl " << id() << " (type: " << _impl_params->desc->type_string() << ") in net_id " << get_network_id() << std::endl;
+        for (size_t i = 0; i < _deps.size(); ++i) {
+            GPU_DEBUG_COUT << "- inputs[" << i << "] : " <<  _deps[i].first->id() << ", " << _impl_params->input_layouts[i].to_short_string() << std::endl;
+        }
+
+        for (size_t i = 0; i < _impl_params->output_layouts.size(); i++) {
+            GPU_DEBUG_COUT << "- outputs[" << i << "] : " << _impl_params->output_layouts[i].to_short_string() << std::endl;
+        }
+        GPU_DEBUG_COUT << "-----------------------------------------------------------------" << std::endl;
+    }
+
     OV_ITT_SCOPED_TASK(ov::intel_gpu::itt::domains::intel_gpu_plugin, openvino::itt::handle("update_impl: " + id()));
     GPU_DEBUG_PROFILED_STAGE(instrumentation::pipeline_stage::update_implementation);
     auto prev_impl_str =  _impl != nullptr ? _impl->get_kernel_name() : "nullptr";
+    // if (get_node().is_type<fully_connected>()) {
+    //     GPU_DEBUG_COUT << " update_impl for " << id() << std::endl;
+    // }
 
     // no need to update impl for optimized out primitive
     if (_impl != nullptr && can_be_optimized()) {
@@ -1216,7 +1232,9 @@ void primitive_inst::update_impl(bool use_async_compilation) {
 #endif
 
         _impl = _impls_factory->get_primitive_impl_for_params(*this, *_impl_params, use_async_compilation);
-        GPU_DEBUG_TRACE_DETAIL << id() << " impl update: was: " << prev_impl_str << " now: " << _impl->get_kernel_name() << std::endl;
+        // if (get_node().is_type<fully_connected>()) {
+        //     GPU_DEBUG_COUT << id() << " impl update: was: " << prev_impl_str << " now: " << _impl->get_kernel_name() << std::endl;
+        // }
     }
 
     set_flag(ExecutionFlags::IMPL_CHANGED);
@@ -1798,12 +1816,14 @@ void primitive_inst::prepare_primitive() {
     OV_ITT_SCOPED_TASK(ov::intel_gpu::itt::domains::intel_gpu_plugin, openvino::itt::handle("primitive_inst::execute: " + id()));
     const auto& primitive_id = id();
     OPENVINO_ASSERT(_has_valid_input, primitive_id, " has invalid/unset input");
-    GPU_DEBUG_TRACE_DETAIL << "-----------------------------------------------------------------" << std::endl;
-    GPU_DEBUG_TRACE_DETAIL << "Execute " << id() << " (type: " << _impl_params->desc->type_string() << ") " << std::endl;
-    for (size_t i = 0; i < _deps.size(); ++i) {
-        GPU_DEBUG_TRACE_DETAIL << "- inputs[" << i << "] : " <<  _deps[i].first->id() << std::endl;
+    if (get_node().is_type<fully_connected>()) {
+        GPU_DEBUG_COUT<< "-----------------------------------------------------------------" << std::endl;
+        GPU_DEBUG_COUT << "Execute " << id() << " (type: " << _impl_params->desc->type_string() << ") in net_id " << get_network_id() << std::endl;
+        for (size_t i = 0; i < _deps.size(); ++i) {
+            GPU_DEBUG_COUT << "- inputs[" << i << "] : " <<  _deps[i].first->id() << std::endl;
+        }
+        GPU_DEBUG_COUT << "-----------------------------------------------------------------" << std::endl;
     }
-    GPU_DEBUG_TRACE_DETAIL << "-----------------------------------------------------------------" << std::endl;
 
     // If it is optimized out or skipped for zero dimension at the previous iteration,
     // Set this flag true to reset output memory in realloc_if_needed.
@@ -1982,7 +2002,10 @@ void primitive_inst::execute() {
         set_out_event(outputs.at(last_prim_id).get_event());
         return;
     }
-
+    if (get_node().is_type<fully_connected>() && !can_be_optimized()) {
+        _impl->print_debug_logs();
+        GPU_DEBUG_COUT << " " << id() << " is dynamic impl : " <<  _impl->is_dynamic() << std::endl;
+    }
     set_out_event(_impl->execute(_impl_params->dep_events, *this));
 
     GPU_DEBUG_GET_INSTANCE(debug_config);

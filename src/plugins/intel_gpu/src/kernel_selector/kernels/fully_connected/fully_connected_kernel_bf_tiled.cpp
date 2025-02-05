@@ -102,7 +102,7 @@ static size_t get_dynamic_quantize_group_size(const fully_connected_params& para
 
             if (iter != layers.end()) {
                 dynamic_quantization_group_size = debug_config->dynamic_quantize_group_size;
-                GPU_DEBUG_COUT << "Found specified Fully-connected layer [" << params.layerID << "]. Enable Dynamic-quantize." << std::endl;
+                GPU_DEBUG_COUT << "[PAUL] Found specified Fully-connected layer [" << params.layerID << "]. Enable Dynamic-quantize." << std::endl;
             } else {
                 dynamic_quantization_group_size = 0;
             }
@@ -127,7 +127,7 @@ static size_t get_dynamic_quantize_group_size(const fully_connected_params& para
                 dynamic_quantization_group_size = zp_group_size;
             }
 
-            GPU_DEBUG_LOG << "FC dyn-quantize by per-token. Actual dyn_quan_group_size(" << dynamic_quantization_group_size
+            GPU_DEBUG_LOG << "[PAUL] FC dyn-quantize by per-token. Actual dyn_quan_group_size(" << dynamic_quantization_group_size
                             << ") : From scale_group_size (" << scale_group_size << ", zp_group_size("  << zp_group_size
                             << "), zp_group_num(" << zp_group_num << "), ifm_size (" << get_input_bf_size(params).second << ")" << std::endl;
             return (size_t)dynamic_quantization_group_size;
@@ -160,7 +160,7 @@ static bool should_dynamic_quantize(const fully_connected_params& params) {
         return false;
 
     if (dynamic_quantization_group_size < min_quantize_grp_size) {
-            GPU_DEBUG_TRACE_DETAIL << "Set dynamic_quantize_group_size " << dynamic_quantization_group_size
+            GPU_DEBUG_TRACE_DETAIL << "[PAUL] Set dynamic_quantize_group_size " << dynamic_quantization_group_size
                             << " is smaller than minimum supported size 32" << std::endl;
             return false;
     }
@@ -174,9 +174,9 @@ static bool should_dynamic_quantize(const fully_connected_params& params) {
     auto input_f = threads.second;
 
     if ((scale_group_size % simd == 0) && (input_f % dynamic_quantization_group_size == 0) &&
-        (params.is_shape_agnostic || (params.inputs[0].Batch().v > 1 && input_b > min_slm_size)) &&
+        (params.is_shape_agnostic || (input_b > min_slm_size)) &&
         params.inputs[0].GetDType() == Datatype::F16 && is_weight_dyn_quantizable(params)) {
-        GPU_DEBUG_TRACE_DETAIL << " Dynamic quantizing for FC : scale_group_size: " << scale_group_size <<
+        GPU_DEBUG_TRACE_DETAIL << " [PAUL] Dynamic quantizing for FC : scale_group_size: " << scale_group_size <<
             ", Dyn-quan group size: " << dynamic_quantization_group_size <<
             ", Type(I:" << kernel_selector::toString(params.inputs[0].GetDType()) <<
             ", O:" << kernel_selector::toString(params.outputs[0].GetDType()) <<
@@ -192,17 +192,17 @@ static bool should_dynamic_quantize(const fully_connected_params& params) {
 
 static bool is_weight_vertical(const fully_connected_params& params, size_t output_f) {
     size_t min_num_threads = params.engineInfo.computeUnitsCount * simd;
-    GPU_DEBUG_TRACE_DETAIL << "out_ofm (== weight N dim) size " << output_f << " is small compared to the available threads. "
+    GPU_DEBUG_TRACE_DETAIL << "[PAUL] out_ofm (== weight N dim) size " << output_f << " is small compared to the available threads. "
                            << "(computeUnitsCount : " << params.engineInfo.computeUnitsCount
                            << " min_num_threads : " << min_num_threads << ")" << std::endl;
-    GPU_DEBUG_TRACE_DETAIL << "Use ofm_tile size 1 if the batch size is 1." << std::endl;
+    GPU_DEBUG_TRACE_DETAIL << "[PAUL] Use ofm_tile size 1 if the batch size is 1." << std::endl;
     return (params.weights.IFM().v >= params.weights.OFM().v * 3
             && output_f / 2 /*most frequently used tile_ofm*/ <= min_num_threads);
 }
 
 static bool is_weight_horizontal(const fully_connected_params& params, size_t output_f) {
     size_t min_num_threads = params.engineInfo.computeUnitsCount * simd;
-    GPU_DEBUG_TRACE_DETAIL << "out_ofm (== weight N dim) size " << output_f << " is large compared to the available threads. "
+    GPU_DEBUG_TRACE_DETAIL << "[PAUL] out_ofm (== weight N dim) size " << output_f << " is large compared to the available threads. "
                            << "(computeUnitsCount : " << params.engineInfo.computeUnitsCount
                            << " min_num_threads : " << min_num_threads << ")" << std::endl;
     return (params.weights.OFM().v > params.weights.IFM().v * 3
@@ -635,6 +635,88 @@ FullyConnected_bf_tiled::SetDefault(const fully_connected_params& params, int au
     dispatchData.tile_ms = tparams.dispatch_bsv;
     dispatchData.tile_ns = tparams.dispatch_fsv;
     dispatchData.use_slm = can_use_slm;
+    {
+        GPU_DEBUG_COUT << "[PAUL_DEBUG] *************************************************************" << std::endl;
+        GPU_DEBUG_COUT << " can_use_slm: " << can_use_slm << std::endl;
+        GPU_DEBUG_COUT << " params: " << params.to_string() << std::endl;
+        GPU_DEBUG_COUT << " params.is_shape_agnostic : " << params.is_shape_agnostic << std::endl;
+        {
+            auto bf_size = get_output_aligned_bf_size(params, false);
+            size_t batch = bf_size.first;
+            size_t output_f = bf_size.second;
+            GPU_DEBUG_COUT << " batch    : " << batch << std::endl;
+            GPU_DEBUG_COUT << " output_f : " << output_f << std::endl;
+        }
+
+        for (size_t k = 0; k < params.inputs.size(); k++) {
+            std::stringstream ss;
+            ss << "params.inputs[" << k << "] : ";
+            for (auto dim : params.inputs[k].GetDims()) {
+                ss << dim.v << ",";
+            }
+            GPU_DEBUG_COUT << ss.str() << std::endl;
+        }
+
+        GPU_DEBUG_COUT << "GWS " << dispatchData.gws[0] << ","
+            << dispatchData.gws[1] << ","
+            << dispatchData.gws[2] << std::endl;
+        GPU_DEBUG_COUT << "LWS " << dispatchData.lws[0] << ","
+            << dispatchData.lws[1] << ","
+            << dispatchData.lws[2] << std::endl;
+        GPU_DEBUG_COUT << "[PAUL_DEBUG] *************************************************************" << std::endl;
+    }
+
+    // if (dispatchData.gws[0] > 121856 && dispatchData.gws[1] == 1 && dispatchData.gws[2] == 1) {
+    //     // GPU_DEBUG_COUT << "[PAUL_DEBUG] *************************************************************" << std::endl;
+    //     // GPU_DEBUG_COUT << " can_use_slm: " << can_use_slm << std::endl;
+    //     // GPU_DEBUG_COUT << " params: " << params.to_string() << std::endl;
+    //     // GPU_DEBUG_COUT << " params.is_shape_agnostic : " << params.is_shape_agnostic << std::endl;
+    //     // {
+    //     //     auto bf_size = get_output_aligned_bf_size(params, false);
+    //     //     size_t batch = bf_size.first;
+    //     //     size_t output_f = bf_size.second;
+    //     //     GPU_DEBUG_COUT << " batch    : " << batch << std::endl;
+    //     //     GPU_DEBUG_COUT << " output_f : " << output_f << std::endl;
+    //     // }
+
+    //     // for (size_t k = 0; k < params.inputs.size(); k++) {
+    //     //     std::stringstream ss;
+    //     //     ss << "params.inputs[" << k << "] : ";
+    //     //     for (auto dim : params.inputs[k].GetDims()) {
+    //     //         ss << dim.v << ",";
+    //     //     }
+    //     //     GPU_DEBUG_COUT << ss.str() << std::endl;
+    //     // }
+
+    //     // GPU_DEBUG_COUT << "GWS " << dispatchData.gws[0] << ","
+    //     //     << dispatchData.gws[1] << ","
+    //     //     << dispatchData.gws[2] << std::endl;
+    //     // GPU_DEBUG_COUT << "LWS " << dispatchData.lws[0] << ","
+    //     //     << dispatchData.lws[1] << ","
+    //     //     << dispatchData.lws[2] << std::endl;
+    //     // OPENVINO_ASSERT(false, "Invalid gws 0");
+    //     // GPU_DEBUG_COUT << "[PAUL][PAUL] *************************************************************" << std::endl;
+    //     // GPU_DEBUG_COUT << "Generate issued gws " << dispatchData.gws[0] << ","
+    //     //     << dispatchData.gws[1] << ","
+    //     //     << dispatchData.gws[2] << std::endl;
+
+    //     dispatchData.gws[0] = feature_threads * simd;
+    //     dispatchData.gws[1] = 1;
+    //     dispatchData.gws[2] = aligned_batch;
+
+    //     dispatchData.lws[0] = simd;
+    //     dispatchData.lws[1] = 1;
+    //     dispatchData.lws[2] = lws_batches;
+    // }
+
+    // if (dispatchData.gws[0] == 121856 && dispatchData.gws[1] == 1 && dispatchData.gws[2] == 1) {
+    //     OPENVINO_ASSERT(false, "Invalid gws 1");
+    //     // GPU_DEBUG_COUT << "[PAUL][PAUL] *************************************************************" << std::endl;
+    //     // GPU_DEBUG_COUT << "Generate issued gws " << dispatchData.gws[0] << ","
+    //     //     << dispatchData.gws[1] << ","
+    //     //     << dispatchData.gws[2] << std::endl;
+    // }
+
 
     return dispatchData;
 }

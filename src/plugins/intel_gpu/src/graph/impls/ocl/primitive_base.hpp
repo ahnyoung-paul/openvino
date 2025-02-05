@@ -241,6 +241,27 @@ protected:
         }
     }
 
+    void print_debug_logs() override {
+        for (size_t kd_idx = 0; kd_idx < _kernel_data.kernels.size(); ++kd_idx) {
+            std::string kernel_name = "no_kenrel_entry";
+            if (_kernel_data.kernels[kd_idx].code.kernelString) {
+                kernel_name = _kernel_data.kernels[kd_idx].code.kernelString->entry_point;
+            }
+            if (_kernel_data.kernels[kd_idx].skip_execution) {
+                GPU_DEBUG_COUT << "Enqueue kernel " << kd_idx << " is skipped .. " << kernel_name << std::endl;
+                continue;
+            }
+            auto& params = _kernel_data.kernels[kd_idx].params;
+            const auto& gws = params.workGroups.global;
+            const auto& lws = params.workGroups.local;
+
+            GPU_DEBUG_COUT << "Enqueue kernel " << kd_idx << ": gws=[" << gws[0] << ", " << gws[1] << ", " << gws[2] << "] "
+                                << "lws=[" << lws[0] << ", " << lws[1] << ", " << lws[2] << "] - kernel "
+                                << kernel_name << std::endl;
+
+        }
+    }
+
     event::ptr execute_impl(const std::vector<event::ptr>& events,
                             typed_primitive_inst<PType>& instance) override {
         stream& stream = instance.get_network().get_stream();
