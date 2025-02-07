@@ -229,26 +229,38 @@ kernel_impl_params fully_connected_inst::get_fake_aligned_params(kernel_impl_par
     if (input_shape.size() == 3)
         can_apply_fake_alignment &= orig_input_layout.data_padding._lower_size[1] == 0 &&
                                     orig_input_layout.data_padding._upper_size[1] == 0;
+    if (!can_apply_fake_alignment) GPU_DEBUG_COUT << "failed can_apply_fake_alignment - step01" << std::endl;
 
     if (output_shape.size() == 3)
         can_apply_fake_alignment &= orig_output_layout.data_padding._lower_size[1] == 0 &&
                                     orig_output_layout.data_padding._upper_size[1] == 0;
+    if (!can_apply_fake_alignment) GPU_DEBUG_COUT << "failed can_apply_fake_alignment - step02" << std::endl;
 
+    size_t dep_count = 0;
     for (auto& fused_desc : orig_impl_param.fused_desc) {
         if (fused_desc.has_outer_dep()) {
+            dep_count++;
             auto fused_op_input_layout = orig_impl_param.input_layouts[fused_desc.outer_dep_start_idx];
             // Check fused desc's input is still dynamic, then do not fake alignment
             if (fused_op_input_layout.is_dynamic()) {
                 can_apply_fake_alignment = false;
+                GPU_DEBUG_COUT << "failed can_apply_fake_alignment - step03" << std::endl;
                 break;
             }
             // Check fused desc's input has full tensor, then do not fake alignment
             if (orig_output_layout.get_shape() == fused_op_input_layout.get_shape()) {
                 can_apply_fake_alignment = false;
+                GPU_DEBUG_COUT << "failed can_apply_fake_alignment - step04 orig_output_layout "
+                    << orig_output_layout.to_short_string()
+                    << ", fused_op_input_layout : " << fused_op_input_layout.to_short_string() << std::endl;
                 break;
             }
         }
     }
+    if (!can_apply_fake_alignment)
+        GPU_DEBUG_COUT << "failed can_apply_fake_alignment - step05 " << dep_count << " / " << orig_impl_param.fused_desc.size() << std::endl;
+    // else
+    //     GPU_DEBUG_COUT << "passed can_apply_fake_alignment - step06 " << dep_count << " / " << orig_impl_param.fused_desc.size() << std::endl;
 
     GPU_DEBUG_GET_INSTANCE(debug_config);
     GPU_DEBUG_IF(debug_config->disable_fake_alignment) {
@@ -269,8 +281,11 @@ kernel_impl_params fully_connected_inst::get_fake_aligned_params(kernel_impl_par
         size_t fake_align_base = 8;
         if (orig_impl_param.dev_type == cldnn::device_type::integrated_gpu) {
             auto weights_layout_dt = orig_impl_param.weights_layout.value().data_type;
-            auto is_4bit = weights_layout_dt == data_types::i4 || weights_layout_dt == data_types::u4;
+            auto is_4bit = weights_layout_dt == data_types::i4 || weights_layout_dt == data_types::u4 || weights_layout_dt == data_types::u8 || weights_layout_dt == data_types::i8;
             auto is_extra_alignment_needed = batch_size >= 256;
+            GPU_DEBUG_COUT << orig_impl_param.desc->id << " calc fake_align_base : is_4bit " << is_4bit
+                        << ", is_extra_alignment_needed " << is_extra_alignment_needed
+                        << ", batch_size " << batch_size << std::endl;
             fake_align_base = is_4bit && is_extra_alignment_needed ? 64 : 16;
         }
 
@@ -284,13 +299,14 @@ kernel_impl_params fully_connected_inst::get_fake_aligned_params(kernel_impl_par
         updated_param.input_layouts[0] = orig_input_layout.clone_with_other_shape(input_shape);
         updated_param.output_layouts[0] = orig_output_layout.clone_with_other_shape(output_shape);
 
-        GPU_DEBUG_TRACE_DETAIL << "Apply fake alignment: input(" << orig_input_layout.to_short_string() << " -> "
+        GPU_DEBUG_COUT << "[PAUL] Apply fake alignment: input(" << orig_input_layout.to_short_string() << " -> "
                                << updated_param.input_layouts[0].to_short_string() << "), output("
                                << orig_output_layout.to_short_string() << " -> "
-                               << updated_param.output_layouts[0].to_short_string() << ")\n";
+                               << updated_param.output_layouts[0].to_short_string() << ") - dep_count " << dep_count << " / " << orig_impl_param.fused_desc.size() << "\n";
 
         return updated_param;
     }
+    GPU_DEBUG_COUT << "[PAUL] Apply fake alignment w/o aligned - dep_count " << dep_count << " / " << orig_impl_param.fused_desc.size() << "\n";
     return std::move(orig_impl_param);
 }
 

@@ -221,7 +221,7 @@ public:
         if (impl_param.typed_desc<fully_connected>()->input_size != 3) {
             params.outputs = { params.outputs[0].FlattenFeatureAndSpatials() };
         }
-
+        GPU_DEBUG_COUT << "Call update_dispatch_data_func " << impl_param.desc->id << std::endl;
         (_kernel_data.update_dispatch_data_func)(*_kernel_data.params, _kernel_data);
     }
 };

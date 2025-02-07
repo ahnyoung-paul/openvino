@@ -384,49 +384,75 @@ bool TuneParamsSelector::VerifyTuneParams(const fully_connected_params& params, 
     auto batch_size = params.is_shape_agnostic ? Align(output_b, tparams.tile_b) : output_b;
     // If batch size is prime number, still can apply tile execution to avoid poor performance.
     if (batch_size % (tparams.tile_b * tparams.dispatch_bsv) != 0) {
-        if ((tparams.dispatch_bsv != 1) || batch_size == 1)
+        if ((tparams.dispatch_bsv != 1) || batch_size == 1) {
+            GPU_DEBUG_COUT << "Failed for 01" << std::endl;
             return false;
+        }
         size_t tile = simd;
         while (batch_size % tile != 0)
             tile--;
-        if (tile > 1)
+        if (tile > 1) {
+            GPU_DEBUG_COUT << "Failed for 02 batch_size: " << batch_size
+                            << ", simd: " << simd << ", tile: " <<  tile << std::endl;
             return false;
+        }
     }
 
-    if (CeilDiv(output_f, tparams.tile_ofm * simd) % tparams.dispatch_fsv != 0)
+    if (CeilDiv(output_f, tparams.tile_ofm * simd) % tparams.dispatch_fsv != 0) {
+        GPU_DEBUG_COUT << "Failed for 03" << std::endl;
         return false;
+    }
 
     // Same result can be achieved with smaller tile_ofm.
-    if (output_f <= (tparams.tile_ofm / 2) * simd)
+    if (output_f <= (tparams.tile_ofm / 2) * simd) {
+        GPU_DEBUG_COUT << "Failed for 04" << std::endl;
         return false;
+    }
     // No weights layout for such huge tile ofm.
-    if (tparams.tile_ofm * simd > 64)
+    if (tparams.tile_ofm * simd > 64) {
+        GPU_DEBUG_COUT << "Failed for 05" << std::endl;
         return false;
+    }
 
     bool is_dyn_quantable_type = is_weight_dyn_quantizable(params);
     if (tparams.kernel_type == FullyConnected_bf_tiled::KernelType::SLM) {
         const auto required_batch_alignment = 64;
-        if (!params.is_shape_agnostic && (!IsAligned(output_b, required_batch_alignment) || output_b < min_slm_size))
+        if (!params.is_shape_agnostic && (!IsAligned(output_b, required_batch_alignment) || output_b < min_slm_size)) {
+            GPU_DEBUG_COUT << "Failed for 06 - output_b: " << output_b
+                << ", required_batch_alignment: " << required_batch_alignment
+                << ", min_slm_size: " << min_slm_size << std::endl;
             return false;
+        }
 
         const auto required_tile_b = 8;
-        if ((tparams.tile_b != required_tile_b) && !is_dyn_quantable_type)
+        if ((tparams.tile_b != required_tile_b) && !is_dyn_quantable_type) {
+            GPU_DEBUG_COUT << "Failed for 07" << std::endl;
             return false;
+        }
 
         const auto required_tile_ofm = 2;
-        if (tparams.tile_ofm != required_tile_ofm)
+        if (tparams.tile_ofm != required_tile_ofm) {
+            GPU_DEBUG_COUT << "Failed for 08" << std::endl;
             return false;
+        }
 
-        if (!is_dyn_quantable_type)
+        if (!is_dyn_quantable_type) {
+            GPU_DEBUG_COUT << "Failed for 09" << std::endl;
             return false;
+        }
 
-        if (params.engineInfo.deviceType != dev_type::integrated_gpu)
+        if (params.engineInfo.deviceType != dev_type::integrated_gpu) {
+            GPU_DEBUG_COUT << "Failed for 10" << std::endl;
             return false;
+        }
 
         const auto required_slm_size = tparams.tile_ofm * simd * tparams.tile_ifm * simd * 2; // 2 bytes per value (FP16 data type)
-        if (params.engineInfo.maxLocalMemSize < required_slm_size)
+        if (params.engineInfo.maxLocalMemSize < required_slm_size) {
+            GPU_DEBUG_COUT << "Failed for 11" << std::endl;
             return false;
+        }
 
+        GPU_DEBUG_COUT << "Passed for 12" << std::endl;
         return true;
     }
     if (params.compressed && is_dyn_quantable_type) {
@@ -512,24 +538,46 @@ FullyConnected_bf_tiled::GetAutoTuneParams(const fully_connected_params& params,
                     }
                 }
             }
+            GPU_DEBUG_COUT << "AutoTunningParams[" << idx << "] tparam w/o SLM - !is_shape_agnostic && batch : " << batch << std::endl;
         } else {
             // Try to use SLM kernels if possible
             unsigned int forced_outer_ofm = swiglu_fused ? 2 : 1;
+            std::string kernel_type_str = "KernelType::DEFAULT";
+            switch (preferred_kernel_type) {
+                case KernelType::SLM:
+                    kernel_type_str = "KernelType::SLM";
+                    break;
+                case KernelType::ANY:
+                    kernel_type_str = "KernelType::ANY";
+                    break;
+                case KernelType::DEFAULT:
+                default:
+                    kernel_type_str = "KernelType::DEFAULT";
+                    break;
+            }
             if (preferred_kernel_type != KernelType::DEFAULT) {
                 if (params.is_shape_agnostic && !should_dynamic_quantize(params)) {
+                    GPU_DEBUG_COUT << "AutoTunningParams[" << idx << "] tparam w/  SLM - is_shape_agnostic && !should_dynamic_quantize" << std::endl;
                     selector.Case(tune_params(16, 2, 2, 4, forced_outer_ofm, 1, 1, EXE_MODE_DEFAULT, KernelType::SLM))
                             .Case(tune_params(16, 2, 1, 4, forced_outer_ofm, 1, 1, EXE_MODE_DEFAULT, KernelType::SLM));
                 }
                 selector.Case(tune_params(8, 2, 2, 4, forced_outer_ofm, 1, 1, EXE_MODE_DEFAULT, KernelType::SLM))
                         .Case(tune_params(8, 2, 1, 4, forced_outer_ofm, 1, 1, EXE_MODE_DEFAULT, KernelType::SLM));
+                GPU_DEBUG_COUT << "AutoTunningParams[" << idx << "]  tparam w/  SLM - preferred_kernel_type : " << kernel_type_str << std::endl;
+            } else {
+                GPU_DEBUG_COUT << "AutoTunningParams[" << idx << "]  tparam w/o SLM - " << kernel_type_str << std::endl;
             }
 
-            if (params.weights.GetLayout() == WeightsLayout::os_iyx_osv16)
+            if (params.weights.GetLayout() == WeightsLayout::os_iyx_osv16) {
+                GPU_DEBUG_COUT << "AutoTunningParams[" << idx << "]  Return WeightsLayout::os_iyx_osv16" << std::endl;
                 return selector.Default(tune_params(8, 1, 1, 4, forced_outer_ofm, 1, 1, EXE_MODE_DEFAULT));
-            else if (params.weights.GetLayout() == WeightsLayout::os_is_yx_osv64_isv2)
+            } else if (params.weights.GetLayout() == WeightsLayout::os_is_yx_osv64_isv2) {
+                GPU_DEBUG_COUT << "AutoTunningParams[" << idx << "]  Return WeightsLayout::os_is_yx_osv64_isv2" << std::endl;
                 return selector.Default(tune_params(8, 4, 1, 2, forced_outer_ofm, 1, 1, EXE_MODE_DEFAULT));
-            else
+            } else {
+                GPU_DEBUG_COUT << "AutoTunningParams[" << idx << "]  Return WeightsLayout others" << std::endl;
                 return selector.Default(tune_params(8, 2, 1, 4, forced_outer_ofm, 1, 1, EXE_MODE_DEFAULT));
+            }
         }
     } else if (params.compressed && params.engineInfo.supports_immad) {
         return selector.Default(tune_params(1, 1, 1, 4, 1, 1, 1, EXE_MODE_DEFAULT));
@@ -605,7 +653,21 @@ FullyConnected_bf_tiled::SetDefault(const fully_connected_params& params, int au
     if (params.is_shape_agnostic)
         kernel_type = kernel_number == 0 ? KernelType::DEFAULT : KernelType::SLM;
 
+    GPU_DEBUG_COUT << "Call GetAutoTuneParams ... autoTuneIndex "
+                        << autoTuneIndex << ", kernel_number " << kernel_number << std::endl;
     auto tparams = GetAutoTuneParams(params, kernel_type, autoTuneIndex);
+    switch (tparams.kernel_type) {
+        case KernelType::ANY:
+            GPU_DEBUG_COUT << " After GetAutoTuneParams : KernelType::ANY" << std::endl;
+            break;
+        case KernelType::SLM:
+            GPU_DEBUG_COUT << " After GetAutoTuneParams : KernelType::SLM" << std::endl;
+            break;
+        case KernelType::DEFAULT:
+        default:
+            GPU_DEBUG_COUT << " After GetAutoTuneParams : KernelType::DEFAULT" << std::endl;
+            break;
+    }
     std::pair<size_t, size_t> threads;
     if (is_swiglu_fused(params))
         threads = get_output_aligned_bf_size(params, true, tparams.tile_b, tparams.tile_ofm * simd);
@@ -626,6 +688,17 @@ FullyConnected_bf_tiled::SetDefault(const fully_connected_params& params, int au
     dispatchData.lws[0] = simd;
     dispatchData.lws[1] = 1;
     dispatchData.lws[2] = can_use_slm ? lws_batches : 1;
+
+    if (dispatchData.gws[0] > 140000 && !can_use_slm) {
+        GPU_DEBUG_COUT << "[PAUL_TRY] *************************************************************" << std::endl;
+        dispatchData.gws[0] = feature_threads * simd;
+        dispatchData.gws[1] = 1;
+        dispatchData.gws[2] = aligned_batch;
+
+        dispatchData.lws[0] = simd;
+        dispatchData.lws[1] = 1;
+        dispatchData.lws[2] = lws_batches;
+    }
 
     dispatchData.tile_m = tparams.tile_b;
     dispatchData.tile_n = tparams.tile_ofm;
@@ -652,6 +725,15 @@ FullyConnected_bf_tiled::SetDefault(const fully_connected_params& params, int au
             std::stringstream ss;
             ss << "params.inputs[" << k << "] : ";
             for (auto dim : params.inputs[k].GetDims()) {
+                ss << dim.v << ",";
+            }
+            GPU_DEBUG_COUT << ss.str() << std::endl;
+        }
+
+        for (size_t k = 0; k < params.outputs.size(); k++) {
+            std::stringstream ss;
+            ss << "params.outputs[" << k << "] : ";
+            for (auto dim : params.outputs[k].GetDims()) {
                 ss << dim.v << ",";
             }
             GPU_DEBUG_COUT << ss.str() << std::endl;
@@ -955,7 +1037,7 @@ void FullyConnected_bf_tiled::GetUpdateDispatchDataFunc(KernelData& kd) const {
             // Check default or SLM version FC, and disable remain version
             kd.kernels[skip_kernel_idx].skip_execution = true;
 
-            GPU_DEBUG_TRACE_DETAIL << "FC bf tiled: " << (execute_type == KernelType::SLM ? "SLM" : "Default") << " shape-agnostic kernel version "
+            GPU_DEBUG_COUT << "FC bf tiled: " << (execute_type == KernelType::SLM ? "SLM" : "Default") << " shape-agnostic kernel version "
                                     << "will be used for batch size = " << output_batch << "\n";
 
             auto dispatchData = SetDefault(prim_params, -1, static_cast<int>(execute_type));
@@ -1157,6 +1239,7 @@ KernelsData FullyConnected_bf_tiled::GetMultiKernelsData(const Params &params,
 
     // Generate dispatch data for KernelType::DEFAULT
     int kernel_number = 0;
+    GPU_DEBUG_COUT << "Generate dispatch data for KernelType::DEFAULT w/ Dynamic-quantize kernel " << std::endl;
     const DispatchData dispatchData = SetDefault(new_params, autoTuneIndex, kernel_number);
 
     // Dynamic-quantize kernel
@@ -1205,6 +1288,7 @@ KernelsData FullyConnected_bf_tiled::GetMultiKernelsData(const Params &params,
     }
     kd.internalBufferDataType = Datatype::F16;
 
+    GPU_DEBUG_COUT << "Generate dispatch data for KernelType::DEFAULT" << std::endl;
     // FC kernel for dynamic quantized input with KernelType::DEFAULT
     {
         auto entry_point = GetEntryPoint(kernelName, fc_params.layerID, params, kernel_number);
@@ -1235,6 +1319,7 @@ KernelsData FullyConnected_bf_tiled::GetMultiKernelsData(const Params &params,
         kernel_number++;
     }
 
+    GPU_DEBUG_COUT << "Generate dispatch data for KernelType::SLM" << std::endl;
     const DispatchData slm_Data = SetDefault(new_params, autoTuneIndex, kernel_number);
     auto slm_params = GetAutoTuneParams(fc_params, KernelType::SLM, autoTuneIndex);
     auto can_select_slm_kernel = slm_params.kernel_type == KernelType::SLM;

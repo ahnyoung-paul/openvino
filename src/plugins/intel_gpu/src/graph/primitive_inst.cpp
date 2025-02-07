@@ -2858,6 +2858,20 @@ std::shared_ptr<primitive_impl> ImplementationsFactory::get_primitive_impl_for_p
 
     // Update param if fake_alignment is available
     auto updated_params = inst.get_fake_aligned_params_if_possible(params);
+    if (inst.get_node().is_type<fully_connected>()) {
+        auto print_layouts = [&](std::vector<cldnn::layout> layouts, std::string title) {
+            std::stringstream ss;
+            ss << inst.id() << " : " << layouts.size() << std::endl;
+            for (size_t i = 0; i < layouts.size(); i++) {
+                ss << " - " << title << " [" << i << "] " << layouts[i].to_short_string() << std::endl;
+            }
+            GPU_DEBUG_COUT << ss.str();
+        };
+        print_layouts(params.input_layouts,  "before_input_layouts");
+        print_layouts(params.output_layouts, "before_output_layouts");
+        print_layouts(updated_params.input_layouts,  "after_input_layouts");
+        print_layouts(updated_params.output_layouts, "after_output_layouts");
+    }
     // Change weights layout of `updated_params` to original one to have valid information
     // in _impl->_weights_reorder_params about required weights format after impl selection
     if (inst.get_node().is_type<fully_connected>() || inst.get_node().is_type<convolution>() || inst.get_node().is_type<deconvolution>()) {
@@ -2894,6 +2908,12 @@ std::shared_ptr<primitive_impl> ImplementationsFactory::get_primitive_impl_for_p
                     return;
             }
 
+            bool is_debug = inst.get_node().is_type<fully_connected>();
+
+            if (is_debug) {
+                GPU_DEBUG_COUT << inst.id() << " [MIKA] Async compilation .... " << std::endl;
+            }
+
             std::unique_ptr<primitive_impl> impl = find_impl(&inst.get_node(), updated_params, shape_types::static_shape);
 
             if (impl->get_kernels_source().size() > 0) {
@@ -2903,6 +2923,8 @@ std::shared_ptr<primitive_impl> ImplementationsFactory::get_primitive_impl_for_p
             cache.add(updated_params, std::move(impl));
         });
     }
+
+    bool is_debug = inst.get_node().is_type<fully_connected>();
 
     std::shared_ptr<primitive_impl> dynamic_impl = nullptr;
     // 2. Try to find existing dynamic impl which supports given shapes
@@ -2915,6 +2937,9 @@ std::shared_ptr<primitive_impl> ImplementationsFactory::get_primitive_impl_for_p
 
     // 3. Try to create new shape agnostic impl & cache it
     if (!dynamic_impl) {
+        if (is_debug) {
+            GPU_DEBUG_COUT << inst.id() << " [MIKA] Dynamic impl compilation .... " << std::endl;
+        }
         dynamic_impl = find_impl(node, params, shape_types::dynamic_shape);
         if (dynamic_impl && !inst.can_be_optimized()) {
             dynamic_impl->set_node_params(*node);
@@ -2926,12 +2951,18 @@ std::shared_ptr<primitive_impl> ImplementationsFactory::get_primitive_impl_for_p
 
     // 4. If we have any dynamic impl, do adjustment for new shape before returning in back
     if (dynamic_impl) {
-        dynamic_impl->update(inst, params);
+        if (is_debug) {
+            GPU_DEBUG_COUT << inst.id() << " [MIKA] Dynamic impl update .... " << std::endl;
+        }
+        dynamic_impl->update(inst, updated_params);
         return dynamic_impl;
     }
 
     // 5. Finally, if no impl found so far, we just enforce static impl compilation
     auto static_impl = find_impl(node, updated_params, shape_types::static_shape);
+    if (is_debug) {
+        GPU_DEBUG_COUT << inst.id() << " [MIKA] Static impl compilation .... " << std::endl;
+    }
     assert(static_impl != nullptr);
     static_impl->set_node_params(*node);
     if (!inst.can_be_optimized()) {
