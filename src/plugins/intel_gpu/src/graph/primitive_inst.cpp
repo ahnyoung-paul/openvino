@@ -1973,8 +1973,13 @@ void primitive_inst::execute() {
         set_out_event(outputs.at(last_prim_id).get_event());
         return;
     }
-
-    set_out_event(_impl->execute(_impl_params->dep_events, *this));
+    if (_impl->is_cpu()) {
+        GPU_DEBUG_PROFILED_STAGE(instrumentation::pipeline_stage::cpu_exec);
+        set_out_event(_impl->execute(_impl_params->dep_events, *this));
+    } else {
+        GPU_DEBUG_PROFILED_STAGE(instrumentation::pipeline_stage::gpu_enqueue);
+        set_out_event(_impl->execute(_impl_params->dep_events, *this));
+    }
 
     GPU_DEBUG_IF(!get_config().get_dump_profiling_data_path().empty()) {
         auto ev = _impl_params->out_event;
