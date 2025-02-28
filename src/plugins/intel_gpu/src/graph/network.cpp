@@ -226,7 +226,8 @@ network::~network() {
     _memory_pool->clear_pool_for_network(net_id);
     std::string dump_path = GPU_DEBUG_VALUE_OR(get_config().get_dump_profiling_data_path(), "");
     GPU_DEBUG_IF(!dump_path.empty()) {
-        dump_perf_data_raw(dump_path + "/perf_raw" + std::to_string(net_id) + ".csv", false, _exec_order);
+        bool per_iter_mode = GPU_DEBUG_VALUE_OR(ov::intel_gpu::ExecutionConfig::get_dump_profiling_data_per_iter(), false);
+        dump_perf_data_raw(dump_path + "/perf_raw" + std::to_string(net_id) + ".csv", per_iter_mode, _exec_order);
     }
 }
 
