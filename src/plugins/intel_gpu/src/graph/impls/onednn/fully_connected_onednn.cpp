@@ -140,22 +140,7 @@ protected:
 
         auto input_md = onednn::layout_to_memory_desc(input_layout, dnnl::memory::format_tag::ab, false);
         // TODO: should change format to any. May need a reorder.
-        dnnl::memory::desc weights_md;
-        // if weights_layout has data_padding, add strides to memory desc
-        if (weights_layout.data_padding) {
-            dnnl::memory::dims dims;
-            dims.push_back(weights_layout.feature());
-            dims.push_back(weights_layout.get_tensor().count() / weights_layout.feature());
-
-            auto padded_dims = weights_layout.get_padded_dims();
-            dnnl::memory::dims strides;
-            strides.push_back(1);
-            strides.push_back(padded_dims[1]);
-            dnnl::memory::data_type dt = convert_data_type(weights_layout.data_type);
-            weights_md = dnnl::memory::desc(dims, dt, strides);
-        } else {
-            weights_md = onednn::layout_to_memory_desc(weights_layout, dnnl::memory::format_tag::ba);
-        }
+        auto weights_md = onednn::layout_to_memory_desc(weights_layout, dnnl::memory::format_tag::ba);
         auto output_md = onednn::layout_to_memory_desc(output_layout, dnnl::memory::format_tag::ab, false);
 
         if (has_bias) {
@@ -318,6 +303,7 @@ public:
                     // 8-bit quantized weight
                     attr->set_scales(DNNL_ARG_WEIGHTS, PER_OC, dnnl::memory::dims{}, ds_data_type);
                 } else {
+                    OPENVINO_ASSERT((ngroups == 1 || group_size % 32 == 0), "group_size should be aligned to 32 if it is not a single scale group");
                     // OneDNN does not support scalar zero-point for s4 and u8 type. Need to broadcast it.
                     attr->set_scales(DNNL_ARG_WEIGHTS, GROUPED, {group_size, 1}, ds_data_type);
                 }
