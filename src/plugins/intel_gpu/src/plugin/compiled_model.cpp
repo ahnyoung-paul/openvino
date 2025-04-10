@@ -67,6 +67,7 @@ CompiledModel::CompiledModel(std::shared_ptr<ov::Model> model,
         auto graph = n == 0 ? graph_base : std::make_shared<Graph>(graph_base, n);
         m_graphs.push_back(graph);
     }
+    std::cout << "m_graphs : " << m_graphs.size() << "," << m_config.get_num_streams() << std::endl;
 }
 
 CompiledModel::CompiledModel(cldnn::BinaryInputBuffer& ib,

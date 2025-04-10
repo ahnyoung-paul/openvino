@@ -3,6 +3,8 @@
 //
 
 #include "pooling_inst.h"
+#include "fully_connected_inst.h"
+#include "gemm_inst.h"
 #include "program_node.h"
 #include "pass_manager.h"
 #include "convolution_inst.h"
@@ -14,9 +16,53 @@ using namespace cldnn;
 using namespace ov::intel_gpu;
 
 void prepare_padding::run(program& p) {
+    GPU_DEBUG_COUT << "RUN ........ prepare_padding output_size_handling_enabled : " << (output_size_handling_enabled) << std::endl;
+
+    if (p.get_config().get_use_onednn()) {
+        for (const auto& node: p.get_processing_order()) {
+            if (!node->is_type<fully_connected>())
+                continue;
+            if (node->get_preferred_impl_type() != impl_types::onednn)
+                continue;
+            
+            auto& weight_node = node->get_dependency(1);
+            if (weight_node.is_type<data>()
+                && weight_node.is_constant()
+                && !weight_node.is_dynamic()
+                && (weight_node.get_output_layout(0).data_type == cldnn::data_types::u4
+                    || weight_node.get_output_layout(0).data_type == cldnn::data_types::i4)) {
+                const size_t alignment = 2;
+                auto weight_layout = weight_node.get_output_layout(0);
+                auto& const_shape = weight_layout.get_partial_shape().to_shape();
+                if (const_shape.back() % alignment != 0) {
+                    GPU_DEBUG_COUT << node->id() << ", " << weight_node.id() << ", " << const_shape.to_string() << std::endl;
+                    auto new_reorder = std::make_shared<reorder>(node->id() + "_padding_reorder_for_" + weight_node.id(),
+                                                                    weight_node.id(), weight_layout);
+                    auto& new_reorder_node = p.get_or_create(new_reorder);
+                    p.add_intermediate(new_reorder_node, *node, weight_node);
+
+                    new_reorder_node.recalc_output_layouts(false);
+                    std::vector<int32_t> new_paddings(const_shape.size(), 0);
+                    new_paddings[const_shape.size() - 1] = 1;
+                    padding needed_padding({0}, new_paddings);
+                    p.apply_needed_padding(*node, node->get_dependency(1), needed_padding);
+
+                    {
+                        auto& new_prev_node = node->get_dependency(1);
+                        GPU_DEBUG_COUT << "Create new reorder " << new_prev_node.id() << ", " << new_prev_node.get_primitive()->type_string()
+                                            << ", " << new_prev_node.get_output_layout(0).to_string() << std::endl;
+                    }
+                }
+            }    
+        }
+    }
+
     if (output_size_handling_enabled) {
         // Prepare upper padding for primitives that support output_size parameter.
         for (const auto& node : p.get_processing_order()) {
+            if (node->is_type<fully_connected>()) {
+                GPU_DEBUG_COUT << "prepare node for " << node->id() << std::endl;
+            }
             if (node->get_dependencies().empty())
                 continue;
 
@@ -24,8 +70,23 @@ void prepare_padding::run(program& p) {
                 continue;
 
             // Padded offsets aren't supported by onednn kernels
-            if (node->get_preferred_impl_type() == impl_types::onednn)
+            if (node->get_preferred_impl_type() == impl_types::onednn) {
+                if (node->is_type<fully_connected>()) {
+                    auto& weight_node = node->get_dependency(1);
+                    if (weight_node.is_type<data>()
+                        && weight_node.is_constant()
+                        && !weight_node.is_dynamic()
+                        && (weight_node.get_output_layout(0).data_type == cldnn::data_types::u4
+                            || weight_node.get_output_layout(0).data_type == cldnn::data_types::i4)) {
+                        const size_t alignment = 2;
+                        auto& const_shape = weight_node.get_output_layout(0).get_partial_shape().to_shape();
+                        if (const_shape.back() % alignment != 0) {
+                            GPU_DEBUG_COUT << node->id() << ", " << weight_node.id() << ", " << const_shape.to_string() << std::endl;
+                        }
+                    }
+                }
                 continue;
+            }
 
             auto add_required_padding = [&p](program_node& node, padding& needed_padding) {
                 // Add extra reorder for cldnn primitive to handle required padding if needed
