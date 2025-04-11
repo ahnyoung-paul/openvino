@@ -34,16 +34,19 @@ void prepare_padding::run(program& p) {
                 auto& const_shape = weight_layout.get_partial_shape().to_shape();
                 if (const_shape.back() % alignment != 0) {
                     // GPU_DEBUG_COUT << node->id() << ", " << weight_node.id() << ", " << const_shape.to_string() << std::endl;
+                    auto weight_out_layout = weight_layout;
+                    std::vector<int32_t> new_paddings(const_shape.size(), 0);
+                    new_paddings[const_shape.size() - 1] = 1;
+                    padding needed_padding({0}, new_paddings);
+                    weight_out_layout.data_padding = padding::max(weight_out_layout.data_padding, padding({0}, new_paddings));
+                    auto weights_reorder_params = std::make_shared<WeightsReorderParams>(weight_layout, weight_out_layout, false, false); 
+
                     auto new_reorder = std::make_shared<reorder>(node->id() + "_padding_reorder_for_" + weight_node.id(),
-                                                                    weight_node.id(), weight_layout);
+                                                                    weight_node.id(), weights_reorder_params);
                     auto& new_reorder_node = p.get_or_create(new_reorder);
                     p.add_intermediate(new_reorder_node, *node, weight_node);
 
                     new_reorder_node.recalc_output_layouts(false);
-                    std::vector<int32_t> new_paddings(const_shape.size(), 0);
-                    new_paddings[const_shape.size() - 1] = 1;
-                    padding needed_padding({0}, new_paddings);
-                    p.apply_needed_padding(*node, node->get_dependency(1), needed_padding);
 
                     {
                         auto& new_prev_node = node->get_dependency(1);
