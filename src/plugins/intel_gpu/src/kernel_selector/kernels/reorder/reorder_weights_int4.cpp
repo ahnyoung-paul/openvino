@@ -65,6 +65,7 @@ bool ReorderWeightsKernelInt4::Validate(const Params& params) const {
 
     if (input.LogicalSize() != input.OFM().v * input.IFM().v ||
         output.LogicalSize() != output.OFM().v * output.IFM().v) {
+        std::cout << "[PAUL][DEBUG] Fail for this ....... " << std::endl;
         return false;
     }
 
@@ -75,6 +76,7 @@ bool ReorderWeightsKernelInt4::Validate(const Params& params) const {
     supported_case |= input.GetLayout() == WeightsLayout::oiyx && output.GetLayout() == WeightsLayout::os_is_yx_osv64_isv2;
     supported_case |= input.GetLayout() == WeightsLayout::ioyx && output.GetLayout() == WeightsLayout::oiyx;
     supported_case |= input.GetLayout() == WeightsLayout::ioyx && output.GetLayout() == WeightsLayout::os_iyx_osv32;
+    std::cout << "[PAUL][DEBUG] ReorderWeightsKernelInt4 ...... return " << supported_case << std::endl;
     return supported_case;
 }
 

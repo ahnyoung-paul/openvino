@@ -24,6 +24,7 @@ ReorderWeightsKernelSelector::ReorderWeightsKernelSelector() {
 }
 
 KernelsData ReorderWeightsKernelSelector::GetBestKernels(const Params& params) const {
+    GPU_DEBUG_COUT << "ReorderWeightsKernelSelector::GetBestKernels is called ...." << std::endl;
     return GetNaiveBestKernel(params, KernelType::REORDER);
 }
 }  // namespace kernel_selector

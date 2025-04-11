@@ -28,6 +28,7 @@ reorder_kernel_selector::reorder_kernel_selector() {
 }
 
 KernelsData reorder_kernel_selector::GetBestKernels(const Params& params) const {
+    GPU_DEBUG_COUT << " Call reorder_kernel_selector::GetBestKernels ...." << std::endl;
     return GetNaiveBestKernel(params, KernelType::REORDER);
 }
 }  // namespace kernel_selector

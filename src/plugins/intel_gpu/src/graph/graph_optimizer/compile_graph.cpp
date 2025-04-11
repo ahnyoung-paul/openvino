@@ -34,7 +34,7 @@ void compile_graph::run(program& p) {
         bool can_select_impl = !node->is_type<data>() && !(node->is_type<mutable_data>() && node->get_dependencies().empty());
 
         if (can_select_impl) {
-            tasks.emplace_back([node, &exception] {
+            // tasks.emplace_back([node, &exception] {
                 try {
                     const auto& params = node->get_kernel_impl_params();
                     auto shape_type = ImplementationManager::get_shape_type(*params);
@@ -59,13 +59,14 @@ void compile_graph::run(program& p) {
                                     fail_reason);
                 } catch (std::exception&) {
                     exception = std::current_exception();
+                    break;
                 }
-            });
+            // });
         }
     }
 
-    task_executor->run_and_wait(tasks);
-    tasks.clear();
+    // task_executor->run_and_wait(tasks);
+    // tasks.clear();
 
     if (exception) {
         std::rethrow_exception(exception);
