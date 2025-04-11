@@ -443,6 +443,56 @@ bool ParamsKey::Support(const ParamsKey& k) const {
     return true;
 }
 
+bool ParamsKey::Support2(const ParamsKey& k) const {
+    if (!((key.restrict.raw & k.key.restrict.raw) == k.key.restrict.raw)) {
+        GPU_DEBUG_COUT << "key.restrict.raw, " << key.restrict.raw << ", " 
+            << k.key.restrict.raw << std::endl;
+        return false;
+    }
+    if (!((key.inputType.raw & k.key.inputType.raw) == k.key.inputType.raw)) {
+        GPU_DEBUG_COUT << "key.inputType.raw : " << key.inputType.raw << ", " 
+            << k.key.inputType.raw << std::endl;
+        return false;
+    }
+    if (!((key.outputType.raw & k.key.outputType.raw) == k.key.outputType.raw)) {
+        GPU_DEBUG_COUT << "key.outputType.raw : " << key.outputType.raw << ", " 
+            << k.key.outputType.raw << std::endl;
+        return false;
+    }
+    if (!((key.inputWeightsType.raw & k.key.inputWeightsType.raw) == k.key.inputWeightsType.raw)) {
+        GPU_DEBUG_COUT << "key.inputWeightsType: " << key.inputWeightsType.raw << ", " 
+            << k.key.inputWeightsType.raw << std::endl;
+        return false;
+    }
+    if (!((key.outputWeightsType.raw & k.key.outputWeightsType.raw) == k.key.outputWeightsType.raw)) {
+        GPU_DEBUG_COUT << "key.outputWeightsType.raw " << key.outputWeightsType.raw << ", " 
+            << k.key.outputWeightsType.raw << std::endl;
+        return false;
+    }
+    if (!((key.inputLayout & k.key.inputLayout) != 0 || key.inputLayout == k.key.inputLayout)) {
+        GPU_DEBUG_COUT << "key.inputLayout, " << key.inputLayout << ", " << k.key.inputLayout << std::endl;
+        return false;
+    }
+    if (!((key.outputLayout & k.key.outputLayout) != 0 || key.outputLayout == k.key.outputLayout)) {
+        GPU_DEBUG_COUT << "key.outputLayout, "<< key.outputLayout << ", " << k.key.outputLayout << std::endl;
+        return false;
+    }
+    if (!((key.weightsInputLayout & k.key.weightsInputLayout) != 0 ||
+          key.weightsInputLayout == k.key.weightsInputLayout)) {
+        GPU_DEBUG_COUT << "key.weightsInputLayout " << key.weightsInputLayout << ", " 
+            << k.key.weightsInputLayout << std::endl;
+        return false;
+    }
+    if (!((key.weightsOutputLayout & k.key.weightsOutputLayout) != 0 ||
+          key.weightsOutputLayout == k.key.weightsOutputLayout)) {
+        GPU_DEBUG_COUT << "key.weightsOutputLayout " << key.weightsOutputLayout << ", " 
+            << k.key.weightsOutputLayout << std::endl;
+        return false;
+    }
+
+    return true;
+}
+
 ParamsKey ParamsKey::Merge(const ParamsKey& k) const {
     ParamsKey ret;
     ret.key.restrict.raw = key.restrict.raw | k.key.restrict.raw;

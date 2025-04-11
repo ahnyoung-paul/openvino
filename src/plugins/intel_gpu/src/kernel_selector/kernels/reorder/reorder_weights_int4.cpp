@@ -16,6 +16,7 @@ ParamsKey ReorderWeightsKernelInt4::GetSupportedKey() const {
     k.EnableInputWeightsType(WeightsType::UINT4);
     k.EnableOutputWeightsType(WeightsType::UINT4);
     k.EnableOutputWeightsType(WeightsType::INT4);
+    // k.EnableInputLayout(DataLayout::bfyx);
     k.EnableInputWeightsLayout(WeightsLayout::oiyx);
     k.EnableInputWeightsLayout(WeightsLayout::ioyx);
     k.EnableOutputWeightsLayout(WeightsLayout::os_iyx_osv16);
@@ -75,6 +76,7 @@ bool ReorderWeightsKernelInt4::Validate(const Params& params) const {
     supported_case |= input.GetLayout() == WeightsLayout::oiyx && output.GetLayout() == WeightsLayout::os_iyx_osv64;
     supported_case |= input.GetLayout() == WeightsLayout::oiyx && output.GetLayout() == WeightsLayout::os_is_yx_osv64_isv2;
     supported_case |= input.GetLayout() == WeightsLayout::ioyx && output.GetLayout() == WeightsLayout::oiyx;
+    supported_case |= input.GetLayout() == WeightsLayout::oiyx && output.GetLayout() == WeightsLayout::oiyx;
     supported_case |= input.GetLayout() == WeightsLayout::ioyx && output.GetLayout() == WeightsLayout::os_iyx_osv32;
     std::cout << "[PAUL][DEBUG] ReorderWeightsKernelInt4 ...... return " << supported_case << std::endl;
     return supported_case;

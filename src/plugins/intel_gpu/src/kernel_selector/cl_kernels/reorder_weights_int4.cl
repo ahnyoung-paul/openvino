@@ -5,7 +5,18 @@
 #include "include/batch_headers/fetch_weights.cl"
 
 KERNEL(reorder_weights_int4)(const __global INPUT0_TYPE* input, __global OUTPUT_TYPE* output) {
-#if defined(INPUT0_LAYOUT_IOYX) && defined(OUTPUT_LAYOUT_OIYX)
+#if defined(INPUT0_LAYOUT_OIYX) && defined(OUTPUT_LAYOUT_OIYX)
+
+    if (get_global_id(0) == 0 && get_global_id(1) == 0) {
+        const uint a = get_global_size(0);
+        const uint b = get_global_size(1);
+        const uint c = get_global_size(2);
+        printf("global_size [%d, %d, %d] OUTPUT_IFM_NUM(%d), OUTPUT_OFM_NUM(%d),\n", a, b, c, OUTPUT_IFM_NUM, OUTPUT_OFM_NUM);
+    }
+    // #error "reorder_weights_int4: debug issue"
+    return;
+
+#elif defined(INPUT0_LAYOUT_IOYX) && defined(OUTPUT_LAYOUT_OIYX)
     const uint out_byte_offset = get_global_id(0);
 
     const uint offset0 = out_byte_offset * 2 + 0;
