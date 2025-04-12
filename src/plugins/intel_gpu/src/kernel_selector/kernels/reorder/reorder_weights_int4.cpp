@@ -16,7 +16,6 @@ ParamsKey ReorderWeightsKernelInt4::GetSupportedKey() const {
     k.EnableInputWeightsType(WeightsType::UINT4);
     k.EnableOutputWeightsType(WeightsType::UINT4);
     k.EnableOutputWeightsType(WeightsType::INT4);
-    // k.EnableInputLayout(DataLayout::bfyx);
     k.EnableInputWeightsLayout(WeightsLayout::oiyx);
     k.EnableInputWeightsLayout(WeightsLayout::ioyx);
     k.EnableOutputWeightsLayout(WeightsLayout::os_iyx_osv16);
@@ -32,6 +31,14 @@ ParamsKey ReorderWeightsKernelInt4::GetSupportedKey() const {
 
 KernelsData ReorderWeightsKernelInt4::GetKernelsData(const Params& params) const {
     const reorder_weights_params& orgParams = static_cast<const reorder_weights_params&>(params);
+    const auto& input = orgParams.input;
+    const auto& output = orgParams.output;
+    // if (input.GetLayout() == WeightsLayout::oiyx 
+    //     && output.GetLayout() == WeightsLayout::oiyx
+    //     && output.IFM().pad.Total()) {
+    //     orgParams.
+    // }
+
     return GetCommonKernelsData(orgParams);
 }
 
@@ -52,7 +59,12 @@ ReorderWeightsKernelInt4::DispatchData ReorderWeightsKernelInt4::SetDefault(cons
     } else if (output.GetLayout() == WeightsLayout::os_is_yx_osv64_isv2) {
         dispatchData.gws = { Align(output.OFM().v, 64), output.IFM().v / 2, 1 };
     } else {
-        dispatchData.gws = { CeilDiv(output.LogicalSize(), 2), 1, 1 };
+        GPU_DEBUG_COUT << "Set gws  OFM.pad " << output.IFM().pad.Total() << ", size " << output.PhysicalSize() << std::endl;
+        if (output.IFM().pad.Total() != 0) {
+            dispatchData.gws = { CeilDiv(output.PhysicalSize(), 2), 1, 1 };
+        } else {
+            dispatchData.gws = { CeilDiv(output.LogicalSize(), 2), 1, 1 };
+        }
     }
     dispatchData.lws = GetOptimalLocalWorkGroupSizes(dispatchData.gws, params.engineInfo);
 
@@ -77,6 +89,7 @@ bool ReorderWeightsKernelInt4::Validate(const Params& params) const {
     supported_case |= input.GetLayout() == WeightsLayout::oiyx && output.GetLayout() == WeightsLayout::os_is_yx_osv64_isv2;
     supported_case |= input.GetLayout() == WeightsLayout::ioyx && output.GetLayout() == WeightsLayout::oiyx;
     supported_case |= input.GetLayout() == WeightsLayout::oiyx && output.GetLayout() == WeightsLayout::oiyx;
+    // supported_case |= input.GetLayout() == WeightsLayout::oiyx && output.GetLayout() == WeightsLayout::oiyx && (output.IFM().pad.Total() != 0);
     supported_case |= input.GetLayout() == WeightsLayout::ioyx && output.GetLayout() == WeightsLayout::os_iyx_osv32;
     std::cout << "[PAUL][DEBUG] ReorderWeightsKernelInt4 ...... return " << supported_case << std::endl;
     return supported_case;

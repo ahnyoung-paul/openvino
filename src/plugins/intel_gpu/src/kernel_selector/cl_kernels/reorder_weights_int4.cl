@@ -11,11 +11,33 @@ KERNEL(reorder_weights_int4)(const __global INPUT0_TYPE* input, __global OUTPUT_
         const uint a = get_global_size(0);
         const uint b = get_global_size(1);
         const uint c = get_global_size(2);
-        printf("global_size [%d, %d, %d] OUTPUT_IFM_NUM(%d), OUTPUT_OFM_NUM(%d),\n", a, b, c, OUTPUT_IFM_NUM, OUTPUT_OFM_NUM);
+        printf("global_size [%d, %d, %d] OUTPUT_IFM_NUM(%d),OUTPUT_OFM_NUM(%d),INPUT_OFM_PITCH(%d),OUTPUT_OFM_PITCH(%d)\n",
+                    a, b, c, OUTPUT_IFM_NUM, OUTPUT_OFM_NUM, INPUT0_OFM_PITCH, OUTPUT_OFM_PITCH);
     }
-    // #error "reorder_weights_int4: debug issue"
-    return;
-
+    const uint output_offset = get_global_id(0);
+    const uint actual_out_pitch = OUTPUT_OFM_PITCH;
+    const uint index_i = (output_offset * 2) % actual_out_pitch;
+    const uint index_o = (output_offset * 2) / actual_out_pitch; 
+    const uint input_offset = (index_o * INPUT0_OFM_PITCH + index_i) / 2;
+    // INPUT0_TYPE in = input[input_offset];
+    // printf("[%d, %d, %d] = %x\n", output_offset, index_o, index_i, (unsigned char)(in));
+    if (index_o % 2 == 0) {
+        if (index_i + 1 < INPUT0_OFM_PITCH) {
+            INPUT0_TYPE in = input[input_offset];
+            output[output_offset] = in;
+        } else {
+            INPUT0_TYPE in0 = (input[input_offset] >> 4) & 0x0F;
+            output[output_offset] = (in0 << 4) | 0x0;
+        }
+    } else {
+        INPUT0_TYPE in0 = input[input_offset] & 0x0F;
+        INPUT0_TYPE in1 = 0x0;
+        if (index_i + 1 < INPUT0_OFM_PITCH) {
+            in1 = (input[input_offset+1] >> 4) & 0x0F;
+        }
+        output[output_offset] = (in0 << 4) | in1;
+        // printf("[%d, %d, %d] = %d [%x,%x]\n", output_offset, index_o, index_i, input_offset, (unsigned char)(in0), (unsigned char)(in1));
+    }
 #elif defined(INPUT0_LAYOUT_IOYX) && defined(OUTPUT_LAYOUT_OIYX)
     const uint out_byte_offset = get_global_id(0);
 

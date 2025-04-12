@@ -70,6 +70,7 @@ inline uint32_t SubGroupSize(DataLayout l) {
 inline JitConstants MakeReorderWeightsJitConstants(const reorder_weights_params& params) {
     const auto& input = params.input;
     const auto& output = params.output;
+    GPU_DEBUG_COUT << "check output padding " << params.output.IFM().pad.Total() << std::endl;
     const bool fp16Supported = output.GetDType() == WeightsType::F16 || input.GetDType() == WeightsType::F16;
 
     JitConstants jit{
@@ -144,7 +145,6 @@ ReorderKernelBase::DispatchData ReorderKernelBase::SetDefault(const reorder_weig
     const auto& out = params.output;
 
     DispatchData dispatchData;
-
     dispatchData.gws = { out.G().v * out.OFM().v, out.IFM().v, out.X().v * out.Y().v * out.Z().v };
     dispatchData.lws = GetOptimalLocalWorkGroupSizes(dispatchData.gws, params.engineInfo);
 

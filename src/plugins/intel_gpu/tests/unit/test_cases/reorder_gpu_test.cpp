@@ -3658,6 +3658,26 @@ TEST(reorder_gpu_i4, reorder_for_padding_2d)
 
     uint8_t* a_ptr = answers;
     cldnn::mem_lock<uint8_t> output_ptr(output, get_test_stream());
+
+    std::stringstream ss_org;
+    ss_org << "org_ptr: ";
+    for (auto&val : input_data) {
+        ss_org << std::hex << static_cast<int>(val) << ",";
+    }
+    std::stringstream ss_act;
+    std::stringstream ss_exp;
+    ss_exp << "exp_ptr: ";
+    ss_act << "act_ptr: ";
+    for (auto&val : output_ptr) {
+        ss_act << std::hex << static_cast<int>(val) << ",";
+        ss_exp << std::hex << static_cast<int>(*(a_ptr++)) << ",";
+    }
+    GPU_DEBUG_COUT << "reorder_in_layout  : " << reorder_in_layout.to_string() << std::endl; 
+    GPU_DEBUG_COUT << "reorder_out_layout : " << reorder_out_layout.to_string() << std::endl; 
+    GPU_DEBUG_COUT << ss_org.str() << std::endl;
+    GPU_DEBUG_COUT << ss_exp.str() << std::endl;
+    GPU_DEBUG_COUT << ss_act.str() << std::endl;
+    a_ptr = answers;
     for (auto& val : output_ptr)
         ASSERT_EQ(*(a_ptr++), val);
 }
