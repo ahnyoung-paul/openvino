@@ -875,6 +875,8 @@ kernel_selector::data_tensor convert_data_tensor(const layout& l, const tensor v
 kernel_selector::weights_tensor convert_weights_tensor(const layout& l, bool is_grouped) {
     const auto ks_type = to_weights_type(l.data_type);
     const auto ks_layout = to_weights_layout(l.format, is_grouped);
+    GPU_DEBUG_COUT << "ks_layout : " << ks_layout << std::endl;
+    GPU_DEBUG_COUT << "l.format : " << l.format << std::endl;
 
     if (l.data_padding) {
         kernel_selector::n_dims vec(kernel_selector::WeightsTensor::ChannelsCount(ks_layout));
@@ -910,7 +912,20 @@ kernel_selector::weights_tensor convert_weights_tensor(const layout& l, bool is_
             pitch *= (reserved_in_mem_count + lp + up);
         }
 
-        return kernel_selector::weights_tensor(vec, ks_type, ks_layout);
+        auto res = kernel_selector::weights_tensor(vec, ks_type, ks_layout);
+        auto print_tensor_dims = [&](const std::string&& tag, kernel_selector::Tensor::Dim& dim) {
+            GPU_DEBUG_COUT << "convert_weight_tensor : " << tag << " : " << dim.pitch 
+                << " pad [" << dim.pad.before << ", " << dim.pad.after << "] padded dims: " 
+                << dim.pitch << std::endl;
+        };
+        print_tensor_dims("tensor.X()", res.X());
+        print_tensor_dims("tensor.Y()", res.Y());
+        print_tensor_dims("tensor.Z()", res.Z());
+        print_tensor_dims("tensor.IFM()", res.IFM());
+        print_tensor_dims("tensor.OFM()", res.OFM());
+
+
+        return res;
     } else {
         const auto& t = l.get_tensor().sizes(l.format);
         std::vector<size_t> vec(kernel_selector::WeightsTensor::ChannelsCount(ks_layout));

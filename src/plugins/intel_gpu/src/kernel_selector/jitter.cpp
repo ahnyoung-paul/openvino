@@ -938,17 +938,6 @@ JitDefinitions WeightTensorJitConstant::GetDefinitions() const {
         {_name + "_GROUPS_PITCH", toCodeString(_tensor.G().pitch)},
     };
 
-    auto print_tensor_dims = [&](const std::string&& tag, kernel_selector::Tensor::Dim& dim) {
-        GPU_DEBUG_COUT << tag << " : " << dim.pitch 
-            << " pad [" << dim.pad.before << ", " << dim.pad.after << "] padded dims: " 
-            << (dim.pitch + dim.pad.Total()) << std::endl;
-    };
-    print_tensor_dims("tensor.X()", _tensor.X());
-    print_tensor_dims("tensor.Y()", _tensor.Y());
-    print_tensor_dims("tensor.Z()", _tensor.Z());
-    print_tensor_dims("tensor.IFM()", _tensor.IFM());
-    print_tensor_dims("tensor.OFM()", _tensor.OFM());
-
     definitions.insert(definitions.end(), baseDefinitions.begin(), baseDefinitions.end());
 
     auto is_common_nd_layout = [](std::vector<Tensor::WeightsChannelName> common_channels, WeightsLayout l) -> bool {
