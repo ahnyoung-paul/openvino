@@ -299,11 +299,11 @@ public:
                 auto ifm = arg.get_dependency(1).get_output_layout().get_dim(1);
                 auto ngroups = arg.get_dependency(decompression_scale_idx).get_output_layout().get_dim(1);
                 group_size = ifm / ngroups;
+                OPENVINO_ASSERT((ngroups == 1 || group_size % 32 == 0), "group_size should be aligned to 32 if it is not a single scale group");
                 if (!is_four_bit_weight) {
                     // 8-bit quantized weight
                     attr->set_scales(DNNL_ARG_WEIGHTS, PER_OC, dnnl::memory::dims{}, ds_data_type);
                 } else {
-                    OPENVINO_ASSERT((ngroups == 1 || group_size % 32 == 0), "group_size should be aligned to 32 if it is not a single scale group");
                     // OneDNN does not support scalar zero-point for s4 and u8 type. Need to broadcast it.
                     attr->set_scales(DNNL_ARG_WEIGHTS, GROUPED, {group_size, 1}, ds_data_type);
                 }
