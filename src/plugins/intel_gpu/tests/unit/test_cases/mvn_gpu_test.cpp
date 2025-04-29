@@ -8,8 +8,10 @@
 #include <intel_gpu/primitives/input_layout.hpp>
 #include <intel_gpu/primitives/mvn.hpp>
 #include <intel_gpu/primitives/reorder.hpp>
+#include <intel_gpu/primitives/eltwise.hpp>
 #include <intel_gpu/runtime/debug_configuration.hpp>
 
+#include "openvino/util/file_util.hpp"
 #include <iostream>
 
 #include "mvn_inst.h"
@@ -974,3 +976,87 @@ TEST_P(mvn_random_test_bsv32, random_cached) {
     this->execute(GetParam(), true);
 }
 #endif
+
+struct mvn_random_test_issued : ::testing::TestWithParam<mvn_basic_test_params> {
+    void SetUp() override { }
+
+    void load_data_from_bin(cldnn::memory::ptr mem, const std::string filepath) {
+        std::vector<uint8_t> bin = ov::util::load_binary(filepath);
+        mem->copy_from(get_test_stream(), static_cast<void *>(&bin[0]), true);
+    }
+
+    std::vector<float> load_data_from_text(const std::string filepath) {
+        std::vector<float> buffer;
+        std::ifstream file(filepath);
+        std::string line;
+        int lineNumber = 0;
+
+        if (file.is_open()) {
+            while (std::getline(file, line)) {
+                lineNumber++;
+                if (lineNumber > 1) { // Skip the first line
+                    std::istringstream iss(line);
+                    float value;
+                    while (iss >> value) {
+                        buffer.push_back(value);
+                    }
+                }
+            }
+            file.close();
+        } else {
+            std::cerr << "Unable to open file" << std::endl;
+        }
+
+        return buffer;
+    }
+
+    void execute(bool is_caching_test) {
+        // auto& engine = get_test_engine();
+        // cldnn::layout input0_dyn_layout({-1,-1,2048}, data_types::f32, format::bfyx);
+        // cldnn::layout input1_dyn_layout({-1,-1,2048}, data_types::f32, format::bfyx);
+        // cldnn::layout input2_dyn_layout({-1,-1,2048}, data_types::f32, format::bfyx);
+
+        // cldnn::layout input0_static_layout({2,990,2048}, data_types::f32, format::bfyx);
+        // cldnn::layout input1_static_layout({2,1,2048}, data_types::f32, format::bfyx);
+        // cldnn::layout input2_static_layout({2,1,2048}, data_types::f32, format::bfyx);
+
+        // auto input0 = engine.allocate_memory(input0_static_layout);
+        // auto input1 = engine.allocate_memory(input1_static_layout);
+        // auto input2 = engine.allocate_memory(input2_static_layout);
+        // load_data_from_bin(input0, "/home/ahnyoung/cldnn/cvs_164660/debug/src/program1_network1_0__03431_mvn___module.norm_out_aten__layer_norm_MVN_src0__f32__2_990_2048_1__bfyx.bin");
+        // load_data_from_bin(input1, "/home/ahnyoung/cldnn/cvs_164660/debug/src/program1_network1_0__03431_mvn___module.norm_out_aten__layer_norm_MVN_src1__f32__2_1_2048_1__bfyx.bin");
+        // load_data_from_bin(input2, "/home/ahnyoung/cldnn/cvs_164660/debug/src/program1_network1_0__03431_mvn___module.norm_out_aten__layer_norm_MVN_src2__f32__2_1_2048_1__bfyx.bin");
+
+        // topology topo;
+        // topo.add(input_layout("input0", input0_dyn_layout));
+        // topo.add(input_layout("input1", input0_dyn_layout));//Gather, ADD_1
+        // topo.add(input_layout("input2", input0_dyn_layout));//Gather_1
+        // topo.add(mvn("mvn", input_info("input0"), true, 1e-06f, true, {2}));
+        // topo.add(eltwise("mul", {input_info("mvn"), input_info("input1")}, eltwise_mode::prod, {}, data_types::f32));
+        // topo.add(eltwise("add", {input_info("mul"), input_info("input2")}, eltwise_mode::prod, {}, data_types::f32));
+        // topo.add(reorder("result",input_info("add"), format::bfyx, data_types::f32));
+        // ExecutionConfig config = get_test_default_config(engine);
+        // config.set_property(ov::intel_gpu::custom_outputs(std::vector<std::string>{"mvn"}));
+        // config.set_property(ov::intel_gpu::force_implementations(ov::intel_gpu::ImplForcingMap{ {"mvn", {format::type::bfyx, "mvn_gpu_bfyx_opt"}} }));
+
+        // cldnn::network::ptr net = get_network(engine, topo, config, get_test_stream_ptr(), is_caching_test);
+
+        // net->set_input_data("input0", input0);
+        // net->set_input_data("input1", input1);
+        // net->set_input_data("input2", input2);
+
+        // auto outputs = net->execute();
+        // auto output = outputs.at("result").get_memory();
+
+        // cldnn::mem_lock<float> opt_ptr(output, get_test_stream());
+
+        std::string ref_path = "/home/ahnyoung/cldnn/cvs_164660/dumps/outs/cpu.mvn/#3249_Eltwise_aten--mul_Multiply_1_out0.ieb";
+        auto ref_data = load_data_from_text(ref_path);
+        std::cout << ref_data.size() << std::endl;
+
+    }
+};
+
+TEST_P(mvn_random_test_issued, random_cached) {
+    this->execute(false);
+}

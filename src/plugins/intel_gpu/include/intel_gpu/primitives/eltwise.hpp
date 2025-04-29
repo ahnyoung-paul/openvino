@@ -97,7 +97,7 @@ struct eltwise : public primitive_base<eltwise> {
           coefficients(std::vector<float>(0)),
           stride(std::vector<tensor>(0)),
           broadcast_spec(spec.m_type, spec.m_axis),
-          m_pythondiv(true) { }
+          m_pythondiv(true) { print_values(0); }
 
     /// @brief Constructs eltwise primitive.
     /// @param id This primitive id.
@@ -117,7 +117,7 @@ struct eltwise : public primitive_base<eltwise> {
           coefficients(std::vector<float>(0)),
           stride(stride),
           broadcast_spec(spec.m_type, spec.m_axis),
-          m_pythondiv(true) { }
+          m_pythondiv(true) { print_values(1); }
 
     /// @brief Constructs eltwise primitive.
     /// @param id This primitive id.
@@ -135,7 +135,7 @@ struct eltwise : public primitive_base<eltwise> {
           coefficients(std::vector<float>(0)),
           stride(std::vector<tensor>(0)),
           broadcast_spec(spec.m_type, spec.m_axis),
-          m_pythondiv(true) { }
+          m_pythondiv(true) { print_values(2); }
 
     /// @brief Constructs eltwise primitive.
     /// @param id This primitive id.
@@ -151,7 +151,7 @@ struct eltwise : public primitive_base<eltwise> {
           coefficients(std::vector<float>(0)),
           stride(std::vector<tensor>(0)),
           broadcast_spec(spec.m_type, spec.m_axis),
-          m_pythondiv(true) { }
+          m_pythondiv(true) { print_values(3); }
 
     /// @brief Constructs eltwise primitive.
     /// @param id This primitive id.
@@ -174,9 +174,42 @@ struct eltwise : public primitive_base<eltwise> {
           stride(std::vector<tensor>(0)),
           broadcast_spec(spec.m_type, spec.m_axis),
           m_pythondiv(m_pythondiv) {
+            print_values(4);
         if (mode == eltwise_mode::sum && !coefficients.empty() && coefficients.size() != inputs.size()) {
             throw std::invalid_argument("Invalid eltwise sum coefficients count (should be equal to 0 or input.size)");
         }
+    }
+
+    void print_values(int type) {
+        if (id != "add:aten::add/Add_1"
+                && id != "add:aten::add/Add_2"
+                && id != "multiply:aten::mul/Multiply_1")
+            return;
+            // mode(mode),
+            // coefficients(std::vector<float>(0)),
+            // stride(std::vector<tensor>(0)),
+            // broadcast_spec(spec.m_type, spec.m_axis),
+            // m_pythondiv(true) { }
+        std::stringstream ss;
+        ss << "********** ID: " << id << "(" << type << ")" << std::endl;
+        ss << "* mode " << static_cast<int>(mode) << std::endl;
+        ss << "* stride {";
+        for (auto& s : stride) {
+            ss << s << ",";
+        }
+        ss << "}" << std::endl;
+        ss << "* coefficents {";
+        for (auto& c: coefficients) {
+            ss << c << ",";
+        }
+        ss << "}" << std::endl;
+        ss << "* broadcast_spec {" << broadcast_spec.m_axis << ", " << broadcast_spec.m_type << "}" << std::endl;
+        ss << "* m_pythondiv : " << m_pythondiv << std::endl;
+        ss << "* inputs : " << input.size() << std::endl;
+        for (auto& d : input) {
+            ss << " -- " << d.to_string() << std::endl;
+        }
+        std::cout << ss.str() << std::endl;
     }
 
     /// @param mode Eltwise mode.

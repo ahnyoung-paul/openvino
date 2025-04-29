@@ -429,6 +429,8 @@ NodeDebugHelper::~NodeDebugHelper() {
     if (config.get_dump_tensors_path().length() > 0) {
         m_stream.finish();
         const std::string layer_name = m_inst.id();
+        if (m_inst.get_network_id() == 0)
+            return;
 
         if (is_target_iteration(m_iter, config.get_dump_iterations()) &&
             config.get_dump_tensors() != ov::intel_gpu::DumpTensors::in &&
