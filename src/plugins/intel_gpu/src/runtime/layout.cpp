@@ -269,6 +269,9 @@ ov::Shape layout::get_shape() const {
 }
 
 tensor layout::get_tensor() const {
+    if (!(!is_dynamic() || has_upper_bound())) {
+        std::cout << "error " << std::endl;
+    }
     OPENVINO_ASSERT(!is_dynamic() || has_upper_bound(), "[GPU] get_tensor() is called for dynamic shape without upper bound");
     ov::Shape shape;
     if (is_dynamic() && has_upper_bound()) {

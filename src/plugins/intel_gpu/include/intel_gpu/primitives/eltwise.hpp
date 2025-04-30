@@ -181,35 +181,35 @@ struct eltwise : public primitive_base<eltwise> {
     }
 
     void print_values(int type) {
-        if (id != "add:aten::add/Add_1"
-                && id != "add:aten::add/Add_2"
-                && id != "multiply:aten::mul/Multiply_1")
-            return;
-            // mode(mode),
-            // coefficients(std::vector<float>(0)),
-            // stride(std::vector<tensor>(0)),
-            // broadcast_spec(spec.m_type, spec.m_axis),
-            // m_pythondiv(true) { }
-        std::stringstream ss;
-        ss << "********** ID: " << id << "(" << type << ")" << std::endl;
-        ss << "* mode " << static_cast<int>(mode) << std::endl;
-        ss << "* stride {";
-        for (auto& s : stride) {
-            ss << s << ",";
-        }
-        ss << "}" << std::endl;
-        ss << "* coefficents {";
-        for (auto& c: coefficients) {
-            ss << c << ",";
-        }
-        ss << "}" << std::endl;
-        ss << "* broadcast_spec {" << broadcast_spec.m_axis << ", " << broadcast_spec.m_type << "}" << std::endl;
-        ss << "* m_pythondiv : " << m_pythondiv << std::endl;
-        ss << "* inputs : " << input.size() << std::endl;
-        for (auto& d : input) {
-            ss << " -- " << d.to_string() << std::endl;
-        }
-        std::cout << ss.str() << std::endl;
+        // if (id != "add:aten::add/Add_1"
+        //         && id != "add:aten::add/Add_2"
+        //         && id != "multiply:aten::mul/Multiply_1")
+        //     return;
+        //     // mode(mode),
+        //     // coefficients(std::vector<float>(0)),
+        //     // stride(std::vector<tensor>(0)),
+        //     // broadcast_spec(spec.m_type, spec.m_axis),
+        //     // m_pythondiv(true) { }
+        // std::stringstream ss;
+        // ss << "********** ID: " << id << "(" << type << ")" << std::endl;
+        // ss << "* mode " << static_cast<int>(mode) << std::endl;
+        // ss << "* stride {";
+        // for (auto& s : stride) {
+        //     ss << s << ",";
+        // }
+        // ss << "}" << std::endl;
+        // ss << "* coefficents {";
+        // for (auto& c: coefficients) {
+        //     ss << c << ",";
+        // }
+        // ss << "}" << std::endl;
+        // ss << "* broadcast_spec {" << broadcast_spec.m_axis << ", " << broadcast_spec.m_type << "}" << std::endl;
+        // ss << "* m_pythondiv : " << m_pythondiv << std::endl;
+        // ss << "* inputs : " << input.size() << std::endl;
+        // for (auto& d : input) {
+        //     ss << " -- " << d.to_string() << std::endl;
+        // }
+        // std::cout << ss.str() << std::endl;
     }
 
     /// @param mode Eltwise mode.

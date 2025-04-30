@@ -32,17 +32,17 @@ struct mvn : public primitive_base<mvn> {
           epsilon(epsilon),
           eps_inside_sqrt(eps_inside_sqrt),
           reduction_axes(reduction_axes) {
-            if (id == "mvn:__module.norm_out/aten::layer_norm/MVN") {
-                std::stringstream ss;
-                ss << "reduction_axes {";
-                for (auto& rs : reduction_axes) {
-                    ss << rs << ",";
-                }
-                ss << "}";
-                std::cout << "MVN [" << id << "] : normalize_variance: " << normalize_variance
-                    << ", epsilon: " << epsilon << ", eps_inside_sqrt: " << eps_inside_sqrt
-                    << ", " << ss.str() << std::endl;
-            }
+            // if (id == "mvn:__module.norm_out/aten::layer_norm/MVN") {
+            //     std::stringstream ss;
+            //     ss << "reduction_axes {";
+            //     for (auto& rs : reduction_axes) {
+            //         ss << rs << ",";
+            //     }
+            //     ss << "}";
+            //     std::cout << "MVN [" << id << "] : normalize_variance: " << normalize_variance
+            //         << ", epsilon: " << epsilon << ", eps_inside_sqrt: " << eps_inside_sqrt
+            //         << ", " << ss.str() << std::endl;
+            // }
           }
 
     /// @brief Determines if normalize variance is applied.

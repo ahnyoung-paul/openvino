@@ -13,6 +13,10 @@
 
 #include "openvino/util/file_util.hpp"
 #include <iostream>
+#include <vector>
+#include <cmath>
+#include <numeric>
+#include <iostream>
 
 #include "mvn_inst.h"
 
@@ -977,10 +981,10 @@ TEST_P(mvn_random_test_bsv32, random_cached) {
 }
 #endif
 
-struct mvn_random_test_issued : ::testing::TestWithParam<mvn_basic_test_params> {
-    void SetUp() override { }
+struct mvn_random_test_issued {
 
     void load_data_from_bin(cldnn::memory::ptr mem, const std::string filepath) {
+        GPU_DEBUG_COUT << "Load data from " << filepath << std::endl;
         std::vector<uint8_t> bin = ov::util::load_binary(filepath);
         mem->copy_from(get_test_stream(), static_cast<void *>(&bin[0]), true);
     }
@@ -990,7 +994,7 @@ struct mvn_random_test_issued : ::testing::TestWithParam<mvn_basic_test_params> 
         std::ifstream file(filepath);
         std::string line;
         int lineNumber = 0;
-
+        GPU_DEBUG_COUT << "Load data from " << filepath << std::endl;
         if (file.is_open()) {
             while (std::getline(file, line)) {
                 lineNumber++;
@@ -1010,53 +1014,117 @@ struct mvn_random_test_issued : ::testing::TestWithParam<mvn_basic_test_params> 
         return buffer;
     }
 
+    const std::string opt_data_path = "/home/ahnyoung/cldnn/cvs_164660/debug.0430/bin/src.opt/";
+
     void execute(bool is_caching_test) {
-        // auto& engine = get_test_engine();
-        // cldnn::layout input0_dyn_layout({-1,-1,2048}, data_types::f32, format::bfyx);
-        // cldnn::layout input1_dyn_layout({-1,-1,2048}, data_types::f32, format::bfyx);
-        // cldnn::layout input2_dyn_layout({-1,-1,2048}, data_types::f32, format::bfyx);
+        auto& engine = get_test_engine();
+        cldnn::layout input0_dyn_layout({-1,-1,2048}, data_types::f32, format::bfyx);
+        cldnn::layout input1_dyn_layout({-1,-1,2048}, data_types::f32, format::bfyx);
+        cldnn::layout input2_dyn_layout({-1,-1,2048}, data_types::f32, format::bfyx);
 
-        // cldnn::layout input0_static_layout({2,990,2048}, data_types::f32, format::bfyx);
-        // cldnn::layout input1_static_layout({2,1,2048}, data_types::f32, format::bfyx);
-        // cldnn::layout input2_static_layout({2,1,2048}, data_types::f32, format::bfyx);
+        cldnn::layout input0_static_layout({2,990,2048}, data_types::f32, format::bfyx);
+        cldnn::layout input1_static_layout({2,1,2048}, data_types::f32, format::bfyx);
+        cldnn::layout input2_static_layout({2,1,2048}, data_types::f32, format::bfyx);
 
-        // auto input0 = engine.allocate_memory(input0_static_layout);
-        // auto input1 = engine.allocate_memory(input1_static_layout);
-        // auto input2 = engine.allocate_memory(input2_static_layout);
-        // load_data_from_bin(input0, "/home/ahnyoung/cldnn/cvs_164660/debug/src/program1_network1_0__03431_mvn___module.norm_out_aten__layer_norm_MVN_src0__f32__2_990_2048_1__bfyx.bin");
-        // load_data_from_bin(input1, "/home/ahnyoung/cldnn/cvs_164660/debug/src/program1_network1_0__03431_mvn___module.norm_out_aten__layer_norm_MVN_src1__f32__2_1_2048_1__bfyx.bin");
-        // load_data_from_bin(input2, "/home/ahnyoung/cldnn/cvs_164660/debug/src/program1_network1_0__03431_mvn___module.norm_out_aten__layer_norm_MVN_src2__f32__2_1_2048_1__bfyx.bin");
+        auto input0 = engine.allocate_memory(input0_static_layout);
+        auto input1 = engine.allocate_memory(input1_static_layout);
+        auto input2 = engine.allocate_memory(input2_static_layout);
+        load_data_from_bin(input0, opt_data_path + "program1_network1_0__03124_mvn___module.norm_out_aten__layer_norm_MVN_src0__f32__2_990_2048_1__bfyx.bin");
+        load_data_from_bin(input1, opt_data_path + "program1_network1_0__03124_mvn___module.norm_out_aten__layer_norm_MVN_src1__f32__2_1_2048_1__bfyx.bin");
+        load_data_from_bin(input2, opt_data_path + "program1_network1_0__03124_mvn___module.norm_out_aten__layer_norm_MVN_src2__f32__2_1_2048_1__bfyx.bin");
 
-        // topology topo;
-        // topo.add(input_layout("input0", input0_dyn_layout));
-        // topo.add(input_layout("input1", input0_dyn_layout));//Gather, ADD_1
-        // topo.add(input_layout("input2", input0_dyn_layout));//Gather_1
-        // topo.add(mvn("mvn", input_info("input0"), true, 1e-06f, true, {2}));
-        // topo.add(eltwise("mul", {input_info("mvn"), input_info("input1")}, eltwise_mode::prod, {}, data_types::f32));
-        // topo.add(eltwise("add", {input_info("mul"), input_info("input2")}, eltwise_mode::prod, {}, data_types::f32));
-        // topo.add(reorder("result",input_info("add"), format::bfyx, data_types::f32));
-        // ExecutionConfig config = get_test_default_config(engine);
-        // config.set_property(ov::intel_gpu::custom_outputs(std::vector<std::string>{"mvn"}));
-        // config.set_property(ov::intel_gpu::force_implementations(ov::intel_gpu::ImplForcingMap{ {"mvn", {format::type::bfyx, "mvn_gpu_bfyx_opt"}} }));
+        topology topo;
+        topo.add(input_layout("input0", input0_dyn_layout));
+        topo.add(input_layout("input1", input1_dyn_layout));//Gather, ADD_1
+        topo.add(input_layout("input2", input2_dyn_layout));//Gather_1
+        topo.add(mvn("mvn", input_info("input0"), true, 1e-06f, true, {2}));
+        topo.add(eltwise("mul", {input_info("mvn"), input_info("input1")}, eltwise_mode::prod, {}, data_types::f32));
+        topo.add(eltwise("add", {input_info("mul"), input_info("input2")}, eltwise_mode::sum, {}, data_types::f32));
+        topo.add(reorder("result",input_info("add"), format::bfyx, data_types::f32));
+        ExecutionConfig config = get_test_default_config(engine);
+        config.set_property(ov::intel_gpu::allow_new_shape_infer(true));
+        config.set_property(ov::intel_gpu::force_implementations(ov::intel_gpu::ImplForcingMap{ {"mvn", {format::type::bfyx, "mvn_gpu_bfyx_opt"}} }));
+        // config.set_property(ov::intel_gpu::force_implementations(ov::intel_gpu::ImplForcingMap{ {"mvn", {format::type::bfyx, "mvn_gpu_ref"}} }));
 
-        // cldnn::network::ptr net = get_network(engine, topo, config, get_test_stream_ptr(), is_caching_test);
+        cldnn::network::ptr net = get_network(engine, topo, config, get_test_stream_ptr(), is_caching_test);
 
-        // net->set_input_data("input0", input0);
-        // net->set_input_data("input1", input1);
-        // net->set_input_data("input2", input2);
+        net->set_input_data("input0", input0);
+        net->set_input_data("input1", input1);
+        net->set_input_data("input2", input2);
 
-        // auto outputs = net->execute();
-        // auto output = outputs.at("result").get_memory();
+        auto outputs = net->execute();
+        auto output = outputs.at("result").get_memory();
 
-        // cldnn::mem_lock<float> opt_ptr(output, get_test_stream());
+        GPU_DEBUG_COUT << "Fix minor error " << std::endl;
+        check_data(output);
+    }
 
-        std::string ref_path = "/home/ahnyoung/cldnn/cvs_164660/dumps/outs/cpu.mvn/#3249_Eltwise_aten--mul_Multiply_1_out0.ieb";
+    // 코사인 유사도를 계산하는 함수
+    float cosineSimilarity(std::vector<float>& vec1, cldnn::mem_lock<float>& memLockVec2) {
+        if (vec1.size() != memLockVec2.size()) {
+            std::cerr << "Vectors must be of the same size." << std::endl;
+            return -1.0f;
+        }
+
+        float dotProduct = std::inner_product(vec1.begin(), vec1.end(), memLockVec2.begin(), 0.0f);
+
+        float magnitude1 = std::sqrt(std::inner_product(vec1.begin(), vec1.end(), vec1.begin(), 0.0f));
+        float magnitude2 = std::sqrt(std::inner_product(memLockVec2.begin(), memLockVec2.end(), memLockVec2.begin(), 0.0f));
+
+        if (magnitude1 == 0.0f || magnitude2 == 0.0f) {
+            std::cerr << "One of the vectors is zero vector." << std::endl;
+            return -1.0f;
+        }
+
+        return dotProduct / (magnitude1 * magnitude2);
+    }
+
+    float cosineSimilarity(cldnn::mem_lock<float>& vec1, cldnn::mem_lock<float>& memLockVec2) {
+        if (vec1.size() != memLockVec2.size()) {
+            std::cerr << "Vectors must be of the same size." << std::endl;
+            return -1.0f;
+        }
+
+        float dotProduct = std::inner_product(vec1.begin(), vec1.end(), memLockVec2.begin(), 0.0f);
+
+        float magnitude1 = std::sqrt(std::inner_product(vec1.begin(), vec1.end(), vec1.begin(), 0.0f));
+        float magnitude2 = std::sqrt(std::inner_product(memLockVec2.begin(), memLockVec2.end(), memLockVec2.begin(), 0.0f));
+
+        if (magnitude1 == 0.0f || magnitude2 == 0.0f) {
+            std::cerr << "One of the vectors is zero vector." << std::endl;
+            return -1.0f;
+        }
+
+        return dotProduct / (magnitude1 * magnitude2);
+    }
+
+    void check_data(cldnn::memory::ptr output_mem) {
+        cldnn::mem_lock<float> opt_ptr(output_mem, get_test_stream());
+#if 1
+        auto& engine = get_test_engine();
+        auto out_ref_mem = engine.allocate_memory(output_mem->get_layout());
+        std::string ref_path = "/home/ahnyoung/cldnn/cvs_164660/debug.0430/bin/src.opt/program1_network1_0__03124_mvn___module.norm_out_aten__layer_norm_MVN_dst0__f32__2_990_2048_1__bfyx.bin";
+        load_data_from_bin(out_ref_mem, ref_path);
+        cldnn::mem_lock<float> ref_data(out_ref_mem, get_test_stream());
+#else
+        // std::string ref_path = "/home/ahnyoung/cldnn/cvs_164660/dumps/outs/cpu.mvn/#3249_Eltwise_aten--mul_Multiply_1_out0.ieb";
+        std::string ref_path = "/home/ahnyoung/cldnn/cvs_164660/dumps/outs/gpu.mvn/program1_network1_0__03403_mvn___module.norm_out_aten__layer_norm_MVN_dst0.txt";
         auto ref_data = load_data_from_text(ref_path);
-        std::cout << ref_data.size() << std::endl;
-
+#endif
+        auto ret = cosineSimilarity(ref_data, opt_ptr);
+        GPU_DEBUG_COUT << "Cosine Similarity : " << ret << std::endl;
+        if (ret < 0.9f) {
+            GPU_DEBUG_COUT << "Compare data] ref_data : act_data" << std::endl;
+            for (size_t idx = 0; idx < 10; idx++) {
+                GPU_DEBUG_COUT << idx << "] " << ref_data[idx] << " : " << opt_ptr[idx] << std::endl;
+            }
+        }
+        ASSERT_GE(ret, 0.9f);
     }
 };
 
-TEST_P(mvn_random_test_issued, random_cached) {
-    this->execute(false);
+
+TEST(mvn_random_test_issued, random_cached) {
+    mvn_random_test_issued test;
+    test.execute(false);
 }
