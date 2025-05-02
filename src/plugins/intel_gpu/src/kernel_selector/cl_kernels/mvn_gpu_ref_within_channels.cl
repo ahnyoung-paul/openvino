@@ -162,6 +162,13 @@ KERNEL (mvn_gpu_ref_within_channels)(
 #   if HAS_FUSED_OPS
                     FUSED_OPS;
                     output[output_idx] = FUSED_OPS_RESULT;
+                    int eltwise0_input_idx = ((1*0) + (1*0) + ((1*2048)*0) + ((1*2048*1)*0) + ((1*2048*1*1*1*1)*0) + ((1*2048*1*1*1*1*(shape_info[9] + 0))*0)) + (0 % 1)*1 + (y % 2048)*1 + (f % (shape_info[9] ))*(1*2048*1*1*1*1) + (b % (shape_info[8] ))*(1*2048*1*1*1*1*(shape_info[9] + 0));
+                    if (output_idx == 4094 || output_idx == 4095
+                        || output_idx == 4096 || output_idx == 4097
+                        || output_idx == 12000 || output_idx == 12001
+                        || output_idx == 1582582 || output_idx == 1895926) {
+                        printf("[%d],[%d],[%f]\n", eltwise0_input_idx, output_idx, eltwise0_data0);
+                    }
 #   else
                     output[output_idx] = TO_OUTPUT_TYPE(ACTIVATION(result, ACTIVATION_PARAMS));
 #   endif

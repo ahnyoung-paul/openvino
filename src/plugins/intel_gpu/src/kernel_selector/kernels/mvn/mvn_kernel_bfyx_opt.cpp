@@ -111,9 +111,9 @@ JitConstants MVNKernelBfyxOpt::GetJitConstants(const mvn_params& params, MVNKern
         if (params.inputs[0].GetDims().size() <= 4) {
             if (params.mvnMode == MVNMode::WITHIN_CHANNELS) {
                 idx_order = { "(data_set_idx / OUTPUT_FEATURE_NUM)",
-                              "(data_set_idx % OUTPUT_FEATURE_NUM)",
-                              "((in_data_set_idx + iteration_in_data_set_offset) / OUTPUT_SIZE_X)",
-                              "((in_data_set_idx + iteration_in_data_set_offset) % OUTPUT_SIZE_X)" };
+                                "(data_set_idx % OUTPUT_FEATURE_NUM)",
+                                "((in_data_set_idx + iteration_in_data_set_offset) / OUTPUT_SIZE_X)",
+                                "((in_data_set_idx + iteration_in_data_set_offset) % OUTPUT_SIZE_X)" };
             } else if (params.mvnMode == MVNMode::ACROSS_CHANNELS) {
                 idx_order = { "data_set_idx",
                               "((in_data_set_idx + iteration_in_data_set_offset) / (OUTPUT_SIZE_X * OUTPUT_SIZE_Y))",
@@ -135,7 +135,7 @@ JitConstants MVNKernelBfyxOpt::GetJitConstants(const mvn_params& params, MVNKern
                               "((in_data_set_idx + iteration_in_data_set_offset) % OUTPUT_SIZE_X)" };
             }
         }
-        auto conf = FusedOpsConfiguration("", idx_order, "result", activation_dt, 1, LoadType::LT_UNALIGNED, BoundaryCheck::DISABLED);
+        auto conf = FusedOpsConfiguration("", idx_order, "result", activation_dt, 1, LoadType::LT_UNALIGNED, BoundaryCheck::ENABLED);
         jit.Merge(MakeFusedOpsJitConstants(params, { conf }));
     }
 

@@ -32,6 +32,11 @@ KERNEL (mvn_gpu_bfyx_opt)(
     float my_sum = 0;
     float tmp;
 
+    if (get_global_id(0) == 0 && get_global_id(1) == 0 && get_global_id(2)) {
+        printf("GWS [%d,%d,%d]\n", get_global_size(0), get_global_size(1), get_global_size(2));
+        printf("LWS [%d,%d,%d]\n", get_local_size(0), get_local_size(1), get_local_size(2));
+    }
+
     //each WI reads items_num consecutive items from batch*feature
     for (uint i=0; i<iters_num; ++i)
     {
@@ -83,6 +88,14 @@ KERNEL (mvn_gpu_bfyx_opt)(
 #   if HAS_FUSED_OPS
         FUSED_OPS;
         output[my_data_offset + iteration_in_data_set_offset] = FUSED_OPS_RESULT;
+        int eltwise0_input_idx = ((1*0) + (1*0) + ((1*2048)*0) + ((1*2048*1)*0) + ((1*2048*1*1*1*1)*0) + ((1*2048*1*1*1*1*(shape_info[9] + 0))*0)) + (0)*1 + (((in_data_set_idx + iteration_in_data_set_offset) / 1))*1 + ((data_set_idx % (shape_info[17] )))*(1*2048*1*1*1*1) + ((data_set_idx / (shape_info[17] )))*(1*2048*1*1*1*1*(shape_info[9] + 0));
+        int out_idx = my_data_offset + iteration_in_data_set_offset;
+        if (out_idx == 4094 || out_idx == 4095
+            || out_idx == 4096 || out_idx == 4097
+            || out_idx == 12000 || out_idx == 12001
+            || out_idx == 1582582 || out_idx == 1895926) {
+            printf("[%d],[%d],[%f]\n", eltwise0_input_idx, out_idx, eltwise0_data0);
+        }
 #   else
         output[my_data_offset + iteration_in_data_set_offset] = TO_OUTPUT_TYPE(ACTIVATION(result, ACTIVATION_PARAMS));
 #   endif

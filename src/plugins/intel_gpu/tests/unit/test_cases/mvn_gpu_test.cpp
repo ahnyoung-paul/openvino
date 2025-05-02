@@ -1015,8 +1015,21 @@ struct mvn_random_test_issued {
     }
 
     const std::string opt_data_path = "/home/ahnyoung/cldnn/cvs_164660/debug.0430/bin/src.opt/";
+    const size_t topology_scenario_basic        = 1;
+    const size_t topology_scenario_single_mul   = 2;
+    const size_t topology_scenario_single_add   = 3;
 
-    void execute(bool is_caching_test) {
+    std::string get_topology_tag(const size_t topology_scenario) {
+        std::string topology_scenario_str = "topology_mvn_mul_add";
+        if (topology_scenario == topology_scenario_single_add) {
+            topology_scenario_str = "topology_mvn_add";
+        } else if (topology_scenario == topology_scenario_single_mul) {
+            topology_scenario_str = "topology_mvn_mul";
+        }
+        return topology_scenario_str;
+    }
+
+    cldnn::memory::ptr run_network(bool is_caching_test, const size_t topology_scenario, bool use_opt_kernel = false) {
         auto& engine = get_test_engine();
         cldnn::layout input0_dyn_layout({-1,-1,2048}, data_types::f32, format::bfyx);
         cldnn::layout input1_dyn_layout({-1,-1,2048}, data_types::f32, format::bfyx);
@@ -1030,33 +1043,158 @@ struct mvn_random_test_issued {
         auto input1 = engine.allocate_memory(input1_static_layout);
         auto input2 = engine.allocate_memory(input2_static_layout);
         load_data_from_bin(input0, opt_data_path + "program1_network1_0__03124_mvn___module.norm_out_aten__layer_norm_MVN_src0__f32__2_990_2048_1__bfyx.bin");
-        load_data_from_bin(input1, opt_data_path + "program1_network1_0__03124_mvn___module.norm_out_aten__layer_norm_MVN_src1__f32__2_1_2048_1__bfyx.bin");
-        load_data_from_bin(input2, opt_data_path + "program1_network1_0__03124_mvn___module.norm_out_aten__layer_norm_MVN_src2__f32__2_1_2048_1__bfyx.bin");
+        const bool load_data_from_data = false;
+        if (load_data_from_data) {
+            load_data_from_bin(input1, opt_data_path + "program1_network1_0__03124_mvn___module.norm_out_aten__layer_norm_MVN_src1__f32__2_1_2048_1__bfyx.bin");
+            load_data_from_bin(input2, opt_data_path + "program1_network1_0__03124_mvn___module.norm_out_aten__layer_norm_MVN_src2__f32__2_1_2048_1__bfyx.bin");
+        } else {
+            std::vector<float> input1_values(input1->count(), 2.f);
+            std::vector<float> input2_values(input2->count(), 1.f);
+
+            set_values(input1, input1_values);
+            set_values(input2, input2_values);
+        }
+
+        std::string dump_base = "/home/ahnyoung/cldnn/cvs_164660/";
+        bool disable_post_ops_fusions = false;
+        bool dump_kernel  = false;
+
+        std::string topology_scenario_str = get_topology_tag(topology_scenario);
+        std::string dump_dir_name = topology_scenario_str;
+        const std::string kernel_dump_path = dump_base + "/debug.0501/kernels." + dump_dir_name;
+
+        bool enable_ov_verbose = false;
+
+        GPU_DEBUG_COUT << "Topology: " << topology_scenario_str << std::endl;
+        GPU_DEBUG_COUT << "* mvn kernel               : " << (use_opt_kernel ? "MVN Opt Kernel" : "MVN Ref Kernel") << std::endl;
+        GPU_DEBUG_COUT << "* disable post ops fusions : " << disable_post_ops_fusions << std::endl;
+        GPU_DEBUG_COUT << "* dump kernel              : " << dump_kernel << std::endl;
+        if (dump_kernel) {
+            GPU_DEBUG_COUT << "*** dump_path : " << kernel_dump_path << std::endl;
+        }
+        GPU_DEBUG_COUT << "* verbose                  : " << (enable_ov_verbose ? "true" : "false") << std::endl;
+        GPU_DEBUG_COUT << "* input0 : " << input0_static_layout.to_short_string() << ", " << input0_static_layout.count() << std::endl;
+        GPU_DEBUG_COUT << "* input1 : " << input1_static_layout.to_short_string() << ", " << input1_static_layout.count() << std::endl;
+        GPU_DEBUG_COUT << "* input2 : " << input2_static_layout.to_short_string() << ", " << input2_static_layout.count() << std::endl;
 
         topology topo;
-        topo.add(input_layout("input0", input0_dyn_layout));
-        topo.add(input_layout("input1", input1_dyn_layout));//Gather, ADD_1
-        topo.add(input_layout("input2", input2_dyn_layout));//Gather_1
-        topo.add(mvn("mvn", input_info("input0"), true, 1e-06f, true, {2}));
-        topo.add(eltwise("mul", {input_info("mvn"), input_info("input1")}, eltwise_mode::prod, {}, data_types::f32));
-        topo.add(eltwise("add", {input_info("mul"), input_info("input2")}, eltwise_mode::sum, {}, data_types::f32));
-        topo.add(reorder("result",input_info("add"), format::bfyx, data_types::f32));
+        if (topology_scenario == topology_scenario_basic) {
+            topo.add(input_layout("input0", input0_dyn_layout));
+            topo.add(input_layout("input1", input1_dyn_layout));//Gather, ADD_1
+            topo.add(input_layout("input2", input2_dyn_layout));//Gather_1
+            topo.add(mvn("mvn", input_info("input0"), true, 1e-06f, true, {2}));
+            topo.add(eltwise("mul", {input_info("mvn"), input_info("input1")}, eltwise_mode::prod, {}, data_types::f32));
+            topo.add(eltwise("add", {input_info("mul"), input_info("input2")}, eltwise_mode::sum, {}, data_types::f32));
+            topo.add(reorder("result",input_info("add"), format::bfyx, data_types::f32));
+        } else if (topology_scenario == topology_scenario_single_add) {
+            topo.add(input_layout("input0", input0_dyn_layout));
+            topo.add(input_layout("input2", input2_dyn_layout));//Gather_1
+            topo.add(mvn("mvn", input_info("input0"), true, 1e-06f, true, {2}));
+            topo.add(eltwise("add", {input_info("mvn"), input_info("input2")}, eltwise_mode::sum, {}, data_types::f32));
+            topo.add(reorder("result",input_info("add"), format::bfyx, data_types::f32));
+        } else if (topology_scenario == topology_scenario_single_mul) {
+            topo.add(input_layout("input0", input0_dyn_layout));
+            topo.add(input_layout("input1", input1_dyn_layout));//Gather, ADD_1
+            topo.add(mvn("mvn", input_info("input0"), true, 1e-06f, true, {2}));
+            topo.add(eltwise("mul", {input_info("mvn"), input_info("input1")}, eltwise_mode::prod, {}, data_types::f32));
+            topo.add(reorder("result",input_info("mul"), format::bfyx, data_types::f32));
+        } else {
+            OPENVINO_ASSERT(false, "No found topology_sceanrio");
+        }
+
         ExecutionConfig config = get_test_default_config(engine);
+        config.set_property(ov::intel_gpu::disable_post_ops_fusions(disable_post_ops_fusions));
         config.set_property(ov::intel_gpu::allow_new_shape_infer(true));
-        config.set_property(ov::intel_gpu::force_implementations(ov::intel_gpu::ImplForcingMap{ {"mvn", {format::type::bfyx, "mvn_gpu_bfyx_opt"}} }));
-        // config.set_property(ov::intel_gpu::force_implementations(ov::intel_gpu::ImplForcingMap{ {"mvn", {format::type::bfyx, "mvn_gpu_ref"}} }));
+
+        if (enable_ov_verbose) {
+            config.set_property(ov::intel_gpu::verbose(100));
+            config.set_property(ov::intel_gpu::verbose_color(false));
+            // config.set_property(ov::intel_gpu::log_to_file(kernel_dump_path  + (use_opt_kernel? "_opt.log" : "_ref.log")));
+        }
+
+        if (use_opt_kernel) {
+            if (dump_kernel) {
+                config.set_property(ov::intel_gpu::dump_sources_path(kernel_dump_path + "/opt/"));
+                config.set_property(ov::intel_gpu::max_kernels_per_batch("1"));
+            }
+            config.set_property(ov::intel_gpu::force_implementations(ov::intel_gpu::ImplForcingMap{ {"mvn", {format::type::bfyx, "mvn_gpu_bfyx_opt"}} }));
+        } else {
+            if (dump_kernel) {
+                config.set_property(ov::intel_gpu::dump_sources_path(kernel_dump_path + "/ref/"));
+                config.set_property(ov::intel_gpu::max_kernels_per_batch("1"));
+            }
+            config.set_property(ov::intel_gpu::force_implementations(ov::intel_gpu::ImplForcingMap{ {"mvn", {format::type::bfyx, "mvn_gpu_ref"}} }));
+        }
+
+        // GPU_DEBUG_COUT << "Config: " << config.to_string() << std::endl;
 
         cldnn::network::ptr net = get_network(engine, topo, config, get_test_stream_ptr(), is_caching_test);
 
-        net->set_input_data("input0", input0);
-        net->set_input_data("input1", input1);
-        net->set_input_data("input2", input2);
-
+        if (topology_scenario == topology_scenario_basic) {
+            net->set_input_data("input0", input0);
+            net->set_input_data("input1", input1);
+            net->set_input_data("input2", input2);
+        } else if (topology_scenario == topology_scenario_single_add) {
+            net->set_input_data("input0", input0);
+            net->set_input_data("input2", input2);
+        } else if (topology_scenario == topology_scenario_single_mul) {
+            net->set_input_data("input0", input0);
+            net->set_input_data("input1", input1);
+        } else {
+            OPENVINO_ASSERT(false, "No found topology_sceanrio");
+        }
         auto outputs = net->execute();
         auto output = outputs.at("result").get_memory();
+        return output;
+    }
 
-        GPU_DEBUG_COUT << "Fix minor error " << std::endl;
-        check_data(output);
+    void execute(bool is_caching_test, const size_t topology_scenario) {
+        GPU_DEBUG_COUT << "Execute " << get_topology_tag(topology_scenario) << std::endl;
+        GPU_DEBUG_COUT << "********************************************************************************" << std::endl;
+        GPU_DEBUG_COUT << "********************************************************************************" << std::endl;
+        auto mem_ref_ptr = run_network(is_caching_test, topology_scenario, false);
+        GPU_DEBUG_COUT << "********************************************************************************" << std::endl;
+        GPU_DEBUG_COUT << "********************************************************************************" << std::endl;
+        auto mem_opt_ptr = run_network(is_caching_test, topology_scenario, true);
+        GPU_DEBUG_COUT << "********************************************************************************" << std::endl;
+        GPU_DEBUG_COUT << "********************************************************************************" << std::endl;
+        cldnn::mem_lock<float> ref_data(mem_ref_ptr, get_test_stream());
+        cldnn::mem_lock<float> opt_data(mem_opt_ptr, get_test_stream());
+        auto ret = cosineSimilarity(ref_data, opt_data);
+        GPU_DEBUG_COUT << "Cosine Similarity : " << ret << std::endl;
+        // if (ret < 0.9f) {
+        {
+            std::vector<size_t> zeros;
+            std::vector<std::pair<size_t, float>> differences;
+            for (size_t idx = 0; idx < ref_data.size(); idx++) {
+                float diff = std::abs(ref_data[idx] - opt_data[idx]);
+                differences.push_back({idx, diff});
+                if (ref_data[idx] != 0.f && opt_data[idx] == 0.f) {
+                    zeros.push_back(idx);
+                }
+            }
+            std::sort(differences.begin(), differences.end(), [](std::pair<size_t, float> a, std::pair<size_t, float> b){
+                return a.second > b.second;
+            });
+            GPU_DEBUG_COUT << "Compare data] ref_data : act_data" << std::endl;
+            for (size_t i = 0; i < 10 && i < differences.size(); i++) {
+                size_t idx = differences[i].first;
+                GPU_DEBUG_COUT << std::setw(8) << std::fixed << idx << "] " << std::setw(12) << ref_data[idx] << " : "
+                    << std::setw(12) << opt_data[idx]
+                    << " (Difference: " << differences[i].second << ")" << std::endl;
+            }
+
+            if (zeros.size() > 0) {
+                GPU_DEBUG_COUT << "act_data has zero values " << zeros.size() << " / " << ref_data.size()
+                                << " ( " << (ref_data.size() - zeros.size()) << " are only none zero value )" << std::endl;
+                for (size_t i = 0; i < 10 && i < zeros.size(); i++) {
+                    size_t idx = zeros[i];
+                    GPU_DEBUG_COUT << std::setw(8) << std::fixed << idx << "] " << std::setw(12) << ref_data[idx] << " : "
+                        << std::setw(12) << opt_data[idx] << std::endl;
+                }
+            }
+        }
+        ASSERT_GE(ret, 0.9f);
     }
 
     // 코사인 유사도를 계산하는 함수
@@ -1103,7 +1241,8 @@ struct mvn_random_test_issued {
 #if 1
         auto& engine = get_test_engine();
         auto out_ref_mem = engine.allocate_memory(output_mem->get_layout());
-        std::string ref_path = "/home/ahnyoung/cldnn/cvs_164660/debug.0430/bin/src.opt/program1_network1_0__03124_mvn___module.norm_out_aten__layer_norm_MVN_dst0__f32__2_990_2048_1__bfyx.bin";
+        // std::string ref_path = "/home/ahnyoung/cldnn/cvs_164660/debug.0430/bin/src.opt/program1_network1_0__03124_mvn___module.norm_out_aten__layer_norm_MVN_dst0__f32__2_990_2048_1__bfyx.bin";
+        std::string ref_path = "/home/ahnyoung/cldnn/cvs_164660/debug.0430/bin/src.ref/program1_network1_0__03124_mvn___module.norm_out_aten__layer_norm_MVN_dst0__f32__2_990_2048_1__bfyx.bin";
         load_data_from_bin(out_ref_mem, ref_path);
         cldnn::mem_lock<float> ref_data(out_ref_mem, get_test_stream());
 #else
@@ -1126,5 +1265,27 @@ struct mvn_random_test_issued {
 
 TEST(mvn_random_test_issued, random_cached) {
     mvn_random_test_issued test;
-    test.execute(false);
+    // GPU_DEBUG_COUT << "========================================================================" << std::endl;
+    // GPU_DEBUG_COUT << "========================================================================" << std::endl;
+    // GPU_DEBUG_COUT << "========================================================================" << std::endl;
+    // GPU_DEBUG_COUT << "========================================================================" << std::endl;
+    // GPU_DEBUG_COUT << "========================================================================" << std::endl;
+    test.execute(false, test.topology_scenario_basic);
+    GPU_DEBUG_COUT << "========================================================================" << std::endl;
+    GPU_DEBUG_COUT << "========================================================================" << std::endl;
+    GPU_DEBUG_COUT << "========================================================================" << std::endl;
+    GPU_DEBUG_COUT << "========================================================================" << std::endl;
+    GPU_DEBUG_COUT << "========================================================================" << std::endl;
+    test.execute(false, test.topology_scenario_single_add);
+    GPU_DEBUG_COUT << "========================================================================" << std::endl;
+    GPU_DEBUG_COUT << "========================================================================" << std::endl;
+    GPU_DEBUG_COUT << "========================================================================" << std::endl;
+    GPU_DEBUG_COUT << "========================================================================" << std::endl;
+    GPU_DEBUG_COUT << "========================================================================" << std::endl;
+    test.execute(false, test.topology_scenario_single_mul);
+    // GPU_DEBUG_COUT << "========================================================================" << std::endl;
+    // GPU_DEBUG_COUT << "========================================================================" << std::endl;
+    // GPU_DEBUG_COUT << "========================================================================" << std::endl;
+    // GPU_DEBUG_COUT << "========================================================================" << std::endl;
+    // GPU_DEBUG_COUT << "========================================================================" << std::endl;
 }
