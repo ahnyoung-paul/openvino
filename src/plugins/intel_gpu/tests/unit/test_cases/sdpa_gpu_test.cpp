@@ -122,16 +122,16 @@ struct spda_gpu_test {
             config.set_property(ov::intel_gpu::force_implementations(ov::intel_gpu::ImplForcingMap{ {"sdpa", {format::type::bfyx, "sdpa_micro"}} }));
             // config.set_property(ov::intel_gpu::max_kernels_per_batch(1));
             // config.set_property(ov::intel_gpu::dump_sources_path("/home/ahnyoung/cldnn/cvs_164660/dumps.0512/kernels/sdpa.micro.unit/"));
-            config.set_property(ov::intel_gpu::dump_tensors("all"));
-            config.set_property(ov::intel_gpu::dump_tensors_format("text"));
-            config.set_property(ov::intel_gpu::dump_tensors_path("/home/ahnyoung/cldnn/cvs_164660/dumps.0512/outs/units/sdpa.micro.unit/"));
+            // config.set_property(ov::intel_gpu::dump_tensors("all"));
+            // config.set_property(ov::intel_gpu::dump_tensors_format("text"));
+            // config.set_property(ov::intel_gpu::dump_tensors_path("/home/ahnyoung/cldnn/cvs_164660/dumps.0512/outs/units/sdpa.micro.unit/"));
         } else {
             config.set_property(ov::intel_gpu::force_implementations(ov::intel_gpu::ImplForcingMap{ {"sdpa", {format::type::bfyx, "sdpa_ref"}} }));
             // config.set_property(ov::intel_gpu::max_kernels_per_batch(1));
             // config.set_property(ov::intel_gpu::dump_sources_path("/home/ahnyoung/cldnn/cvs_164660/dumps.0512/kernels/sdpa.ref.unit/"));
-            config.set_property(ov::intel_gpu::dump_tensors("all"));
-            config.set_property(ov::intel_gpu::dump_tensors_format("text"));
-            config.set_property(ov::intel_gpu::dump_tensors_path("/home/ahnyoung/cldnn/cvs_164660/dumps.0512/outs/units/sdpa.micro.unit/"));
+            // config.set_property(ov::intel_gpu::dump_tensors("all"));
+            // config.set_property(ov::intel_gpu::dump_tensors_format("text"));
+            // config.set_property(ov::intel_gpu::dump_tensors_path("/home/ahnyoung/cldnn/cvs_164660/dumps.0512/outs/units/sdpa.micro.unit/"));
         }
 
         cldnn::network::ptr net = get_network(engine, topo, config, get_test_stream_ptr(), is_caching_test);
@@ -173,10 +173,12 @@ struct spda_gpu_test {
             std::vector<std::pair<size_t, ov::float16>> differences;
             for (size_t idx = 0; idx < ref_data.size(); idx++) {
                 if (std::isnan(opt_data[idx])) {
-                    GPU_DEBUG_COUT << "opt_data has nan " << opt_data[idx] << std::endl;
+                    GPU_DEBUG_COUT << "opt_data has nan (" << opt_data[idx] << ")" << std::endl;
+                    ASSERT_TRUE(false);
                 }
                 if (std::isnan(ref_data[idx])) {
-                    GPU_DEBUG_COUT << "ref_data has nan " << ref_data[idx] << std::endl;
+                    GPU_DEBUG_COUT << "ref_data has nan (" << ref_data[idx] << ")" << std::endl;
+                    ASSERT_TRUE(false);
                 }
                 ASSERT_FALSE(std::isnan(opt_data[idx]));
                 float diff = std::abs(ref_data[idx] - opt_data[idx]);

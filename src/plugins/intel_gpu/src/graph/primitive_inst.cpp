@@ -42,6 +42,7 @@
 #include "registry/implementation_manager.hpp"
 #include "registry/registry.hpp"
 #include "graph_optimizer/prepare_buffer_fusing.h"
+#include "scaled_dot_product_attention_inst.h"
 
 #include "intel_gpu/plugin/common_utils.hpp"
 #include "intel_gpu/plugin/multi_tensor_variable_state.hpp"
@@ -2033,6 +2034,22 @@ void primitive_inst::execute() {
     }
 
     set_out_event(_impl->execute(_impl_params->dep_events, *this));
+
+    if (get_node().is_type<scaled_dot_product_attention>()) {
+        GPU_DEBUG_COUT << "[BEFORE]" << id() << " has executed ... " << std::endl;
+        get_network().get_stream().finish();
+        auto output_mem = output_memory_ptr(0);
+        if (output_mem) {
+            mem_lock<ov::float16, mem_lock_type::read> lock(output_mem, get_network().get_stream());
+            for (size_t k = 0; k < lock.size(); k++) {
+                if (std::isnan(lock[k])) {
+                    GPU_DEBUG_COUT << "It has Nan" << std::endl;
+                    OPENVINO_THROW(id() + " has nan");
+                }
+            }
+            GPU_DEBUG_COUT << "[AFTER_]" << id() << " has executed ... " << std::endl;
+        }
+    }
 
     GPU_DEBUG_IF(!get_config().get_dump_profiling_data_path().empty()) {
         auto ev = _impl_params->out_event;

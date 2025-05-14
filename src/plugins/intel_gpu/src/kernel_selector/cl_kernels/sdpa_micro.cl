@@ -18,6 +18,8 @@
 #include "include/batch_headers/sdpa_utils.cl"
 #include "include/batch_headers/tile_ops.cl"
 
+#pragma OPENCL EXTENSION cl_intel_printf : enable
+
 /* The quantization parameter may be unique for each token/element */
 #define QUANTIZE_2D 2
 
@@ -35,7 +37,7 @@ typedef ugemm_kq_c_type s_tile_type;
 typedef ugemm_vs_c_type a_tile_type;
 
 DECLARE_2D_TILE(q_tile_type, uint, SUBGROUP_SIZE, D_MAX / 2, 1, 1, q_tile_sg_n)
-
+// DECLARE_2D_TILE(tile_type, element_type, sg, br, bc, nbr, nbc)
 #ifdef BLOCK_Q
 DECLARE_2D_TILE_BLOCK_OPS(
         q_tile_type, uint, SUBGROUP_SIZE, D_MAX / 2, 1, 1, q_tile_sg_n)
@@ -223,6 +225,15 @@ KERNEL(micro_sdpa)(OPTIONAL_SHAPE_INFO_ARG
 
     local char slm[Q_slm_size + S_slm_size + S_sum_slm_size + S_max_slm_size
             + ugemm_slm_size];
+    {
+        int local_id = get_local_id(0);
+        int local_size = get_local_size(0);
+        for (int i = local_id; i < Q_slm_size + S_slm_size + S_sum_slm_size + S_max_slm_size
+            + ugemm_slm_size; i+= local_size ) {
+                slm[i] = 0;
+            }
+        barrier(CLK_LOCAL_MEM_FENCE);
+    }
 
     local half *Q_slm = (local half *)&slm[0];
     local half *S_slm = (local half *)&slm[Q_slm_size];
@@ -272,7 +283,10 @@ KERNEL(micro_sdpa)(OPTIONAL_SHAPE_INFO_ARG
 #if VAL_ZERO_POINTS
     V_zp += VAL_COMP_OFF(b1, b0_kv, 0, 0) / VAL_ZP_ELEMENTS_PER_BYTE;
 #endif
-
+//     bool is_debug = false;
+    bool is_debug = (get_global_id(0) == 125 && get_global_id(1) == 90 && get_global_id(2) == 0);
+    // bool is_debug = (get_global_id(0) >= 120 && (get_global_id(1) >= 134 && get_global_id(1) < 135) && get_global_id(2) == 0);
+    // bool is_debug = true;
     __builtin_assume_aligned(K, K_ALIGN);
     __builtin_assume_aligned(Q, Q_ALIGN);
     __builtin_assume_aligned(V, V_ALIGN);
@@ -282,6 +296,9 @@ KERNEL(micro_sdpa)(OPTIONAL_SHAPE_INFO_ARG
     q_tile_type Q_tile;
     uint q0_copy = q_tile_sg_n * sg_ij;
 #ifdef BLOCK_Q
+//     __attribute__((overloadable)) void tile_load_block(tile_type *t, \
+//             const global element_type *ptr, int n, int ld, int offset_r, \
+//             int offset_c) {
     tile_load_block_rem_q(
             &Q_tile, (global uint *)Q, q, ldq >> 1, 0, wg_j0 + q0_copy);
 #elif Q_ALIGN >= 4
@@ -290,6 +307,61 @@ KERNEL(micro_sdpa)(OPTIONAL_SHAPE_INFO_ARG
 #else
     tile_load_packed_half(&Q_tile, Q, d, q, ldq, 0, wg_j0 + q0_copy);
 #endif
+    // if (is_debug) {
+        {
+            for (int j0 = 0; j0 < 2; j0++) {
+                for (int i0 = 0; i0 < 4; i0++) {
+                    uint val = Q_tile.x[j0][i0];
+                    half2 val_half = as_half2(val);
+                    if (isnan(val_half.s0) || isnan(val_half.s1)) {
+                        printf("G[%d,%d,%d] Load Q_tile.x[%d][%d] = %d, (%f,%f)\n", get_global_id(0), get_global_id(1), get_global_id(2),
+                            j0, i0, val, val_half.s0, val_half.s1);
+                    }
+                }
+            }
+        }
+
+        // {
+        //     int br = D_MAX / 2;
+        //     int bc = 1;
+        //     int nbr = 1;
+        //     int nbc = q_tile_sg_n;
+        //     int n = q;
+        //     int ld = ldq >> 1;
+        //     int offset_r = 0;
+        //     int offset_c = wg_j0 + q0_copy;
+        //     global uint * ptr = (global uint *)Q;
+        //     ptr += ld * offset_c + offset_r;
+        //     printf("(br / SUBGROUP_SIZE) = %d\n", (br / SUBGROUP_SIZE));
+        //     printf("Q: %p [%d]\n", Q, ((uint)Q % 4));
+        //     printf("offset : (ld [%d] * offset_c [%d] + offset_r [%d]) %d\n", ld, offset_c, offset_r, offset_c + offset_r);
+        //     printf("ptr     : %p [%d]\n", ptr, ((uint)ptr % 4));
+        //     _Pragma("unroll") for (int jj = 0; jj < nbc; jj++, ptr += ld * bc) {
+        //         _Pragma("unroll") for (int ii = 0; ii < nbr; ii++) {
+        //             global void * test_ptr = (global void *)(ptr + ii * br);
+        //             printf("test_ptr[%d,%d]     : %p\n", jj, ii, test_ptr);
+        //             uint4 ret = as_uint4( intel_sub_group_block_read4(test_ptr));
+        //             {
+        //                 ushort8 ret_us = as_ushort8(ret);
+        //                 half8 ret_half = as_half8(ret_us);
+        //                 printf("block_load[0,1] = (%f,%f) [%d,%d,%d]\n", ret_half[0], ret_half[1], ii, br, br / SUBGROUP_SIZE);
+        //                 printf("block_load[2,3] = (%f,%f) [%d,%d,%d]\n", ret_half[2], ret_half[3], ii, br, br / SUBGROUP_SIZE);
+        //                 printf("block_load[4,5] = (%f,%f) [%d,%d,%d]\n", ret_half[4], ret_half[5], ii, br, br / SUBGROUP_SIZE);
+        //                 printf("block_load[6,7] = (%f,%f) [%d,%d,%d]\n", ret_half[6], ret_half[7], ii, br, br / SUBGROUP_SIZE);
+        //             }
+
+        //             half8 ret_half = as_half8( intel_sub_group_block_read_us8(test_ptr));
+        //             {
+        //                 printf("block_load_us[0,1] = (%f,%f) [%d,%d,%d]\n", ret_half[0], ret_half[1], ii, br, br / SUBGROUP_SIZE);
+        //                 printf("block_load_us[2,3] = (%f,%f) [%d,%d,%d]\n", ret_half[2], ret_half[3], ii, br, br / SUBGROUP_SIZE);
+        //                 printf("block_load_us[4,5] = (%f,%f) [%d,%d,%d]\n", ret_half[4], ret_half[5], ii, br, br / SUBGROUP_SIZE);
+        //                 printf("block_load_us[6,7] = (%f,%f) [%d,%d,%d]\n", ret_half[6], ret_half[7], ii, br, br / SUBGROUP_SIZE);
+        //             }
+        //         }
+        //     }
+        // }
+    // }
+
 
 #if WITH_SCALE
         /* Load scale */
@@ -341,10 +413,128 @@ KERNEL(micro_sdpa)(OPTIONAL_SHAPE_INFO_ARG
     a_tile_type A_tile;
     tile_fill(A_tile, 0.0f);
 
+    bool first_is_not_nan = true;
+    // if (is_debug) {
+    //     for (int a = 0; a < Q_slm_size; a++) {
+    //         if (isnan(Q_slm[a])) {
+    //                 // printf("[Before] Q_slm[%d] is nan (%f) [%d,%d,%d] G(%d,%d,%d)\n", a, Q_slm[a], sg_ij, b0, b1,
+    //                             // get_global_id(0), get_global_id(1), get_global_id(2));
+    //                 first_is_not_nan = false;
+    //                 break;
+    //         }
+    //     }
+    // }
+    // if (is_debug) {
+    //     do {
+    //             for (int i = 0; i < sizeof(Q_tile.x) / sizeof(Q_tile.x[0]); i++) {
+    //                     for (int s = 0; s < sizeof(Q_tile.x[0]) / sizeof(Q_tile.x[0][0]) / 2; s++) {
+    //                             if (isnan(Q_tile.x[i][2 * s])) {
+    //                                     printf("Q_tile] Found Nan for [%f](%d,%d) [%d, %d, %d] [%d in %d]\n", Q_tile.x[i][2 * s], i, (2*s), sg_ij, b0, b1, k0, k);
+    //                                     break;
+    //                                     found_nan = true;
+    //                             }
+    //                             if (isnan(Q_tile.x[i][2 * s + 1])) {
+    //                                     printf("Q_tile] Found Nan for [%f](%d,%d) [%d, %d, %d] [%d in %d]\n", Q_tile.x[i][2 * s + 1], i, (2*s+1),sg_ij, b0, b1, k0, k);
+    //                                     break;
+    //                                     found_nan = true;
+    //                             }
+    //                     }
+    //             }
+    //     } while (0);
+    // }
     /* Store Q tile to SLM */
-    tile_store_t_sys_src1(
-            Q_tile, (local uint *)&Q_slm[0], D_MAX / 2, q0_copy, 0);
+    // tile_store_t_sys_src1(
+    //         Q_tile, (local uint *)&Q_slm[0], D_MAX / 2, q0_copy, 0);
+    // {
+    //     uint* ptr = (uint *)&Q_slm[0];
+    //     int ld = D_MAX / 2;
+    //     int sg = SUBGROUP_SIZE;
+    //     int br = D_MAX / 2;
+    //     int bc = 1;
+    //     int nbr = 1;
+    //     int nbc = q_tile_sg_n;
+    //     int offset_r = q0_copy;
+    //     int offset_c = get_sub_group_local_id();
+    //     int offset_r0 = offset_r & (sg - 1);
+    //     int offset_r1 = offset_r & ~(sg - 1);
+    //     int index = offset_r0 + sg * offset_c + ld * offset_r1;
+    //     ptr += index;
+    //     _Pragma("unroll") for (int j0 = 0; j0 < br * nbr; j0 += sg, ptr += sg * sg, index += sg * sg) {
+    //         _Pragma("unroll") for (int i = 0; i < bc * nbc; i++) {
+    //             int index_j0 = (j0) / (br) + (nbr) * ((i) / (bc));
+    //             int index_i = ((j0) % (br)) / (sg) + ((i) % (bc)) * ((br) / (sg));
+    //             ptr[i] = tile_access(Q_tile, j0, i, sg, br, bc, nbr);
+    //             uint val = Q_tile.x[index_j0][index_i];
+    //             half2 val_half = as_half2(val);
+    //             half2 ptr_val_half = as_half2(ptr[i]);
+    //             if (isnan(ptr_val_half.s0) || isnan(ptr_val_half.s1))
+    //                 printf("G[%d,%d,%d] ptr_val_half[%d,%d] = ptr[%d] = ptr_val_half2(%f,%f), ptr(%d), Q_slm(%f,%f) from Q_tile.x[%d][%d] = %d (%f,%f)\n",
+    //                     get_global_id(0), get_global_id(1), get_global_id(2),
+    //                     j0, i, (index+i), ptr_val_half.s0, ptr_val_half.s1, ptr[i], Q_slm[index * 2], Q_slm[index * 2 + 1], index_j0, index_i, val, val_half.s0, val_half.s1);
+    //         }
+    //     }
+    // }
+    // if (is_debug) {
+    //     for (int a = 0; a < Q_slm_size; a++) {
+    //         if (isnan(Q_slm[a]) && first_is_not_nan) {
+    //                 printf("[After_] Q_slm[%d] Q_slm_size(%d) is nan (%f) [%d,%d,%d] G(%d,%d,%d) (%d, %d)\n",
+    //                             a, Q_slm_size, Q_slm[a],
+    //                             sg_ij, b0, b1,
+    //                             get_global_id(0), get_global_id(1), get_global_id(2), D_MAX / 2, q0_copy);
+    //                 {
+    //                     int ld = D_MAX / 2;
+    //                     int offset_r = q0_copy;
+    //                     int offset_c = 0;
+    //                     {
+    //                         for (int j = 0; j < 2; j++) {
+    //                             for (int i = 0; i < 4; i++) {
+    //                                 uint val = Q_tile.x[j][i];
+    //                                 half2 ptr_val_half = as_half2(val);
+    //                                 printf("Q_tile.x[%d][%d] = {%f,%f}, [%d,%d]\n", j, i, ptr_val_half.s0, ptr_val_half.s1, isnan(ptr_val_half.s0), isnan(ptr_val_half.s1));
+    //                             }
+    //                         }
+    //                     }
+    //                     char slm_temp[2 * 2 * 8];
+    //                     half* Q_slm_temp = (half *)&slm_temp[0];
+    //                     uint* ptr_test = (uint *)&Q_slm_temp[0];
+    //                     #pragma unroll
+    //                     for (int j0 = 0; j0 < 64 / 2 * 1; j0 += 8, ptr_test+=2) {
+    //                         #pragma unroll
+    //                         for (int i = 0; i < 1 * (((64) + ((8 * 4))-1) / ((8 * 4))); i++) {
+    //                             ptr_test[i] = (Q_tile).x[(j0) / (64 / 2) + (1) * ((i) / (1))] [((j0) % (64 / 2)) / (8) + ((i) % (1)) * ((64 / 2) / (8))];
+    //                             // half2 ptr_val_half = as_half2(ptr_val);
+    //                             // printf("ptr_val_half[%d,%d] = (%f[%d],%f[%d]) %d\n", j0, i, ptr_val_half.s0, isnan(ptr_val_half.s0), ptr_val_half.s1, isnan(ptr_val_half.s1), ptr_val);
+    //                         }
+    //                     }
+    //                     for (int k = 0; k < 2 * 8; k++) {
+    //                         printf("Q_slm_temp[%d] = %f (%d)\n", k, Q_slm_temp[k], isnan(Q_slm_temp[k]));
+    //                     }
+    //                 }
 
+    //                 // {
+    //                 //     int ld = D_MAX / 2;
+    //                 //     int br = D_MAX / 2;
+    //                 //     int bc = 1;
+    //                 //     int nbr = 1;
+    //                 //     int nbc = q_tile_sg_n;
+    //                 //     int offset_r = q0_copy;
+    //                 //     int offset_c = get_sub_group_local_id();
+    //                 //     int offset_r0 = offset_r & (SUBGROUP_SIZE - 1);
+    //                 //     int offset_r1 = offset_r & ~(SUBGROUP_SIZE - 1);
+    //                 //     int offset = offset_r0 + SUBGROUP_SIZE * offset_c + ld * offset_r1;
+    //                 //     _Pragma("unroll") for (int j0 = 0; j0 < br * nbr; j0 += SUBGROUP_SIZE, offset += SUBGROUP_SIZE * SUBGROUP_SIZE) {
+    //                 //         printf("offset %d , stride : %d\n", offset, (SUBGROUP_SIZE * SUBGROUP_SIZE));
+    //                 //         _Pragma("unroll") for (int i = 0; i < bc * nbc; i++) {
+    //                 //             uint data_sample = tile_access(Q_tile, j0, i, SUBGROUP_SIZE, br, bc, nbr);
+    //                 //             half2 conv_data = as_half2(data_sample);
+    //                 //             printf("Q_tile[%d, %d] = %d (%f,%f) Q_tile.tile_access (%d,%d,%d,%d,%d,%d)\n", i, offset, data_sample, conv_data[0], conv_data[1], j0, i, SUBGROUP_SIZE, br, bc, nbr);
+    //                 //         }
+    //                 //     }
+    //                 // }
+    //                 break;
+    //         }
+    //     }
+    // }
     /* Clear S column sums/maxes */
     s_sum_tile_type S_sum_tile;
     s_sum_tile_type S_max_tile, S_max_tile_old;
@@ -396,6 +586,27 @@ KERNEL(micro_sdpa)(OPTIONAL_SHAPE_INFO_ARG
                         ldkq
 #endif
                 );
+        // bool found_nan = false;
+        // do {
+        //         for (int i = 0; i < sizeof(S_tile.x) / sizeof(S_tile.x[0]); i++) {
+        //                 for (int s = 0; s < sizeof(S_tile.x[0]) / sizeof(S_tile.x[0][0]) / 2; s++) {
+        //                         if (isnan(S_tile.x[i][2 * s])) {
+        //                                 printf("Found Nan for [%f](%d,%d) [%d, %d, %d] [%d in %d]\n", S_tile.x[i][2 * s], i, (2*s), sg_ij, b0, b1, k0, k);
+        //                                 break;
+        //                                 found_nan = true;
+        //                         }
+        //                         if (isnan(S_tile.x[i][2 * s + 1])) {
+        //                                 printf("Found Nan for [%f](%d,%d) [%d, %d, %d] [%d in %d]\n", S_tile.x[i][2 * s + 1], i, (2*s+1),sg_ij, b0, b1, k0, k);
+        //                                 break;
+        //                                 found_nan = true;
+        //                         }
+        //                 }
+        //                 if (found_nan)
+        //                         break;
+        //         }
+        // } while (0);
+        // if (found_nan)
+        //         return;
 
 #if KEY_SCALES == QUANTIZE_COMMON
 #define k_scale_op(x) ((x)*k_scale)
