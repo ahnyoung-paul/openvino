@@ -118,7 +118,7 @@ KERNEL(scatter_nd_update_ref)(OPTIONAL_SHAPE_INFO_ARG
             const uint idx_x = idx[5];
         #endif
         uint index = GET_UPDATES_INDEX(INPUT1, IDX_ORDER);
-        out[i] = indices[index];
+        out[i] = (uint)indices[index];
 
         // Check if tensor size is valid
         // ex) when data format = bfyx and data shape = { 3, 3, 4, 1 }, indices shape is { 2, 1 } with rank = 2, indices values are { 1.0, 4.0 },

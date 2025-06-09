@@ -361,11 +361,11 @@ ov::pass::KeepDequantizationPrecision::KeepDequantizationPrecision(const element
         // Multiply's output data type to ensure data type consistency.
         if (add_precision_sensitive_convert) {
             auto convert = std::make_shared<v0::Convert>(multiply, multiply->get_output_element_type(0));
-            if (convert->get_input_element_type(0) != convert->get_output_element_type(0)) {
+            // if (convert->get_input_element_type(0) != convert->get_output_element_type(0)) {
                 multiply->output(0).replace(convert);
                 ov::mark_as_precision_sensitive(convert->input(0));
                 return true;
-            }
+            // }
         }
 
         return false;
