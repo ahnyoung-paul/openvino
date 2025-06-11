@@ -11,7 +11,7 @@
 #include <intel_gpu/runtime/debug_configuration.hpp>
 
 #include <iostream>
-
+#include <chrono>
 #include "mvn_inst.h"
 
 using namespace cldnn;
@@ -982,6 +982,10 @@ TEST(mvn_bfyx_opt_fused_ops, basic_fused) {
     auto input0_layout = layout{ov::PartialShape{2,990,2048}, data_types::f16, format::bfyx};
     auto input1_layout = layout{ov::PartialShape{2,1,2048}, data_types::f16, format::bfyx};
 
+    std::cout << "* input dynamic shape: " << input_dyn_layout.to_short_string() << std::endl;
+    std::cout << "* input0_layout : " << input0_layout.to_short_string() << std::endl;
+    std::cout << "* input1_layout : " << input1_layout.to_short_string() << std::endl;
+
     topology topo;
     topo.add(input_layout("input0", input_dyn_layout));
     topo.add(input_layout("input1", input_dyn_layout));
@@ -1006,28 +1010,49 @@ TEST(mvn_bfyx_opt_fused_ops, basic_fused) {
     config_fused.set_property(ov::intel_gpu::optimize_data(true));
     config_fused.set_property(ov::intel_gpu::allow_new_shape_infer(true));
     config_fused.set_property(ov::intel_gpu::force_implementations(ov::intel_gpu::ImplForcingMap{ {"mvn", {format::type::bfyx, "mvn_gpu_bfyx_opt"}} }));
-
     network network_fused(engine, topo, config_fused);
     network_fused.set_input_data("input0", input0);
     network_fused.set_input_data("input1", input1);
     network_fused.set_input_data("input2", input2);
 
+    {
+        std::map<cldnn::primitive_id, cldnn::network_output> outputs_fused;
+        const int num_iters = 1000;
+        std::vector<double> execution_times;
+        for (int i = 0; i < num_iters; ++i) {
+            auto start = std::chrono::high_resolution_clock::now();
+            outputs_fused = network_fused.execute();
+            auto end = std::chrono::high_resolution_clock::now();
+            std::chrono::duration<double, std::milli> duration = end - start;
+            execution_times.push_back(duration.count());
+        }
+
+        // Calculate min, max, and average
+        double min_time = *std::min_element(execution_times.begin(), execution_times.end());
+        double max_time = *std::max_element(execution_times.begin(), execution_times.end());
+        double avg_time = std::accumulate(execution_times.begin(), execution_times.end(), 0.0) / execution_times.size();
+
+        // Print results
+        std::cout << "Execution times (ms): " << num_iters << " times" << std::endl;
+        std::cout << "Min: " << min_time << " ms" << std::endl;
+        std::cout << "Max: " << max_time << " ms" << std::endl;
+        std::cout << "Avg: " << avg_time << " ms" << std::endl;
+    }
     auto outputs_fused = network_fused.execute();
+// // #else
+// #endif
     ASSERT_EQ(outputs_fused.size(), size_t(1));
     ASSERT_EQ(outputs_fused.begin()->first, "reorder");
     auto output_fused = outputs_fused.begin()->second.get_memory();
-
     ExecutionConfig config_unfused = get_test_default_config(engine);
     config_unfused.set_property(ov::intel_gpu::optimize_data(false));
     config_unfused.set_property(ov::intel_gpu::disable_post_ops_fusions(true));
     config_unfused.set_property(ov::intel_gpu::allow_new_shape_infer(true));
     config_unfused.set_property(ov::intel_gpu::force_implementations(ov::intel_gpu::ImplForcingMap{ {"mvn", {format::type::bfyx, "mvn_gpu_bfyx_opt"}} }));
-
     network network_unfused(engine, topo, config_unfused);
     network_unfused.set_input_data("input0", input0);
     network_unfused.set_input_data("input1", input1);
     network_unfused.set_input_data("input2", input2);
-
     auto outputs_unfused = network_unfused.execute();
     ASSERT_EQ(outputs_unfused.size(), size_t(1));
     ASSERT_EQ(outputs_unfused.begin()->first, "reorder");

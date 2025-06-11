@@ -147,6 +147,7 @@ JitConstants MVNKernelBfyxOpt::GetJitConstants(const mvn_params& params, MVNKern
                 }
             }
         }
+        std::cout << "Boundary check : " << (boundary_check != BoundaryCheck::DISABLED ? "ENABLED" : "DISABLED") << std::endl;
         auto conf = FusedOpsConfiguration("", idx_order, "result", activation_dt, 1, LoadType::LT_UNALIGNED, boundary_check);
         jit.Merge(MakeFusedOpsJitConstants(params, { conf }));
     }
