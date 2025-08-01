@@ -412,10 +412,10 @@ void TransformationsPipeline::apply(std::shared_ptr<ov::Model> func) {
             }
         }
 
-        if (infer_precision == ov::element::f16) {
-            use_disable_fp16_compression = true;
-            manager.register_pass<DisableFP16CompressionForPeriodicFuncs>();
-        }
+        // if (infer_precision == ov::element::f16) {
+        //     use_disable_fp16_compression = true;
+        //     manager.register_pass<DisableFP16CompressionForPeriodicFuncs>();
+        // }
         type_to_fuse_map empty_fuse_map = {};
         manager.register_pass<ov::pass::Validate>();
 
