@@ -191,6 +191,8 @@
 #include "openvino/op/roll.hpp"
 #include "openvino/op/shuffle_channels.hpp"
 #include "openvino/op/transpose.hpp"
+#include "openvino/op/sin.hpp"
+#include "openvino/op/cos.hpp"
 
 namespace {
 template<typename T>
@@ -343,6 +345,7 @@ void TransformationsPipeline::apply(std::shared_ptr<ov::Model> func) {
     bool enableInt8;
     ov::element::Type infer_precision = ov::element::dynamic;
     bool unroll_loop = config.get_enable_loop_unrolling();
+    bool use_disable_fp16_compression = false;
     {
         ov::pass::Manager manager("Plugin:GPU");
         auto pass_config = manager.get_pass_config();
@@ -411,6 +414,7 @@ void TransformationsPipeline::apply(std::shared_ptr<ov::Model> func) {
         }
 
         if (infer_precision == ov::element::f16) {
+            use_disable_fp16_compression = true;
             manager.register_pass<DisableFP16CompressionForPeriodicFuncs>();
         }
         type_to_fuse_map empty_fuse_map = {};
@@ -1300,6 +1304,33 @@ void TransformationsPipeline::apply(std::shared_ptr<ov::Model> func) {
             manager.register_pass<ov::intel_gpu::PrintModelStatistics>();
         }
         manager.run_passes(func);
+    }
+
+
+    {
+        std::cout << "******************************************************" << std::endl;
+        std::cout << "Use DisableFP16Compression : " << (use_disable_fp16_compression ? "Yes" : "No") << std::endl;
+        for (auto& op : func->get_ordered_ops()) {
+            if (ov::is_type<ov::op::v0::Cos>(op)
+                || ov::is_type<ov::op::v0::Sin>(op)) {
+                    if (ov::fp16_compression_is_disabled(op)) {
+                        GPU_DEBUG_COUT << op->get_friendly_name() << " fp16 compression is disabled, "
+                            << op->get_input_element_type(0) << std::endl;
+                        for (const auto& output : op->outputs()) {
+                            for (const auto& out_inputs : output.get_target_inputs()) {
+                                auto out_node = out_inputs.get_node()->shared_from_this();
+                                GPU_DEBUG_COUT << " * out : " << out_node->get_friendly_name()
+                                    << ", " << out_node->get_type_name()
+                                    << ", " << fp16_compression_is_disabled(out_node) << std::endl;
+                            }
+                        }
+                    } else {
+                        GPU_DEBUG_COUT << op->get_friendly_name() << "  fp16 compression is enabled, "
+                            << op->get_input_element_type(0) << std::endl;
+                    }
+                }
+        }
+        std::cout << "******************************************************" << std::endl;
     }
 }
 }  // namespace ov::intel_gpu

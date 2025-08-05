@@ -98,6 +98,9 @@ ov::intel_gpu::DisableFP16CompressionForPeriodicFuncs::DisableFP16CompressionFor
             }
         }
 
+        std::cout << "==================================================================================" << std::endl;
+        std::cout << "Run disable_fp16_compression for node: " << node->get_friendly_name() << std::endl;
+        std::cout << "==================================================================================" << std::endl;
         // Disable FP16 compression for the current node
         ov::disable_fp16_compression(node);
 
