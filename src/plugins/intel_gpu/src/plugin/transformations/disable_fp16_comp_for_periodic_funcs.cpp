@@ -61,6 +61,9 @@ ov::intel_gpu::DisableFP16CompressionForPeriodicFuncs::DisableFP16CompressionFor
     ov::matcher_pass_callback callback = [&](ov::pass::pattern::Matcher& m) {
         auto node = m.get_match_root();
 
+        std::cout << "==================================================================================" << std::endl;
+        std::cout << "Run disable_fp16_compression for node: " << node->get_friendly_name() << std::endl;
+        std::cout << "==================================================================================" << std::endl;
         // Disable FP16 compression for the current node
         ov::disable_fp16_compression(node);
 
