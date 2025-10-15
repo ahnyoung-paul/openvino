@@ -487,7 +487,9 @@ void TransformationsPipeline::apply(std::shared_ptr<ov::Model> func) {
             return static_cast<int32_t>((gamma_shape.back() / vec_size)) > static_cast<int32_t>(device_info.max_work_group_size);
         });
         manager.register_pass<ov::pass::RMSFusion>(false, true);
+        // manager.register_pass<DebugRMSFusion>(config, "RMSFusion", true);
         manager.register_pass<DisableFP16CompForRMS>();
+        // manager.register_pass<DebugRMSFusion>(config, "DisableFP16CompForRMS", true);
 
         const bool keep_precision_sensitive_in_fp32_1 = true;
         const bool convert_input_output_precision = false;
@@ -502,7 +504,7 @@ void TransformationsPipeline::apply(std::shared_ptr<ov::Model> func) {
                                                           keep_precision_sensitive_in_fp32_1,
                                                           convert_input_output_precision,
                                                           store_original_precision_as_rt_attribute);
-
+        manager.register_pass<DebugRMSFusion>(config, "ConvertPrecision", true);
         manager.register_pass<ov::pass::CommonOptimizations>();
 
         // In the case of "input -> reshape -> convert -> multiply",

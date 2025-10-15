@@ -148,6 +148,8 @@ static uint32_t get_unique_net_id() {
     return ++id_gen;
 }
 
+
+static std::mutex _exec_mutex;
 /*
 Network will always have net_id = 0 when it will be cldnn internal micronetwork (created i.e by propagate_constants
 opt pass).
@@ -730,6 +732,43 @@ std::map<primitive_id, network_output> network::execute(const std::vector<event:
     auto surf_lock = surfaces_lock::create(get_engine().type(), in_out_mem, get_stream());
 
     execute_impl(dependencies);
+
+
+    if (get_id() == 1) {
+        std::lock_guard<std::mutex> lock(_exec_mutex);
+        for (auto& inst : _exec_order) {
+            if (inst->is_constant())
+                continue;
+            std::cout << inst->id()
+                        << ";" << inst->get_node().get_primitive()->type_string()
+                        << ";" << inst->can_be_optimized()
+                        << ";" << inst->get_output_layout().to_short_string() << std::endl;
+        }
+        std::vector<std::string> target_names = {
+            "fullyconnectedcompressed:__module.model.layers.6.self_attn.o_proj/ov_ext::linear/MatMul",
+            "rms:__module.model.layers.6.post_attention_layernorm/aten::mul/Multiply_1",
+            "fullyconnectedcompressed:__module.model.layers.6.mlp.down_proj/ov_ext::linear/MatMul",
+            "rms:__module.model.layers.6.post_feedforward_layernorm/aten::mul/Multiply_1"
+        };
+        for (auto& inst : _exec_order) {
+            if (std::find_if(target_names.begin(), target_names.end(), [&](const std::string& name) {
+                    auto node_name = inst->id();
+                    return node_name.find(name) != std::string::npos;
+                }) != target_names.end()) {
+                std::cout << "-----------------------------------------------------------------" << std::endl;
+                std::cout << "Execute " << inst->id() << " (type: " << inst->get_impl_params()->desc->type_string()
+                    << ", kernel: " << inst->get_impl()->get_kernels().front()->get_id() << ") " << std::endl;
+                for (size_t i = 0; i < inst->get_impl_params()->input_layouts.size(); ++i) {
+                    std::cout << "- inputs[" << i << "] : "
+                            <<  inst->get_impl_params()->input_layouts[i].to_short_string() << std::endl;
+                }
+                std::cout << "-----------------------------------------------------------------" << std::endl;
+                std::cout << inst->get_node().type()->to_string(inst->get_node()) << std::endl;
+            }
+        }
+        get_stream().finish();
+        OPENVINO_ASSERT(false, "assert for debug");
+    }
 
     std::map<primitive_id, network_output> result;
     for (auto& inst : _outputs) {
