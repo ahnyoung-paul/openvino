@@ -663,6 +663,22 @@ void program::mark_if_data_flow(program_node& node) {
             }
         }
     }
+
+    if (!is_new_shape_infer() && !node.data_flow) {
+        auto& current_output_layout = node.get_output_layout();
+        for (auto& user : node.get_users()) {
+            for (size_t i = 0; i < user->get_dependencies().size(); ++i) {
+                if ((user->get_dependency(i).id() == node.id())
+                    && user->is_type<gemm>()) {
+                    auto& user_output_layout = user->get_output_layout(0);
+                    if (current_output_layout.get_rank() != user_output_layout.get_rank()) {
+                        node.data_flow = true;
+                        return;
+                    }
+                }
+            }
+        }
+    }
 }
 
 void program::transfer_memory_to_device() {

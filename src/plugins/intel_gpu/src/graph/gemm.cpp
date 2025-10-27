@@ -96,6 +96,11 @@ layout gemm_inst::calc_output_layout(gemm_node const& node, kernel_impl_params c
 
     auto output_format = input0_layout.format;
 
+    if (input1_layout.format != input0_layout.format) {
+        output_format = input1_layout.get_dims().size() > input0_layout.get_dims().size() ?
+            input1_layout.format : input0_layout.format;
+    }
+
     if (node.get_preferred_impl_type() == impl_types::onednn && node.get_preferred_output_fmt() != format::any) {
         output_format = node.get_preferred_output_fmt();
     }
@@ -190,7 +195,8 @@ std::vector<layout> gemm_inst::transform_input_layouts(const std::shared_ptr<con
             }
         } else {
             if (input_pshape.is_static()) {
-                OPENVINO_ASSERT(input_pshape.size() >= input_rank, "[GPU] Requested input rank in gemm primitive is greater than actual shape");
+                OPENVINO_ASSERT(input_pshape.size() >= input_rank, "[GPU] Requested input rank[",
+                        input_rank, "] in gemm primitive is greater than actual shape: ", input_pshape.to_string());
                 std::vector<ov::Dimension> dims(input_pshape.begin(), input_pshape.begin() + input_rank);
                 transposed_input_pshape = ov::PartialShape(dims);
             } else {
