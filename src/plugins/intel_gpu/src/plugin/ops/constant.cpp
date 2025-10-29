@@ -24,6 +24,7 @@
 #include "openvino/op/loop.hpp"
 #include "openvino/op/tensor_iterator.hpp"
 #include "openvino/op/bucketize.hpp"
+#include "openvino/op/matmul.hpp"
 #include "openvino/op/util/binary_elementwise_bitwise.hpp"
 
 #include "intel_gpu/primitives/data.hpp"
@@ -195,7 +196,32 @@ static void CreateConstantOp(ProgramBuilder& p, const std::shared_ptr<ov::op::v0
     // Also check if constant users is a backprop convolution - in that case O and I need to be swapped.
     for (auto& node : constUsers) {
         auto outOp = node.get_node();
-        if (auto castedOp = ov::as_type<ov::op::v0::Concat>(outOp)) {
+        if (ov::is_type<ov::op::v0::Convert>(outOp) && !p.use_new_shape_infer()) {
+#ifdef ENABLE_ONEDNN_FOR_GPU
+            if (p.get_config().get_use_onednn()) {
+                auto convertUsers = outOp->get_output_target_inputs(0);
+                // bool found_mat = (op->get_friendly_name() == "/generator/model/model.5/conv1/ffc/convg2g/fu/rttn/Sin_1_output_0_postponed_compression"
+                //     || op->get_friendly_name() == "/generator/model/model.5/conv1/ffc/convg2g/fu/rttn/Cos_1_output_0_postponed_compression");
+                bool found_mat = false;
+                for (auto& user : convertUsers) {
+                    if (ov::is_type<ov::op::v0::MatMul>(user.get_node())) {
+                        found_mat = true;
+                        break;
+                    }
+                }
+                if (found_mat) {
+                    const size_t const_max_dims = 4;
+                    if (constDims.size() < const_max_dims) {
+                        ov::Shape reshaped_const_dims(const_max_dims, 1);
+                        for (size_t i = constDims.size(); i < const_max_dims; i++) {
+                            reshaped_const_dims[i] = constDims[i - constDims.size()];
+                        }
+                        constDims = reshaped_const_dims;
+                    }
+                }
+            }
+#endif
+        } else if (auto castedOp = ov::as_type<ov::op::v0::Concat>(outOp)) {
             if (castedOp->get_axis() == 0) {
                 consts[op].needsBatchInterpretation = constDims.size() == 1;
             }
