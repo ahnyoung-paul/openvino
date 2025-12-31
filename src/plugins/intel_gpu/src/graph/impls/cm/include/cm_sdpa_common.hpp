@@ -180,7 +180,7 @@
 //                 #pragma unroll
 //                 for(int k = 0, ri = 0; k < head_size; k += REG_N, ri += num_P_tiles) {
 //                     cm_prefetch<CacheHint::Cached, CacheHint::Cached>(b2dKV_prefetch.set_block_x(k));
-//                     cm_load<lsc::Normal>(quanVmat.format<uint8_t>(), b2dKV.set_block_x(k));
+//                     cm_load<lsc::Normal>(quanVmat.format<uint8_t>(), b2dV.set_block_x(k));
 //                      #pragma unroll
 //                     for(int r = 0; r < kv_step;r++)  {
 //                         Vmat[r] =  quanVmat[r]-zp[r];
@@ -207,7 +207,7 @@
 //                 #pragma unroll
 //                 for(int k = 0, ri=0; k < head_size; k += REG_N, ri += num_P_tiles) {
 //                     cm_prefetch<CacheHint::Cached, CacheHint::Cached>(b2dKV_prefetch.set_block_x(k));
-//                     cm_load<lsc::Normal>(quanVmat.format<uint8_t>(), b2dKV.set_block_x(k));
+//                     cm_load<lsc::Normal>(quanVmat.format<uint8_t>(), b2dV.set_block_x(k));
 
 //                     #pragma unroll
 //                     for(int r = 0; r < kv_step;r++)  {
@@ -281,7 +281,13 @@ void sdpa_kernel_lsc(
     svmptr_t o_base [[type("svmptr_t")]]) {
 
 
-    printf("sdpa_kernel_lsc = use_causal_mask=%d, num_heads=%d, num_kv_heads=%d, head_size=%d, is_qkv_fused=%d\n",use_causal_mask, num_heads, num_kv_heads, head_size, is_qkv_fused);
+    // 방법 1: wg_local_id와 group_id 조합 사용
+    if (wg_local_id == 0 && cm_group_id(0) == 0 && cm_group_id(1) == 0) {
+        printf("sdpa_kernel= q_step=%d, kv_step=%d, o_pitch=%d, q_pitch=%d, kv_pitch=%d, REG_K=%d, REG_N=%d, use_causal_mask=%d, num_heads=%d, num_kv_heads=%d, head_size=%d, is_qkv_fused=%d\n",
+                q_step, kv_step, o_pitch, q_pitch, kv_pitch,
+                REG_K, REG_N, use_causal_mask, num_heads, num_kv_heads, head_size, is_qkv_fused);
+    }
+
     constexpr uint o_pitch = (num_heads * head_size * sizeof(half));
     constexpr uint q_pitch = is_qkv_fused ? ((num_heads + num_kv_heads*2) * head_size * sizeof(half)) : o_pitch;
     constexpr uint kv_pitch = is_qkv_fused ? q_pitch : (num_kv_heads * head_size * sizeof(half));
@@ -644,13 +650,17 @@ void sdpa_kernel(
     cur_max = -3e38f;
     cur_sum = 0;
 
-    printf("sdpa_kernel= use_causal_mask=%d, num_heads=%d, num_kv_heads=%d, head_size=%d, is_qkv_fused=%d\n",use_causal_mask, num_heads, num_kv_heads, head_size, is_qkv_fused);
-
     matrix<half, padded_head_size/REG_K, REG_K*REG_N> rQ;
     auto q_tokens_left = q_len;
     static_assert(q_step == REG_N);
     static_assert(kv_step == REG_K);
     static_assert((head_size % 8) == 0);
+
+    if (wg_local_id == 0 && cm_group_id(0) == 0 && cm_group_id(1) == 0) {
+        printf("sdpa_kernel= q_step=%d, kv_step=%d, o_pitch=%d, q_pitch=%d, kv_pitch=%d, REG_K=%d, REG_N=%d, use_causal_mask=%d, num_heads=%d, num_kv_heads=%d, head_size=%d, is_qkv_fused=%d\n",
+            q_step, kv_step, o_pitch, q_pitch, kv_pitch,
+            REG_K, REG_N, use_causal_mask, num_heads, num_kv_heads, head_size, is_qkv_fused);
+    }
 
     if (q_tokens_left < 0) q_tokens_left = 0;
     if (q_tokens_left > q_step) q_tokens_left = q_step;
