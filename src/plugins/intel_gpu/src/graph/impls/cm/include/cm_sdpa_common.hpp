@@ -280,6 +280,8 @@ void sdpa_kernel_lsc(
     svmptr_t v_base [[type("svmptr_t")]],
     svmptr_t o_base [[type("svmptr_t")]]) {
 
+
+    printf("sdpa_kernel_lsc = use_causal_mask=%d, num_heads=%d, num_kv_heads=%d, head_size=%d, is_qkv_fused=%d\n",use_causal_mask, num_heads, num_kv_heads, head_size, is_qkv_fused);
     constexpr uint o_pitch = (num_heads * head_size * sizeof(half));
     constexpr uint q_pitch = is_qkv_fused ? ((num_heads + num_kv_heads*2) * head_size * sizeof(half)) : o_pitch;
     constexpr uint kv_pitch = is_qkv_fused ? q_pitch : (num_kv_heads * head_size * sizeof(half));
@@ -438,6 +440,7 @@ void sdpa_kernel_lsc_prefetch(
     svmptr_t k_base [[type("svmptr_t")]],
     svmptr_t v_base [[type("svmptr_t")]],
     svmptr_t o_base [[type("svmptr_t")]]) {
+    printf("sdpa_kernel_lsc_prefetch = use_causal_mask=%d, num_heads=%d, num_kv_heads=%d, head_size=%d, is_qkv_fused=%d\n",use_causal_mask, num_heads, num_kv_heads, head_size, is_qkv_fused);
 
     constexpr uint o_pitch = (num_heads * head_size * sizeof(half));
     constexpr uint q_pitch = is_qkv_fused ? ((num_heads + num_kv_heads*2) * head_size * sizeof(half)) : o_pitch;
@@ -641,7 +644,7 @@ void sdpa_kernel(
     cur_max = -3e38f;
     cur_sum = 0;
 
-    printf("use_causal_mask=%d, num_heads=%d, num_kv_heads=%d, head_size=%d, is_qkv_fused=%d\n",use_causal_mask, num_heads, num_kv_heads, head_size, is_qkv_fused);
+    printf("sdpa_kernel= use_causal_mask=%d, num_heads=%d, num_kv_heads=%d, head_size=%d, is_qkv_fused=%d\n",use_causal_mask, num_heads, num_kv_heads, head_size, is_qkv_fused);
 
     matrix<half, padded_head_size/REG_K, REG_K*REG_N> rQ;
     auto q_tokens_left = q_len;
