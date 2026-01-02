@@ -656,11 +656,16 @@ void sdpa_kernel(
     static_assert(kv_step == REG_K);
     static_assert((head_size % 8) == 0);
 
-    if (wg_local_id == 0 && cm_group_id(0) == 0 && cm_group_id(1) == 0) {
-        printf("sdpa_kernel= q_step=%d, kv_step=%d, o_pitch=%d, q_pitch=%d, kv_pitch=%d, REG_K=%d, REG_N=%d, use_causal_mask=%d, num_heads=%d, num_kv_heads=%d, head_size=%d, is_qkv_fused=%d\n",
-            q_step, kv_step, o_pitch, q_pitch, kv_pitch,
-            REG_K, REG_N, use_causal_mask, num_heads, num_kv_heads, head_size, is_qkv_fused);
+    const auto* debug_flags = get_env({"OV_GPU_CM_DEBUG_MESSAGES"});
+    if (debug_flags) {
+        const std::string prof_str(debug_flags);
+        if ((prof_str == "1") && wg_local_id == 0 && cm_group_id(0) == 0 && cm_group_id(1) == 0) {
+            printf("sdpa_kernel= q_step=%d, kv_step=%d, o_pitch=%d, q_pitch=%d, kv_pitch=%d, REG_K=%d, REG_N=%d, use_causal_mask=%d, num_heads=%d, num_kv_heads=%d, head_size=%d, is_qkv_fused=%d\n",
+                q_step, kv_step, o_pitch, q_pitch, kv_pitch,
+                REG_K, REG_N, use_causal_mask, num_heads, num_kv_heads, head_size, is_qkv_fused);
+        }
     }
+
 
     if (q_tokens_left < 0) q_tokens_left = 0;
     if (q_tokens_left > q_step) q_tokens_left = q_step;
