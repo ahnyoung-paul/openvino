@@ -300,6 +300,14 @@ bool is_target_iteration(int64_t iteration, const std::set<int64_t> dump_iterati
     return true;
 }
 
+bool is_target_network_id(uint32_t net_id, const std::set<int64_t>& debug_network_ids) {
+    // Empty set means all networks are targets
+    if (debug_network_ids.empty())
+        return true;
+
+    return debug_network_ids.find(static_cast<int64_t>(net_id)) != debug_network_ids.end();
+}
+
 std::string get_matched_from_filelist(const std::vector<std::string>& file_names, std::string pattern) {
     for (const auto& file : file_names) {
         auto found = file.find(pattern);
@@ -499,7 +507,10 @@ NodeDebugHelper::NodeDebugHelper(const primitive_inst& inst)
 NodeDebugHelper::~NodeDebugHelper() {
     const auto& config = m_network.get_config();
 
-    if (config.get_validate_output_buffer() && !m_network.is_internal()) {
+    // Validate output buffer with network ID and iteration filtering
+    if (config.get_validate_output_buffer() && !m_network.is_internal() &&
+        is_target_network_id(m_network.get_id(), config.get_debug_network_ids()) &&
+        is_target_iteration(m_iter, config.get_dump_iterations())) {
         m_stream.finish(); // Wait for stream completion before checking output buffers
         for (size_t i = 0; i < m_inst.outputs_memory_count(); i++) {
             auto output_mem = m_inst.output_memory_ptr(i);
@@ -614,7 +625,7 @@ NetworkDebugHelper::NetworkDebugHelper(const network& net)
     , m_iter(net.iteration) {
     auto net_id = m_network.get_id();
     const auto& config = m_network.get_config();
-    if (config.get_dump_memory_pool()) {
+    if (config.get_dump_memory_pool() && is_target_network_id(net_id, config.get_debug_network_ids())) {
         auto& iters = config.get_dump_iterations();
         if (iters.empty() || iters.find(m_iter) != iters.end()) {
             GPU_DEBUG_COUT << "============================================================================" << std::endl;
@@ -696,7 +707,7 @@ NetworkDebugHelper::~NetworkDebugHelper() {
         }
     }
 
-    if (config.get_dump_memory_pool()) {
+    if (config.get_dump_memory_pool() && is_target_network_id(net_id, config.get_debug_network_ids())) {
         auto& iters = config.get_dump_iterations();
         if (iters.empty() || iters.find(m_iter) != iters.end()) {
             dump_memory_pool(config.get_dump_memory_pool_path(), m_iter);
