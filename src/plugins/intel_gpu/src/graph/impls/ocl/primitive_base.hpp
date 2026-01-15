@@ -273,7 +273,7 @@ protected:
             GPU_DEBUG_TRACE_DETAIL << "Enqueue kernel " << kd_idx << ": gws=[" << gws[0] << ", " << gws[1] << ", " << gws[2] << "] "
                                    << "lws=[" << lws[0] << ", " << lws[1] << ", " << lws[2] << "]"
                                    << (needs_completion_event ? " has_completion_event=true" : "") << std::endl;
-            {
+            if (!is_cpu()) {
                 std::stringstream ss;
 
                 ss << "Kernel[" << kd_idx << "] " <<  _kernel_data.kernels[kd_idx].code.kernelString->entry_point
