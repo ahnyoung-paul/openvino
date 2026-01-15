@@ -275,8 +275,7 @@ protected:
                                    << (needs_completion_event ? " has_completion_event=true" : "") << std::endl;
             if (!is_cpu()) {
                 std::stringstream ss;
-
-                ss << "Kernel[" << kd_idx << "] " <<  _kernel_data.kernels[kd_idx].code.kernelString->entry_point
+                ss << "Kernel[" << kd_idx << "] " <<  _kernels[kd_idx]->get_id()
                    << " gws=[" << gws[0] << ", " << gws[1] << ", " << gws[2] << "]"
                    << " lws=[" << lws[0] << ", " << lws[1] << ", " << lws[2] << "]";
                 _kernel_log_info = ss.str();
