@@ -2189,6 +2189,70 @@ void primitive_inst::execute() {
     }
 
     set_out_event(_impl->execute(_impl_params->dep_events, *this));
+#ifdef GPU_DEBUG_CONFIG
+    {
+        const auto& config = get_network().get_config();
+        auto net_id = get_network().get_id();
+        auto iter = get_network().get_current_iteration_num();
+
+        auto is_target_network_id = [](const uint32_t net_id, const std::set<int64_t>& target_net_ids) {
+            if (target_net_ids.empty()) {
+                return false;
+            }
+            return target_net_ids.find(static_cast<int64_t>(net_id)) != target_net_ids.end();
+        };
+
+        auto is_target_iteration = [](int64_t iter, const std::set<int64_t>& target_iterations) {
+            if (target_iterations.empty()) {
+                return true;
+            }
+            return target_iterations.find(iter) != target_iterations.end();
+        };
+
+        // Filtering: Uses OV_GPU_DEBUG_NETWORK_IDS, OV_GPU_DUMP_ITERATIONS environment variables
+        // - OV_GPU_DEBUG_NETWORK_IDS="7" -> network 7 only
+        // - OV_GPU_DUMP_ITERATIONS="" -> all iterations (empty means all)
+        // - OV_GPU_DUMP_ITERATIONS="10,11,12" -> specified iterations only
+        if (is_target_network_id(net_id, config.get_debug_network_ids()) &&
+            is_target_iteration(iter, config.get_dump_iterations())) {
+            // Basic info
+            GPU_DEBUG_COUT << "========== [EXEC] net:" << net_id << " iter:" << iter << " ==========" << std::endl;
+            GPU_DEBUG_COUT << "  id: " << id() << std::endl;
+            GPU_DEBUG_COUT << "  type: " << _impl_params->desc->type_string() << std::endl;
+
+            // Kernel info
+            if (_impl) {
+                GPU_DEBUG_COUT << "  kernel_name: " << _impl->get_kernel_name() << std::endl;
+                auto [batch_hash, kernel_entries] = _impl->get_kernels_dump_info();
+                if (!kernel_entries.empty()) {
+                    GPU_DEBUG_COUT << "  kernel_entries: " << kernel_entries << std::endl;
+                }
+                GPU_DEBUG_COUT << "  is_dynamic: " << _impl->is_dynamic() << std::endl;
+                GPU_DEBUG_COUT << "  is_cpu: " << _impl->is_cpu() << std::endl;
+            }
+
+            // Input nodes and shapes
+            GPU_DEBUG_COUT << "  inputs (" << _deps.size() << "):" << std::endl;
+            for (size_t i = 0; i < _deps.size(); ++i) {
+                GPU_DEBUG_COUT << "    [" << i << "] " << _deps[i].first->id()
+                        << " : " << _impl_params->get_input_layout(i).to_short_string() << std::endl;
+            }
+
+            // Output shapes
+            GPU_DEBUG_COUT << "  outputs (" << _impl_params->output_layouts.size() << "):" << std::endl;
+            for (size_t i = 0; i < _impl_params->output_layouts.size(); ++i) {
+                GPU_DEBUG_COUT << "    [" << i << "] " << _impl_params->get_output_layout(i).to_short_string() <<
+                    ", 0x" << std::hex << reinterpret_cast<uintptr_t>(_outputs[i]->buffer_ptr()) << std::dec << std::endl;
+            }
+
+            // Additional state info
+            GPU_DEBUG_COUT << "  can_be_optimized: " << can_be_optimized() << std::endl;
+            GPU_DEBUG_COUT << "  mem_allocated: " << mem_allocated() << std::endl;
+
+            GPU_DEBUG_COUT << "=================================================" << std::endl;
+        }
+    }
+#endif
 
     GPU_DEBUG_IF(!get_config().get_dump_profiling_data_path().empty()) {
         auto ev = _impl_params->out_event;
