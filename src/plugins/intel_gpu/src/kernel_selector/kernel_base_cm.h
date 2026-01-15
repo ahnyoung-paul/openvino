@@ -29,7 +29,7 @@ protected:
             kernel_string->str = codes[0];
             kernel_string->jit = jit.first;
             kernel_string->undefs = jit.second;
-            kernel_string->options = " -cmc ";
+            kernel_string->options = " -cmc -zcm ";
 
             kernel_string->entry_point = entry_point;
             kernel_string->batch_compilation = true;

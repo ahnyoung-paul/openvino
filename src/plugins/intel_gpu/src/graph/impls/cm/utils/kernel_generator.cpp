@@ -58,7 +58,7 @@ std::string KernelGenerator::get_entry_point(const RuntimeParams& params) const 
 }
 
 std::string KernelGenerator::get_build_options(const RuntimeParams& params) const {
-    return " -cmc ";
+    return " -cmc -zcm ";
 }
 
 JitConstants KernelGenerator::get_jit_constants(const RuntimeParams& params) const {

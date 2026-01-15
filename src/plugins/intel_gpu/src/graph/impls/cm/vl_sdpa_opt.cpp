@@ -17,7 +17,7 @@ namespace ov::intel_gpu::cm {
 namespace {
 
 constexpr auto get_vlsdpa_build_options() {
-    return " -cmc -Qxcm_register_file_size=256";
+    return " -cmc -Qxcm_register_file_size=256 -zcm";
 }
 
 struct VLSDPARuntimeParams : public ImplRuntimeParams {

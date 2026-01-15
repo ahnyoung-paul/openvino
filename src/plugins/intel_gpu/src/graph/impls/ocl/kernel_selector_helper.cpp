@@ -97,7 +97,7 @@ bool check_cm_jit_support(cldnn::engine& e, const cldnn::ExecutionConfig& config
         )"""";
 
     kernel_string->str = kernel_code;
-    kernel_string->options = " -cmc ";
+    kernel_string->options = " -cmc -zcm ";
     kernel_string->entry_point = "cm_check";
     kernel_string->batch_compilation = true;
     kernel_string->language = kernel_language::CM;
