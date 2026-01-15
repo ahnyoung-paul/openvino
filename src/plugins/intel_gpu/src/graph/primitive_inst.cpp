@@ -2223,9 +2223,10 @@ void primitive_inst::execute() {
             // Kernel info
             if (_impl) {
                 GPU_DEBUG_COUT << "  kernel_name: " << _impl->get_kernel_name() << std::endl;
-                auto [batch_hash, kernel_entries] = _impl->get_kernels_dump_info();
-                if (!kernel_entries.empty()) {
-                    GPU_DEBUG_COUT << "  kernel_entries: " << kernel_entries << std::endl;
+                auto kernel_log = _impl->get_kernel_log_info();
+                // auto [batch_hash, kernel_entries] = _impl->get_kernels_dump_info();
+                if (!kernel_log.empty()) {
+                    GPU_DEBUG_COUT << "  kernel_entries: " << kernel_log << std::endl;
                 }
                 GPU_DEBUG_COUT << "  is_dynamic: " << _impl->is_dynamic() << std::endl;
                 GPU_DEBUG_COUT << "  is_cpu: " << _impl->is_cpu() << std::endl;
