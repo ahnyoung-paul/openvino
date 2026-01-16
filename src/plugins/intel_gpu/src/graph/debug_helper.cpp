@@ -62,6 +62,13 @@ bool __validate_data_range(memory::ptr mem, stream& stream, std::string &info) {
             if (std::isinf(val) || std::isnan(val)) {
                 std::string err_str = std::isinf(val) ? "inf" : "nan";
                 GPU_DEBUG_COUT << err_str << " WAS FOUND: " << info << std::endl;
+                GPU_DEBUG_COUT << "[validate] " << info
+                                << " | mem->count()=" << mem->count()
+                                << ", layout.count()=" << mem->get_layout().count()
+                                << ", mem->size()=" << mem->size()
+                                << ", layout.bytes_count()=" << mem->get_layout().bytes_count()
+                                << ", is_memory_packed=" << is_memory_packed
+                                << ", tensor=" << size.to_string() << std::endl;
                 return false;
             }
             if (val > val_max)
