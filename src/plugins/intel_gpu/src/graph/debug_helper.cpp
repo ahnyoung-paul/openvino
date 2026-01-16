@@ -44,29 +44,33 @@ size_t get_x_pitch(const layout& layout) {
 }
 
 template <class T>
-bool __validate_data_range(memory::ptr mem, stream& stream, std::string &info) {
+bool __validate_data_range(memory::ptr mem, stream& stream, const layout& data_layout, std::string &info) {
     if (!mem)
         return true;
-    auto&& size = mem->get_layout().get_tensor();
-    mem_lock<T, mem_lock_type::read> lock(mem, stream);
+
+    // Reinterpret buffer to represent actual data layout (same as log_memory_to_file)
+    auto actual_mem = mem->get_engine()->reinterpret_buffer(*mem, data_layout);
+
+    auto&& size = actual_mem->get_layout().get_tensor();
+    mem_lock<T, mem_lock_type::read> lock(actual_mem, stream);
     auto mem_ptr = lock.data();
-    auto x_pitch = get_x_pitch(mem->get_layout());
+    auto x_pitch = get_x_pitch(actual_mem->get_layout());
     std::stringstream buffer;
     float val_min = std::numeric_limits<float>::max();
     float val_max = std::numeric_limits<float>::lowest();
-    const bool is_memory_packed = !mem->is_memory_reset_needed(mem->get_layout());
+    const bool is_memory_packed = !actual_mem->is_memory_reset_needed(actual_mem->get_layout());
 
     if (is_memory_packed) {
-        for (size_t i = 0; i < mem->count(); ++i) {
+        for (size_t i = 0; i < actual_mem->count(); ++i) {
             auto val = convert_element(mem_ptr[i]);
             if (std::isinf(val) || std::isnan(val)) {
                 std::string err_str = std::isinf(val) ? "inf" : "nan";
                 GPU_DEBUG_COUT << err_str << " WAS FOUND: " << info << std::endl;
                 GPU_DEBUG_COUT << "[validate] " << info
-                                << " | mem->count()=" << mem->count()
-                                << ", layout.count()=" << mem->get_layout().count()
-                                << ", mem->size()=" << mem->size()
-                                << ", layout.bytes_count()=" << mem->get_layout().bytes_count()
+                                << " | actual_mem->count()=" << actual_mem->count()
+                                << ", layout.count()=" << actual_mem->get_layout().count()
+                                << ", orig mem->count()=" << mem->count()
+                                << ", layout.bytes_count()=" << actual_mem->get_layout().bytes_count()
                                 << ", is_memory_packed=" << is_memory_packed
                                 << ", tensor=" << size.to_string() << std::endl;
                 return false;
@@ -109,15 +113,16 @@ bool __validate_data_range(memory::ptr mem, stream& stream, std::string &info) {
     return true;
 }
 
-bool validate_data_range(memory::ptr mem, stream& stream, ov::element::Type_t data_type, std::string &info) {
-    if (data_type == ov::element::Type_t::f32)
-        return __validate_data_range<float>(mem, stream, info);
-    else if (data_type == ov::element::Type_t::f16)
-        return __validate_data_range<ov::float16>(mem, stream, info);
-    else if (data_type == ov::element::Type_t::i8)
-        return __validate_data_range<int8_t>(mem, stream, info);
-    else if (data_type == ov::element::Type_t::u8)
-        return __validate_data_range<uint8_t>(mem, stream, info);
+bool validate_data_range(memory::ptr mem, stream& stream, const layout& data_layout, std::string &info) {
+    auto data_type = data_layout.data_type;
+    if (data_type == cldnn::data_types::f32)
+        return __validate_data_range<float>(mem, stream, data_layout, info);
+    else if (data_type == cldnn::data_types::f16)
+        return __validate_data_range<ov::float16>(mem, stream, data_layout, info);
+    else if (data_type == cldnn::data_types::i8)
+        return __validate_data_range<int8_t>(mem, stream, data_layout, info);
+    else if (data_type == cldnn::data_types::u8)
+        return __validate_data_range<uint8_t>(mem, stream, data_layout, info);
     else
         GPU_DEBUG_INFO << "Unsupport data type for validating data range " << data_type << std::endl;
     return true;
@@ -525,8 +530,9 @@ NodeDebugHelper::~NodeDebugHelper() {
         static bool first_nan_dumped = false;
         for (size_t i = 0; i < m_inst.outputs_memory_count(); i++) {
             auto output_mem = m_inst.output_memory_ptr(i);
+            auto output_layout = m_inst.get_output_layout(i);
             std::string info = m_inst.id() + "(" + std::to_string(i) + ") at iteration " + std::to_string(m_network.get_current_iteration_num());
-            bool is_valid = validate_data_range(output_mem, m_stream, m_inst.get_output_layout(i).data_type, info);
+            bool is_valid = validate_data_range(output_mem, m_stream, output_layout, info);
 
             // Dump src and dst on first NaN detection
             if (!is_valid && !first_nan_dumped) {
