@@ -24,7 +24,7 @@ using namespace cldnn;  // TODO: Remove once namespaces are aligned
 namespace ov::intel_gpu::cm {
 
 constexpr auto get_pa_build_options() {
-    return " -cmc -Qxcm_register_file_size=256 -zcm";
+    return " -cmc -Qxcm_register_file_size=256";
 }
 
 // BLOCK_SIZE can be 16/256 for legacy and xattn cases respectively
