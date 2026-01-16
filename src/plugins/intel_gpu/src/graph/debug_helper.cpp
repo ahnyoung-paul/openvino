@@ -44,9 +44,9 @@ size_t get_x_pitch(const layout& layout) {
 }
 
 template <class T>
-void __validate_data_range(memory::ptr mem, stream& stream, std::string &info) {
+bool __validate_data_range(memory::ptr mem, stream& stream, std::string &info) {
     if (!mem)
-        return;
+        return true;
     auto&& size = mem->get_layout().get_tensor();
     mem_lock<T, mem_lock_type::read> lock(mem, stream);
     auto mem_ptr = lock.data();
@@ -61,8 +61,8 @@ void __validate_data_range(memory::ptr mem, stream& stream, std::string &info) {
             auto val = convert_element(mem_ptr[i]);
             if (std::isinf(val) || std::isnan(val)) {
                 std::string err_str = std::isinf(val) ? "inf" : "nan";
-                GPU_DEBUG_COUT << err_str << " WAS FOUND: " << info << "  *********************" << std::endl;
-                return;
+                GPU_DEBUG_COUT << err_str << " WAS FOUND: " << info << std::endl;
+                return false;
             }
             if (val > val_max)
                 val_max = val;
@@ -83,8 +83,8 @@ void __validate_data_range(memory::ptr mem, stream& stream, std::string &info) {
                                     auto val = convert_element(mem_ptr[input_it]);
                                     if (std::isinf(val) || std::isnan(val)) {
                                         std::string err_str = std::isinf(val) ? "inf" : "nan";
-                                        GPU_DEBUG_COUT << err_str << " WAS FOUND: " << info << "  *********************" << std::endl;
-                                        return;
+                                        GPU_DEBUG_COUT << err_str << " WAS FOUND: " << info << std::endl;
+                                        return false;
                                     }
                                     if (val > val_max)
                                         val_max = val;
@@ -98,20 +98,22 @@ void __validate_data_range(memory::ptr mem, stream& stream, std::string &info) {
             }
         }
     }
-    GPU_DEBUG_INFO << "min, max = " << val_min << ", " << val_max << "  : " << info << "  is_packed " << is_memory_packed << std::endl;
+    GPU_DEBUG_INFO << "min, max = " << val_min << ", " << val_max << "  : " << info << std::endl;
+    return true;
 }
 
-void validate_data_range(memory::ptr mem, stream& stream, ov::element::Type_t data_type, std::string &info) {
+bool validate_data_range(memory::ptr mem, stream& stream, ov::element::Type_t data_type, std::string &info) {
     if (data_type == ov::element::Type_t::f32)
-        __validate_data_range<float>(mem, stream, info);
+        return __validate_data_range<float>(mem, stream, info);
     else if (data_type == ov::element::Type_t::f16)
-        __validate_data_range<ov::float16>(mem, stream, info);
+        return __validate_data_range<ov::float16>(mem, stream, info);
     else if (data_type == ov::element::Type_t::i8)
-        __validate_data_range<int8_t>(mem, stream, info);
+        return __validate_data_range<int8_t>(mem, stream, info);
     else if (data_type == ov::element::Type_t::u8)
-        __validate_data_range<uint8_t>(mem, stream, info);
+        return __validate_data_range<uint8_t>(mem, stream, info);
     else
         GPU_DEBUG_INFO << "Unsupport data type for validating data range " << data_type << std::endl;
+    return true;
 }
 
 template <class T>
@@ -513,10 +515,47 @@ NodeDebugHelper::~NodeDebugHelper() {
         is_target_network_id(m_network.get_id(), config.get_debug_network_ids()) &&
         is_target_iteration(m_iter, config.get_dump_iterations())) {
         m_stream.finish(); // Wait for stream completion before checking output buffers
+        static bool first_nan_dumped = false;
         for (size_t i = 0; i < m_inst.outputs_memory_count(); i++) {
             auto output_mem = m_inst.output_memory_ptr(i);
             std::string info = m_inst.id() + "(" + std::to_string(i) + ") at iteration " + std::to_string(m_network.get_current_iteration_num());
-            validate_data_range(output_mem, m_stream, m_inst.get_output_layout(i).data_type, info);
+            bool is_valid = validate_data_range(output_mem, m_stream, m_inst.get_output_layout(i).data_type, info);
+
+            // Dump src and dst on first NaN detection
+            if (!is_valid && !first_nan_dumped) {
+                first_nan_dumped = true;
+                std::string dump_path = config.get_dump_tensors_path().empty() ? "./nan_dump/" : config.get_dump_tensors_path() + "/nan_dump/";
+                GPU_DEBUG_COUT << "*** First NaN detected! Dumping src/dst to " << dump_path << " ***" << std::endl;
+
+                // Dump all input (src) buffers
+                for (size_t src_idx = 0; src_idx < m_inst.dependencies().size(); src_idx++) {
+                    auto input_mem = m_inst.dep_memory_ptr(src_idx);
+                    if (input_mem == nullptr) continue;
+
+                    auto dep = m_inst.dependencies().at(src_idx);
+                    auto input_layout = dep.first->get_output_layout(dep.second);
+                    std::string src_name = get_name_for_dump(m_inst.id()) + "_src" + std::to_string(src_idx);
+                    auto src_filename = get_file_path_for_binary_dump(input_layout, src_name, dump_path);
+
+                    // Create directory if needed
+                    ov::util::create_directory_recursive(dump_path);
+
+                    mem_lock<char, mem_lock_type::read> lock(input_mem, m_stream);
+                    ov::util::save_binary(src_filename, lock.data(), input_mem->size());
+                    GPU_DEBUG_COUT << "  Dumped src[" << src_idx << "]: " << src_filename
+                                   << " (addr: " << input_mem->buffer_ptr() << ", size: " << input_mem->size() << ")" << std::endl;
+                }
+
+                // Dump output (dst) buffer
+                auto output_layout = m_inst.get_output_layout(i);
+                std::string dst_name = get_name_for_dump(m_inst.id()) + "_dst" + std::to_string(i);
+                auto dst_filename = get_file_path_for_binary_dump(output_layout, dst_name, dump_path);
+
+                mem_lock<char, mem_lock_type::read> lock(output_mem, m_stream);
+                ov::util::save_binary(dst_filename, lock.data(), output_mem->size());
+                GPU_DEBUG_COUT << "  Dumped dst[" << i << "]: " << dst_filename
+                               << " (addr: " << output_mem->buffer_ptr() << ", size: " << output_mem->size() << ")" << std::endl;
+            }
         }
     }
 
