@@ -594,43 +594,43 @@ NodeDebugHelper::~NodeDebugHelper() {
                 if (config.get_dump_tensors_format() == ov::intel_gpu::DumpFormat::binary) {
                     // Binary dump : raw
                     auto output_layout = m_inst.get_output_layout(i);
-                    OPENVINO_ASSERT(output_layout.data_type == ov::element::f16,
-                                   "Binary dump with stability check is supported for f16 data type only: " + layer_name);
 #if 1
-                    // === Stability check ===
                     // === Stability check (f16 only) ===
                     if (output_layout.data_type == ov::element::f16) {
                         std::vector<ov::float16> temp_vec0(output_mem->count());
                         {
-                            mem_lock<ov::float16, mem_lock_type::read> lock0(output_mem, m_stream);
-                            std::copy(lock0.data(), lock0.data() + output_mem->count(), temp_vec0.begin());
+                            auto actual_mem = output_mem->get_engine()->reinterpret_buffer(*output_mem, output_layout);
+                            mem_lock<ov::float16, mem_lock_type::read> lock0(actual_mem, m_stream);
+                            std::copy(lock0.data(), lock0.data() + actual_mem->count(), temp_vec0.begin());
                         } // lock0 release
 
                         std::this_thread::sleep_for(std::chrono::milliseconds(10));
 
                         std::vector<ov::float16> temp_vec1(output_mem->count());
                         {
-                            mem_lock<ov::float16, mem_lock_type::read> lock1(output_mem, m_stream);
-                            std::copy(lock1.data(), lock1.data() + output_mem->count(), temp_vec1.begin());
+                            auto actual_mem = output_mem->get_engine()->reinterpret_buffer(*output_mem, output_layout);
+                            mem_lock<ov::float16, mem_lock_type::read> lock1(actual_mem, m_stream);
+                            std::copy(lock1.data(), lock1.data() + actual_mem->count(), temp_vec1.begin());
                         } // lock1 release
 
                         bool is_same = std::equal(temp_vec0.begin(), temp_vec0.end(), temp_vec1.begin());
-                        OPENVINO_ASSERT(is_same, "Unstable buffer detected for " + layer_name + " dst" + std::to_string(i));
-                        // if (!is_same) {
-                        //     GPU_DEBUG_COUT << " WARNING: Unstable buffer for " << layer_name << " dst" << i << std::endl;
-
-                        //     // 차이점 출력 (처음 10개)
-                        //     size_t diff_count = 0;
-                        //     for (size_t j = 0; j < temp_vec0.size() && diff_count < 10; j++) {
-                        //         if (temp_vec0[j] != temp_vec1[j]) {
-                        //             GPU_DEBUG_COUT << "  [" << j << "] " << float(temp_vec0[j])
-                        //                           << " -> " << float(temp_vec1[j]) << std::endl;
-                        //             diff_count++;
-                        //         }
-                        //     }
-                        // }
+                        if (!is_same) {
+                            std::stringstream ss;
+                            size_t diff_count = 0;
+                            for (size_t j = 0; j < temp_vec0.size() && diff_count < 3; j++) {
+                                if (temp_vec0[j] != temp_vec1[j]) {
+                                    ss << "  [" << j << "] " << float(temp_vec0[j])
+                                                  << " -> " << float(temp_vec1[j]) << ",";
+                                    diff_count++;
+                                }
+                            }
+                            GPU_DEBUG_COUT << "!!!!!!!!!!!!!!!! WARNING: Unstable buffer for "
+                                << layer_name << " - " << output_layout.to_short_string()
+                                << ", dst" << i << " : " << ss.str() << std::endl;
+                        }
                     } else {
-                        GPU_DEBUG_COUT << " Stability check is supported for f16 data type only: " << layer_name << std::endl;
+                        GPU_DEBUG_COUT << " Skip stability check for " << layer_name << " dst" << i
+                                        << " (" << output_layout.to_short_string() << ")" << std::endl;
                     }
 #else
                     auto filename = get_file_path_for_binary_dump(output_layout, name, config.get_dump_tensors_path());
