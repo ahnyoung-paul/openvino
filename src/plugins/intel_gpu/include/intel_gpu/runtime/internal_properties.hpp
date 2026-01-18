@@ -184,6 +184,7 @@ static constexpr Property<bool, ov::PropertyMutability::RW> dump_src_after_exec{
 static constexpr Property<bool, ov::PropertyMutability::RW> allow_bypass_xattn{"GPU_ALLOW_BYPASS_XATTN_EXEC"};
 static constexpr Property<bool, ov::PropertyMutability::RW> list_layers{"GPU_LIST_LAYERS"};
 static constexpr Property<bool, ov::PropertyMutability::RW> print_input_data_shapes{"GPU_PRINT_INPUT_DATA_SHAPES"};
+static constexpr Property<bool, ov::PropertyMutability::RW> disable_inc_rms{"GPU_DISABLE_INC_RMS"};
 }  // namespace ov::intel_gpu
 
 namespace cldnn {
