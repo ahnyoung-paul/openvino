@@ -293,6 +293,7 @@ void sdpa_kernel_lsc(
     cur_sum = 0;
     constexpr int num_P_tiles = REG_N / REG_M;
     matrix<half, padded_head_size/REG_K, REG_K*REG_N> rQ;
+    rQ = 0;  // Initialize rQ to zero to prevent NaN when q_len < q_step
     matrix <float, padded_head_size/REG_N*num_P_tiles, REG_M*REG_N> rO;
 
     auto q_tokens_left = q_len;
@@ -352,15 +353,15 @@ void sdpa_kernel_lsc(
             v_base += kv_step * kv_pitch,
             slm_buff_id_read ++) {
 
-        //  load0, load1, signal1, 
+        //  load0, load1, signal1,
         //  [wait2, signal2, load2, read0]
         //  [wait3, signal3, load3, read1]
-        //  [wait4, signal4, load4, read2]  
-        //  [wait5, signal5, load5, read3]  
+        //  [wait4, signal4, load4, read2]
+        //  [wait5, signal5, load5, read3]
         //
         //  after wait4, all workers have reached signal3, so:
-        //     - all workers have finished load2 & read0. 
-        //     - we can start to load 4 into SLM slot 0 (i & 3) safely 
+        //     - all workers have finished load2 & read0.
+        //     - we can start to load 4 into SLM slot 0 (i & 3) safely
         //     - we can start to read 2 ((i-2) & 3) safely
 
         cm_fence(CM_LOCAL_BARRIER);
@@ -453,6 +454,7 @@ void sdpa_kernel_lsc_prefetch(
     cur_sum = 0;
     constexpr int num_P_tiles = REG_N / REG_M;
     matrix<half, padded_head_size/REG_K, REG_K*REG_N> rQ;
+    rQ = 0;  // Initialize rQ to zero to prevent NaN when q_len < q_step
     matrix <float, padded_head_size/REG_N*num_P_tiles, REG_M*REG_N> rO;
 
     auto q_tokens_left = q_len;// - q_start;
@@ -642,6 +644,7 @@ void sdpa_kernel(
     cur_sum = 0;
 
     matrix<half, padded_head_size/REG_K, REG_K*REG_N> rQ;
+    rQ = 0;  // Initialize rQ to zero to prevent NaN when q_len < q_step
     auto q_tokens_left = q_len;
     static_assert(q_step == REG_N);
     static_assert(kv_step == REG_K);
@@ -709,7 +712,7 @@ void sdpa_kernel(
             for (; i < num_full_blocks; i += local_size / 2) {
                 int k = i * REG_K;
                 cm_load_2d(temp, key, k_off + k * sizeof(half), kv_pitch);
-                cm_slm_block_write(slm_K, 
+                cm_slm_block_write(slm_K,
                     slm_offset + k * 2 * REG_M * sizeof(half),
                     temp.format<half>());
             }
@@ -718,7 +721,7 @@ void sdpa_kernel(
             if constexpr (head_size % REG_K > 0) {
                 int k = num_full_blocks * REG_K;
                 cm_load_2d_with_tail<2*REG_M, REG_K, head_size % REG_K>(temp, key, k_off + k * sizeof(half), kv_pitch);
-                cm_slm_block_write(slm_K, 
+                cm_slm_block_write(slm_K,
                     slm_offset + k * 2 * REG_M * sizeof(half),
                     temp.format<half>());
             }
@@ -773,15 +776,15 @@ void sdpa_kernel(
     for(int kv_pos = 0; kv_pos < kv_stop; kv_pos += kv_step,
             slm_buff_id_read ++) {
         //
-        //  load0->0, signal1, 
+        //  load0->0, signal1,
         //  [load1->1, wait2, signal2, read0]
         //  [load2->2, wait3, signal3, read1]
-        //  [load3->3, wait4, signal4, read2]  
-        //  [load4->0, wait5, signal5, read3]  
+        //  [load3->3, wait4, signal4, read2]
+        //  [load4->0, wait5, signal5, read3]
         //
         //  after wait4, all workers have reached signal3, so:
-        //     - all workers have finished load2 & read0. 
-        //     - we can start to load 4 into SLM slot 0 (i & 3) safely 
+        //     - all workers have finished load2 & read0.
+        //     - we can start to load 4 into SLM slot 0 (i & 3) safely
         //     - we can start to read 2 ((i-2) & 3) safely
         //
         cm_fence(CM_LOCAL_BARRIER);
