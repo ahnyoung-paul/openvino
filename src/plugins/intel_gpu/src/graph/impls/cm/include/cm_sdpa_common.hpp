@@ -290,11 +290,12 @@ void sdpa_kernel_lsc(
     vector<float, q_step> cur_sum;
 
     cur_max = -3e38f;
-    cur_sum = 0;
+    cur_sum = 1.0f;  // Initialize to 1.0 to prevent division by zero when q_len < q_step
     constexpr int num_P_tiles = REG_N / REG_M;
     matrix<half, padded_head_size/REG_K, REG_K*REG_N> rQ;
     rQ = 0;  // Initialize rQ to zero to prevent NaN when q_len < q_step
     matrix <float, padded_head_size/REG_N*num_P_tiles, REG_M*REG_N> rO;
+    rO = 0;  // Initialize rO to zero to prevent garbage when q_len < q_step
 
     auto q_tokens_left = q_len;
     static_assert(q_step == REG_N);
@@ -458,11 +459,12 @@ void sdpa_kernel_lsc_prefetch(
     vector<float, q_step> cur_sum;
 
     cur_max = -3e38f;
-    cur_sum = 0;
+    cur_sum = 1.0f;  // Initialize to 1.0 to prevent division by zero when q_len < q_step
     constexpr int num_P_tiles = REG_N / REG_M;
     matrix<half, padded_head_size/REG_K, REG_K*REG_N> rQ;
     rQ = 0;  // Initialize rQ to zero to prevent NaN when q_len < q_step
     matrix <float, padded_head_size/REG_N*num_P_tiles, REG_M*REG_N> rO;
+    rO = 0;  // Initialize rO to zero to prevent garbage when q_len < q_step
 
     auto q_tokens_left = q_len;// - q_start;
     static_assert(q_step == REG_N);
@@ -655,7 +657,7 @@ void sdpa_kernel(
     vector<float, q_step> cur_sum;
 
     cur_max = -3e38f;
-    cur_sum = 0;
+    cur_sum = 1.0f;  // Initialize to 1.0 to prevent division by zero when q_len < q_step
 
     matrix<half, padded_head_size/REG_K, REG_K*REG_N> rQ;
     rQ = 0;  // Initialize rQ to zero to prevent NaN when q_len < q_step
@@ -703,6 +705,7 @@ void sdpa_kernel(
 
     constexpr int num_P_tiles = REG_N / REG_M;
     matrix <float, padded_head_size/REG_N*num_P_tiles, REG_M*REG_N> rO;
+    rO = 0;  // Initialize rO to zero to prevent garbage when q_len < q_step
     int causal_left = q_start;
 
     constexpr uint slm_buff_size = kv_step * padded_head_size * sizeof(half);
