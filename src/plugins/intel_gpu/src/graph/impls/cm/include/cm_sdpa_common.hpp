@@ -407,6 +407,14 @@ void sdpa_kernel_lsc(
             matrix<half, REG_N, REG_K> P;
             Transpose2DMatrix(St, P);
 
+            // Explicitly zero out rows for masked q_tokens in P matrix after softmax
+            // Even though exp(-3.4e38f) should be ~0, we ensure it's exactly 0 to prevent
+            // any numerical issues in DPAS (especially in VNNI format)
+            #pragma unroll
+            for(int q = q_tokens_left; q < q_step; q++) {
+                P.row(q) = 0;
+            }
+
             if (kv_pos == 0)
                 ugemm_PV0(slm_V, P, rO, slm_offset);
             else
@@ -558,6 +566,14 @@ void sdpa_kernel_lsc_prefetch(
 
         matrix<half, REG_N, REG_K> P;
         Transpose2DMatrix(St, P);
+
+        // Explicitly zero out rows for masked q_tokens in P matrix after softmax
+        // Even though exp(-3.4e38f) should be ~0, we ensure it's exactly 0 to prevent
+        // any numerical issues in DPAS (especially in VNNI format)
+        #pragma unroll
+        for(int q = q_tokens_left; q < q_step; q++) {
+            P.row(q) = 0;
+        }
 
         b2dV.set_block_y(kv_pos);
         prefetch_V.set_block_y(wg_local_id +kv_pos + kv_step);
@@ -860,6 +876,14 @@ void sdpa_kernel(
 
         matrix<half, REG_N, REG_K> P;
         Transpose2DMatrix(St, P);
+
+        // Explicitly zero out rows for masked q_tokens in P matrix after softmax
+        // Even though exp(-3.4e38f) should be ~0, we ensure it's exactly 0 to prevent
+        // any numerical issues in DPAS (especially in VNNI format)
+        #pragma unroll
+        for(int q = q_tokens_left; q < q_step; q++) {
+            P.row(q) = 0;
+        }
 
         if (kv_pos == 0)
             ugemm_PV0(slm_V, P, rO, slm_offset);
