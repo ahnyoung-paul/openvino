@@ -277,7 +277,8 @@ protected:
                 std::stringstream ss;
                 ss << "Kernel[" << kd_idx << "] " <<  _kernels[kd_idx]->get_id()
                    << " gws=[" << gws[0] << ", " << gws[1] << ", " << gws[2] << "]"
-                   << " lws=[" << lws[0] << ", " << lws[1] << ", " << lws[2] << "]";
+                   << " lws=[" << lws[0] << ", " << lws[1] << ", " << lws[2] << "]"
+                   << (needs_completion_event ? " has_completion_event=true" : "") ;
                 _kernel_log_info = ss.str();
             }
 

@@ -45,6 +45,7 @@ struct PrimitiveImplOCL : public cldnn::primitive_impl {
     std::vector<Stage*> _stages;
     std::vector<size_t> _order;
     std::unique_ptr<ImplRuntimeParams> m_rt_params = nullptr;
+    mutable std::string _kernel_log_info = "";
 
     // a pair of batch program hash and kernel entry hash of each ocl impl.
     std::pair<std::string, std::string> kernel_dump_info;
@@ -264,8 +265,20 @@ struct PrimitiveImplOCL : public cldnn::primitive_impl {
 
         GPU_DEBUG_TRACE_DETAIL << "Enqueue stage " << stage.kernel->get_id() << " : gws=[" << gws[0] << ", " << gws[1] << ", " << gws[2] << "] " << "lws=["
                                << lws[0] << ", " << lws[1] << ", " << lws[2] << "]" << (needs_completion_event ? " has_completion_event=true" : "") << '\n';
+        {
+                std::stringstream ss;
+                ss << "Kernel: " <<  stage.kernel->get_id()
+                   << " gws=[" << gws[0] << ", " << gws[1] << ", " << gws[2] << "]"
+                   << " lws=[" << lws[0] << ", " << lws[1] << ", " << lws[2] << "]"
+                   << (needs_completion_event ? " has_completion_event=true" : "") ;
+                _kernel_log_info = ss.str();
+        }
 
         return stream.enqueue_kernel(*stage.kernel, params, {}, events, needs_completion_event);
+    }
+
+    std::string get_kernel_log_info() const override {
+        return _kernel_log_info;
     }
 
     virtual std::vector<size_t> get_stages_execution_order(const cldnn::primitive_inst& instance) const {

@@ -404,6 +404,14 @@ void sdpa_kernel_lsc(
             //show(St);
             auto max_comp = online_softmax_update(St, cur_max, cur_sum);
 
+            // Explicitly zero out masked KV rows in St after softmax (for non-causal case)
+            // exp(-3.4e38f) should be ~0, but we ensure it's exactly 0.0 to prevent
+            // 0 * garbage = NaN issues in DPAS when V has garbage in masked rows
+            if constexpr (!use_causal_mask) {
+                int kv_tokens = kv_stop - kv_pos;
+                for(int p = kv_tokens; p < kv_step; p++) St[p] = 0;
+            }
+
             matrix<half, REG_N, REG_K> P;
             Transpose2DMatrix(St, P);
 
@@ -563,6 +571,14 @@ void sdpa_kernel_lsc_prefetch(
 
         //show(St);
         auto max_comp = online_softmax_update(St, cur_max, cur_sum);
+
+        // Explicitly zero out masked KV rows in St after softmax (for non-causal case)
+        // exp(-3.4e38f) should be ~0, but we ensure it's exactly 0.0 to prevent
+        // 0 * garbage = NaN issues in DPAS when V has garbage in masked rows
+        if constexpr (!use_causal_mask) {
+            int kv_tokens = kv_stop - kv_pos;
+            for(int p = kv_tokens; p < kv_step; p++) St[p] = 0;
+        }
 
         matrix<half, REG_N, REG_K> P;
         Transpose2DMatrix(St, P);
@@ -873,6 +889,11 @@ void sdpa_kernel(
 
         //show(St);
         auto max_comp = online_softmax_update(St, cur_max, cur_sum);
+
+        // Explicitly zero out masked KV rows in St after softmax
+        // exp(-3.4e38f) should be ~0, but we ensure it's exactly 0.0 to prevent
+        // 0 * garbage = NaN issues in DPAS when V has garbage in masked rows
+        for(int p = kv_tokens; p < kv_step; p++) St[p] = 0;
 
         matrix<half, REG_N, REG_K> P;
         Transpose2DMatrix(St, P);
