@@ -289,7 +289,9 @@ void sdpa_kernel_lsc(
     vector<float, q_step> cur_max;
     vector<float, q_step> cur_sum;
 
-    cur_max = -3e38f;
+    // Initialize cur_max to 0.0f so that masked columns (with -3.4e38f) will become 0 after softmax
+    // If cur_max = -3.4e38f, then exp(mask - max) = exp(0) = 1.0 which is wrong
+    cur_max = 0.0f;
     cur_sum = 1.0f;  // Initialize to 1.0 to prevent division by zero when q_len < q_step
     constexpr int num_P_tiles = REG_N / REG_M;
     matrix<half, padded_head_size/REG_K, REG_K*REG_N> rQ;
@@ -458,7 +460,9 @@ void sdpa_kernel_lsc_prefetch(
     vector<float, q_step> cur_max;
     vector<float, q_step> cur_sum;
 
-    cur_max = -3e38f;
+    // Initialize cur_max to 0.0f so that masked columns (with -3.4e38f) will become 0 after softmax
+    // If cur_max = -3.4e38f, then exp(mask - max) = exp(0) = 1.0 which is wrong
+    cur_max = 0.0f;
     cur_sum = 1.0f;  // Initialize to 1.0 to prevent division by zero when q_len < q_step
     constexpr int num_P_tiles = REG_N / REG_M;
     matrix<half, padded_head_size/REG_K, REG_K*REG_N> rQ;
@@ -656,7 +660,9 @@ void sdpa_kernel(
     vector<float, q_step> cur_max;
     vector<float, q_step> cur_sum;
 
-    cur_max = -3e38f;
+    // Initialize cur_max to 0.0f so that masked columns (with -3.4e38f) will become 0 after softmax
+    // If cur_max = -3.4e38f, then exp(mask - max) = exp(0) = 1.0 which is wrong
+    cur_max = 0.0f;
     cur_sum = 1.0f;  // Initialize to 1.0 to prevent division by zero when q_len < q_step
 
     matrix<half, padded_head_size/REG_K, REG_K*REG_N> rQ;
