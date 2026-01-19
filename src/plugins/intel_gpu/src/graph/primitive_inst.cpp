@@ -2190,7 +2190,7 @@ void primitive_inst::execute() {
 
     set_out_event(_impl->execute(_impl_params->dep_events, *this));
 #ifdef GPU_DEBUG_CONFIG
-    {
+    if (!can_be_optimized() && !is_constant()) {
         const auto& config = get_network().get_config();
         auto net_id = get_network().get_id();
         auto iter = get_network().get_current_iteration_num();

@@ -532,6 +532,17 @@ NodeDebugHelper::~NodeDebugHelper() {
             auto output_mem = m_inst.output_memory_ptr(i);
             auto output_layout = m_inst.get_output_layout(i);
             std::string info = m_inst.id() + "(" + std::to_string(i) + ") at iteration " + std::to_string(m_network.get_current_iteration_num());
+
+            if (m_inst.can_be_optimized()) {
+                GPU_DEBUG_COUT << "Skipped to validate output buffer for optimized-away node: " << info << std::endl;
+                continue;
+            }
+
+            if (m_inst.is_constant()) {
+                GPU_DEBUG_COUT << "Skipped to validate output buffer for constant node: " << info << std::endl;
+                continue;
+            }
+
             bool is_valid = validate_data_range(output_mem, m_stream, output_layout, info);
 
             // Dump src and dst on first NaN detection
