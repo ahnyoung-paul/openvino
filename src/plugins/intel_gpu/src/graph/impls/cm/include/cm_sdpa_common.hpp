@@ -391,6 +391,13 @@ void sdpa_kernel_lsc(
                 for(int p = kv_tokens; p < kv_step; p++) St[p] = -3.4e38f;
             }
 
+            // Mask off unused q_tokens columns when q_len < q_step
+            // This prevents garbage values from affecting softmax computation
+            for(int q = q_tokens_left; q < q_step; q++) {
+                #pragma unroll
+                for(int k = 0; k < kv_step; k++) St[k][q] = -3.4e38f;
+            }
+
             //show(St);
             auto max_comp = online_softmax_update(St, cur_max, cur_sum);
 
@@ -531,6 +538,13 @@ void sdpa_kernel_lsc_prefetch(
             int kv_tokens = kv_stop - kv_pos;
             // LSC ensures no overflow-access, but mask off k-tails attn-score is still required
             for(int p = kv_tokens; p < kv_step; p++) St[p] = -3.4e38f;
+        }
+
+        // Mask off unused q_tokens columns when q_len < q_step
+        // This prevents garbage values from affecting softmax computation
+        for(int q = q_tokens_left; q < q_step; q++) {
+            #pragma unroll
+            for(int k = 0; k < kv_step; k++) St[k][q] = -3.4e38f;
         }
 
         //show(St);
@@ -824,6 +838,13 @@ void sdpa_kernel(
         // mask off k-tails
         int kv_tokens = kv_stop - kv_pos;
         for(int p = kv_tokens; p < kv_step; p++) St[p] = -3.4e38f;
+
+        // Mask off unused q_tokens columns when q_len < q_step
+        // This prevents garbage values from affecting softmax computation
+        for(int q = q_tokens_left; q < q_step; q++) {
+            #pragma unroll
+            for(int k = 0; k < kv_step; k++) St[k][q] = -3.4e38f;
+        }
 
         //show(St);
         auto max_comp = online_softmax_update(St, cur_max, cur_sum);
