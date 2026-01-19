@@ -594,7 +594,7 @@ NodeDebugHelper::~NodeDebugHelper() {
                 if (config.get_dump_tensors_format() == ov::intel_gpu::DumpFormat::binary) {
                     // Binary dump : raw
                     auto output_layout = m_inst.get_output_layout(i);
-#if 1
+#if 0
                     // === Stability check (f16 only) ===
                     if (output_layout.data_type == ov::element::f16) {
                         std::vector<ov::float16> temp_vec0(output_mem->count());
