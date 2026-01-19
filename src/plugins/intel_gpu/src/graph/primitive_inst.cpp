@@ -28,6 +28,7 @@
 #include "strided_slice_inst.h"
 #include "scatter_elements_update_inst.h"
 #include "scatter_nd_update_inst.h"
+#include "vl_sdpa_inst.h"
 #include "scatter_update_inst.h"
 #include "gemm_inst.h"
 #include "assign_inst.h"
@@ -976,6 +977,14 @@ void primitive_inst::realloc_if_needed(bool prev_execution_skipped) {
 
     for (size_t i = 0; i < actual_layouts.size(); ++i) {
         bool can_reuse_buffer = (_outputs[i] && updated_layouts[i].get_linear_size() <= _max_output_layout_count[i]);
+        if (get_node().is_type<vl_sdpa>()) {
+            GPU_DEBUG_COUT << id() << ": vl_sdpa detected - allocating fresh memory (bypassing memory pool)" << std::endl;
+            auto& _engine = get_network().get_engine();
+            auto layout = updated_params.output_layouts[i].clone_with_other_shape(
+                updated_params.output_layouts[i].get_partial_shape().get_max_shape());
+            _outputs[i] = _engine.allocate_memory(layout, allocation_type::usm_device, false /* reset */);
+            continue;
+        }
         std::pair<bool, ov::Shape> prealloc_info;
         if (get_node().is_type<kv_cache>() && i != 1) {
             const auto& desc = get_node().as<kv_cache>().get_primitive();
