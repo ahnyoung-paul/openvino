@@ -41,6 +41,7 @@ template <class PType>
 struct typed_primitive_impl_ocl : public typed_primitive_impl<PType> {
     kernel_selector::kernel_data _kernel_data;
     std::vector<kernel::ptr> _kernels;
+    std::string _kernel_log_info = "";
 
     // a pair of batch program hash and kernel entry hash of each ocl impl.
     std::pair<std::string, std::string> kernel_dump_info;
@@ -272,6 +273,14 @@ protected:
             GPU_DEBUG_TRACE_DETAIL << "Enqueue kernel " << kd_idx << ": gws=[" << gws[0] << ", " << gws[1] << ", " << gws[2] << "] "
                                    << "lws=[" << lws[0] << ", " << lws[1] << ", " << lws[2] << "]"
                                    << (needs_completion_event ? " has_completion_event=true" : "") << std::endl;
+            if (!is_cpu()) {
+                std::stringstream ss;
+                ss << "Kernel[" << kd_idx << "] " <<  _kernels[kd_idx]->get_id()
+                   << " gws=[" << gws[0] << ", " << gws[1] << ", " << gws[2] << "]"
+                   << " lws=[" << lws[0] << ", " << lws[1] << ", " << lws[2] << "]"
+                   << (needs_completion_event ? " has_completion_event=true" : "") ;
+                _kernel_log_info = ss.str();
+            }
 
             auto ev = stream.enqueue_kernel(*_kernels[kd_idx], params, args, tmp_events, needs_completion_event);
             if (_kernel_data.needs_sub_kernels_sync) {
@@ -285,6 +294,10 @@ protected:
 
         bool group_events = (all_events.size() > 1);
         return stream.aggregate_events(all_events, group_events);
+    }
+
+    std::string get_kernel_log_info() const override {
+        return _kernel_log_info;
     }
 
     std::vector<std::shared_ptr<cldnn::kernel_string>> get_kernels_source() override {

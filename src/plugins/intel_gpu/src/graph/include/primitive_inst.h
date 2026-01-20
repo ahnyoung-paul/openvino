@@ -132,6 +132,10 @@ struct primitive_impl {
         return std::make_pair("", "");
     }
 
+    virtual std::string get_kernel_log_info() const {
+        return "unknown_kernel";
+    }
+
     // If this flag is set as false, the memory allocated for this primitive is not allowed to be reused
     bool can_reuse_memory = true;
     bool can_share_kernels = false;
@@ -197,6 +201,8 @@ public:
     const std::vector<std::pair<const primitive_inst*, int32_t>>& dependencies() const {
         return reinterpret_cast<std::vector<std::pair<const primitive_inst*, int32_t>> const&>(_deps);
     }
+
+    void debug_message() const;
 
     memory& dep_memory(size_t index) const {
         auto dep = dependencies().at(index);

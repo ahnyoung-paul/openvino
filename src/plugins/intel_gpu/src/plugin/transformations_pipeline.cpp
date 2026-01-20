@@ -1376,7 +1376,12 @@ void TransformationsPipeline::apply(std::shared_ptr<ov::Model> func) {
         manager.set_per_pass_validation(false);
 
         manager.register_pass<ov::pass::ConvertWeightCompressedConv1x1ToMatmul>();
-        manager.register_pass<ov::intel_gpu::IncreaseRMSInputPrecision>();
+
+        const bool get_disable_inc_rms = GPU_DEBUG_VALUE_OR(config.get_disable_inc_rms(), false);
+        if (!get_disable_inc_rms) {
+            GPU_DEBUG_COUT << "!!!@@@@@!!!!!! Enable IncreaseRMSInputPrecision pass" << std::endl;
+            manager.register_pass<ov::intel_gpu::IncreaseRMSInputPrecision>();
+        }
         manager.register_pass<ov::intel_gpu::ClampFP16Output>();
         manager.register_pass<ov::intel_gpu::ConvertMatMulToFullyConnected>(device_info.supports_immad);
         manager.register_pass<ov::intel_gpu::MoveFCReshapeToWeights>();
