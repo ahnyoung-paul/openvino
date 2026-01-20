@@ -557,6 +557,15 @@ void sdpa_kernel_lsc_prefetch(
 
         b2dV.set_block_y(kv_pos);
         prefetch_V.set_block_y(wg_local_id +kv_pos + kv_step);
+
+        // Check if this is the last kv block with potential OOB reads
+        // On Xe2 architecture, LSC 2D load may return garbage/NaN for OOB reads
+        // (unlike Xe/DG2 which returns 0), so we need to mask out invalid rows
+        int kv_tokens_in_block = kv_stop - kv_pos;
+        bool need_vmat_masking = (kv_tokens_in_block < kv_step);
+        // VNNI format packs 2 rows into 1, so calculate valid VNNI rows
+        int vnni_valid_rows = (kv_tokens_in_block + 1) / 2;
+
         if (kv_pos == 0) {
             // ugemm_PV0(slm_V, P, rO, slm_offset);
             auto P2 = P.format<half, num_P_tiles, REG_M * REG_K>();
@@ -565,6 +574,10 @@ void sdpa_kernel_lsc_prefetch(
                 matrix<half, REG_K/2, REG_N*2> Vmat;
                 cm_prefetch<CacheHint::Cached, CacheHint::Cached>(prefetch_V.set_block_x(k));
                 cm_load<lsc::VNNI>(Vmat.format<half>(), b2dV.set_block_x(k));
+                // Mask out OOB rows in Vmat to prevent NaN propagation on Xe2
+                if (need_vmat_masking) {
+                    for(int r = vnni_valid_rows; r < REG_K/2; r++) Vmat.row(r) = 0;
+                }
                 #pragma unroll
                 for(int p = 0; p < num_P_tiles; p++) {
                     rO[ri + p] = cm_dpas<CM_PRECISION_HF, CM_PRECISION_HF, SystolicDepth, RepeatCount, float>(
@@ -583,6 +596,10 @@ void sdpa_kernel_lsc_prefetch(
 
                 cm_prefetch<CacheHint::Cached, CacheHint::Cached>(prefetch_V.set_block_x(k));
                 cm_load<lsc::VNNI>(Vmat.format<half>(), b2dV.set_block_x(k));
+                // Mask out OOB rows in Vmat to prevent NaN propagation on Xe2
+                if (need_vmat_masking) {
+                    for(int r = vnni_valid_rows; r < REG_K/2; r++) Vmat.row(r) = 0;
+                }
 
                 //# compensate cur_O
                 //  matrix <float, head_size/REG_K*2, REG_M*REG_N> rO;
