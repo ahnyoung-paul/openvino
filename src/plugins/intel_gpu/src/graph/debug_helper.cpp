@@ -44,25 +44,36 @@ size_t get_x_pitch(const layout& layout) {
 }
 
 template <class T>
-void __validate_data_range(memory::ptr mem, stream& stream, std::string &info) {
+bool __validate_data_range(memory::ptr mem, stream& stream, const layout& data_layout, std::string &info) {
     if (!mem)
-        return;
-    auto&& size = mem->get_layout().get_tensor();
-    mem_lock<T, mem_lock_type::read> lock(mem, stream);
+        return true;
+
+    // Reinterpret buffer to represent actual data layout (same as log_memory_to_file)
+    auto actual_mem = mem->get_engine()->reinterpret_buffer(*mem, data_layout);
+
+    auto&& size = actual_mem->get_layout().get_tensor();
+    mem_lock<T, mem_lock_type::read> lock(actual_mem, stream);
     auto mem_ptr = lock.data();
-    auto x_pitch = get_x_pitch(mem->get_layout());
+    auto x_pitch = get_x_pitch(actual_mem->get_layout());
     std::stringstream buffer;
     float val_min = std::numeric_limits<float>::max();
     float val_max = std::numeric_limits<float>::lowest();
-    const bool is_memory_packed = !mem->is_memory_reset_needed(mem->get_layout());
+    const bool is_memory_packed = !actual_mem->is_memory_reset_needed(actual_mem->get_layout());
 
     if (is_memory_packed) {
-        for (size_t i = 0; i < mem->count(); ++i) {
+        for (size_t i = 0; i < actual_mem->count(); ++i) {
             auto val = convert_element(mem_ptr[i]);
             if (std::isinf(val) || std::isnan(val)) {
                 std::string err_str = std::isinf(val) ? "inf" : "nan";
-                GPU_DEBUG_COUT << err_str << " WAS FOUND: " << info << "  *********************" << std::endl;
-                return;
+                GPU_DEBUG_COUT << err_str << " WAS FOUND: " << info << std::endl;
+                GPU_DEBUG_COUT << "[validate] " << info
+                                << " | actual_mem->count()=" << actual_mem->count()
+                                << ", layout.count()=" << actual_mem->get_layout().count()
+                                << ", orig mem->count()=" << mem->count()
+                                << ", layout.bytes_count()=" << actual_mem->get_layout().bytes_count()
+                                << ", is_memory_packed=" << is_memory_packed
+                                << ", tensor=" << size.to_string() << std::endl;
+                return false;
             }
             if (val > val_max)
                 val_max = val;
@@ -83,8 +94,8 @@ void __validate_data_range(memory::ptr mem, stream& stream, std::string &info) {
                                     auto val = convert_element(mem_ptr[input_it]);
                                     if (std::isinf(val) || std::isnan(val)) {
                                         std::string err_str = std::isinf(val) ? "inf" : "nan";
-                                        GPU_DEBUG_COUT << err_str << " WAS FOUND: " << info << "  *********************" << std::endl;
-                                        return;
+                                        GPU_DEBUG_COUT << err_str << " WAS FOUND: " << info << std::endl;
+                                        return false;
                                     }
                                     if (val > val_max)
                                         val_max = val;
@@ -98,20 +109,23 @@ void __validate_data_range(memory::ptr mem, stream& stream, std::string &info) {
             }
         }
     }
-    GPU_DEBUG_INFO << "min, max = " << val_min << ", " << val_max << "  : " << info << "  is_packed " << is_memory_packed << std::endl;
+    GPU_DEBUG_INFO << "min, max = " << val_min << ", " << val_max << "  : " << info << std::endl;
+    return true;
 }
 
-void validate_data_range(memory::ptr mem, stream& stream, ov::element::Type_t data_type, std::string &info) {
-    if (data_type == ov::element::Type_t::f32)
-        __validate_data_range<float>(mem, stream, info);
-    else if (data_type == ov::element::Type_t::f16)
-        __validate_data_range<ov::float16>(mem, stream, info);
-    else if (data_type == ov::element::Type_t::i8)
-        __validate_data_range<int8_t>(mem, stream, info);
-    else if (data_type == ov::element::Type_t::u8)
-        __validate_data_range<uint8_t>(mem, stream, info);
+bool validate_data_range(memory::ptr mem, stream& stream, const layout& data_layout, std::string &info) {
+    auto data_type = data_layout.data_type;
+    if (data_type == cldnn::data_types::f32)
+        return __validate_data_range<float>(mem, stream, data_layout, info);
+    else if (data_type == cldnn::data_types::f16)
+        return __validate_data_range<ov::float16>(mem, stream, data_layout, info);
+    else if (data_type == cldnn::data_types::i8)
+        return __validate_data_range<int8_t>(mem, stream, data_layout, info);
+    else if (data_type == cldnn::data_types::u8)
+        return __validate_data_range<uint8_t>(mem, stream, data_layout, info);
     else
         GPU_DEBUG_INFO << "Unsupport data type for validating data range " << data_type << std::endl;
+    return true;
 }
 
 template <class T>
@@ -300,6 +314,14 @@ bool is_target_iteration(int64_t iteration, const std::set<int64_t> dump_iterati
     return true;
 }
 
+bool is_target_network_id(uint32_t net_id, const std::set<int64_t>& debug_network_ids) {
+    // Empty set means all networks are targets
+    if (debug_network_ids.empty())
+        return true;
+
+    return debug_network_ids.find(static_cast<int64_t>(net_id)) != debug_network_ids.end();
+}
+
 std::string get_matched_from_filelist(const std::vector<std::string>& file_names, std::string pattern) {
     for (const auto& file : file_names) {
         auto found = file.find(pattern);
@@ -454,6 +476,7 @@ NodeDebugHelper::NodeDebugHelper(const primitive_inst& inst)
         const std::string& layer_name = inst.id();
 
         if (is_target_iteration(m_iter, config.get_dump_iterations()) &&
+            is_target_network_id(m_network.get_id(), config.get_debug_network_ids()) &&
             config.get_dump_tensors() != ov::intel_gpu::DumpTensors::out && is_layer_for_dumping(config, layer_name)) {
             m_stream.finish(); // Wait for stream completion before dumping input buffers
             std::string debug_str_for_bin_load = " Command for loading : OV_LOAD_DUMP_RAW_BINARY=\"" + layer_name + ":";
@@ -499,12 +522,65 @@ NodeDebugHelper::NodeDebugHelper(const primitive_inst& inst)
 NodeDebugHelper::~NodeDebugHelper() {
     const auto& config = m_network.get_config();
 
-    if (config.get_validate_output_buffer() && !m_network.is_internal()) {
+    // Validate output buffer with network ID and iteration filtering
+    if (config.get_validate_output_buffer() && !m_network.is_internal() &&
+        is_target_network_id(m_network.get_id(), config.get_debug_network_ids()) &&
+        is_target_iteration(m_iter, config.get_dump_iterations())) {
         m_stream.finish(); // Wait for stream completion before checking output buffers
+        static bool first_nan_dumped = false;
         for (size_t i = 0; i < m_inst.outputs_memory_count(); i++) {
             auto output_mem = m_inst.output_memory_ptr(i);
+            auto output_layout = m_inst.get_output_layout(i);
             std::string info = m_inst.id() + "(" + std::to_string(i) + ") at iteration " + std::to_string(m_network.get_current_iteration_num());
-            validate_data_range(output_mem, m_stream, m_inst.get_output_layout(i).data_type, info);
+
+            if (m_inst.can_be_optimized()) {
+                GPU_DEBUG_COUT << "Skipped to validate output buffer for optimized-away node: " << info << std::endl;
+                continue;
+            }
+
+            if (m_inst.is_constant()) {
+                GPU_DEBUG_COUT << "Skipped to validate output buffer for constant node: " << info << std::endl;
+                continue;
+            }
+
+            bool is_valid = validate_data_range(output_mem, m_stream, output_layout, info);
+
+            // Dump src and dst on first NaN detection
+            if (!is_valid && !first_nan_dumped) {
+                first_nan_dumped = true;
+                std::string dump_path = config.get_dump_tensors_path().empty() ? "./nan_dump/" : config.get_dump_tensors_path() + "/nan_dump/";
+
+                GPU_DEBUG_COUT << "*** First NaN detected! Dumping src/dst to " << dump_path << " ***" << std::endl;
+                m_inst.debug_message();
+                // Dump all input (src) buffers
+                for (size_t src_idx = 0; src_idx < m_inst.dependencies().size(); src_idx++) {
+                    auto input_mem = m_inst.dep_memory_ptr(src_idx);
+                    if (input_mem == nullptr) continue;
+
+                    auto dep = m_inst.dependencies().at(src_idx);
+                    auto input_layout = dep.first->get_output_layout(dep.second);
+                    std::string src_name = get_name_for_dump(m_inst.id()) + "_src" + std::to_string(src_idx);
+                    auto src_filename = get_file_path_for_binary_dump(input_layout, src_name, dump_path);
+
+                    // Create directory if needed
+                    ov::util::create_directory_recursive(dump_path);
+
+                    mem_lock<char, mem_lock_type::read> lock(input_mem, m_stream);
+                    ov::util::save_binary(src_filename, lock.data(), input_mem->size());
+                    GPU_DEBUG_COUT << "  Dumped src[" << src_idx << "]: " << src_filename
+                                   << " (addr: " << input_mem->buffer_ptr() << ", size: " << input_mem->size() << ")" << std::endl;
+                }
+
+                // Dump output (dst) buffer
+                auto output_layout = m_inst.get_output_layout(i);
+                std::string dst_name = get_name_for_dump(m_inst.id()) + "_dst" + std::to_string(i);
+                auto dst_filename = get_file_path_for_binary_dump(output_layout, dst_name, dump_path);
+
+                mem_lock<char, mem_lock_type::read> lock(output_mem, m_stream);
+                ov::util::save_binary(dst_filename, lock.data(), output_mem->size());
+                GPU_DEBUG_COUT << "  Dumped dst[" << i << "]: " << dst_filename
+                               << " (addr: " << output_mem->buffer_ptr() << ", size: " << output_mem->size() << ")" << std::endl;
+            }
         }
     }
 
@@ -513,6 +589,7 @@ NodeDebugHelper::~NodeDebugHelper() {
         const std::string layer_name = m_inst.id();
 
         if (is_target_iteration(m_iter, config.get_dump_iterations()) &&
+            is_target_network_id(m_network.get_id(), config.get_debug_network_ids()) &&
             config.get_dump_tensors() != ov::intel_gpu::DumpTensors::in &&
             is_layer_for_dumping(config, layer_name)) {
             m_stream.finish(); // Wait for stream completion before dumping output buffers
@@ -529,12 +606,52 @@ NodeDebugHelper::~NodeDebugHelper() {
                 if (config.get_dump_tensors_format() == ov::intel_gpu::DumpFormat::binary) {
                     // Binary dump : raw
                     auto output_layout = m_inst.get_output_layout(i);
+#if 0
+                    // === Stability check (f16 only) ===
+                    if (output_layout.data_type == ov::element::f16) {
+                        std::vector<ov::float16> temp_vec0(output_mem->count());
+                        {
+                            auto actual_mem = output_mem->get_engine()->reinterpret_buffer(*output_mem, output_layout);
+                            mem_lock<ov::float16, mem_lock_type::read> lock0(actual_mem, m_stream);
+                            std::copy(lock0.data(), lock0.data() + actual_mem->count(), temp_vec0.begin());
+                        } // lock0 release
+
+                        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+
+                        std::vector<ov::float16> temp_vec1(output_mem->count());
+                        {
+                            auto actual_mem = output_mem->get_engine()->reinterpret_buffer(*output_mem, output_layout);
+                            mem_lock<ov::float16, mem_lock_type::read> lock1(actual_mem, m_stream);
+                            std::copy(lock1.data(), lock1.data() + actual_mem->count(), temp_vec1.begin());
+                        } // lock1 release
+
+                        bool is_same = std::equal(temp_vec0.begin(), temp_vec0.end(), temp_vec1.begin());
+                        if (!is_same) {
+                            std::stringstream ss;
+                            size_t diff_count = 0;
+                            for (size_t j = 0; j < temp_vec0.size() && diff_count < 3; j++) {
+                                if (temp_vec0[j] != temp_vec1[j]) {
+                                    ss << "  [" << j << "] " << float(temp_vec0[j])
+                                                  << " -> " << float(temp_vec1[j]) << ",";
+                                    diff_count++;
+                                }
+                            }
+                            GPU_DEBUG_COUT << "!!!!!!!!!!!!!!!! WARNING: Unstable buffer for "
+                                << layer_name << " - " << output_layout.to_short_string()
+                                << ", dst" << i << " : " << ss.str() << std::endl;
+                        }
+                    } else {
+                        GPU_DEBUG_COUT << " Skip stability check for " << layer_name << " dst" << i
+                                        << " (" << output_layout.to_short_string() << ")" << std::endl;
+                    }
+#else
                     auto filename = get_file_path_for_binary_dump(output_layout, name, config.get_dump_tensors_path());
 
                     mem_lock<char, mem_lock_type::read> lock(output_mem, m_stream);
                     ov::util::save_binary(ov::util::make_path(filename), lock.data(), output_mem->size());
                     GPU_DEBUG_COUT  << " Dump layer dst : " << layer_name << " to " << filename << std::endl;
                     debug_str_for_bin_load += (filename + ",");
+#endif
                 } else {
                     const bool dump_raw = config.get_dump_tensors_format() == ov::intel_gpu::DumpFormat::text_raw;
                     GPU_DEBUG_COUT << " Dump " << (dump_raw ? "raw " : "") << name << std::endl;
@@ -614,7 +731,7 @@ NetworkDebugHelper::NetworkDebugHelper(const network& net)
     , m_iter(net.iteration) {
     auto net_id = m_network.get_id();
     const auto& config = m_network.get_config();
-    if (config.get_dump_memory_pool()) {
+    if (config.get_dump_memory_pool() && is_target_network_id(net_id, config.get_debug_network_ids())) {
         auto& iters = config.get_dump_iterations();
         if (iters.empty() || iters.find(m_iter) != iters.end()) {
             GPU_DEBUG_COUT << "============================================================================" << std::endl;
@@ -696,7 +813,7 @@ NetworkDebugHelper::~NetworkDebugHelper() {
         }
     }
 
-    if (config.get_dump_memory_pool()) {
+    if (config.get_dump_memory_pool() && is_target_network_id(net_id, config.get_debug_network_ids())) {
         auto& iters = config.get_dump_iterations();
         if (iters.empty() || iters.find(m_iter) != iters.end()) {
             dump_memory_pool(config.get_dump_memory_pool_path(), m_iter);
