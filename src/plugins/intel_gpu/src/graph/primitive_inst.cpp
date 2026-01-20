@@ -28,6 +28,7 @@
 #include "strided_slice_inst.h"
 #include "scatter_elements_update_inst.h"
 #include "scatter_nd_update_inst.h"
+#include "vl_sdpa_inst.h"
 #include "scatter_update_inst.h"
 #include "gemm_inst.h"
 #include "assign_inst.h"
@@ -976,6 +977,14 @@ void primitive_inst::realloc_if_needed(bool prev_execution_skipped) {
 
     for (size_t i = 0; i < actual_layouts.size(); ++i) {
         bool can_reuse_buffer = (_outputs[i] && updated_layouts[i].get_linear_size() <= _max_output_layout_count[i]);
+        // if (get_node().is_type<vl_sdpa>()) {
+        //     GPU_DEBUG_COUT << id() << ": vl_sdpa detected - allocating fresh memory (bypassing memory pool)" << std::endl;
+        //     auto& _engine = get_network().get_engine();
+        //     auto layout = updated_params.output_layouts[i].clone_with_other_shape(
+        //         updated_params.output_layouts[i].get_partial_shape().get_max_shape());
+        //     _outputs[i] = _engine.allocate_memory(layout, allocation_type::usm_device, false /* reset */);
+        //     continue;
+        // }
         std::pair<bool, ov::Shape> prealloc_info;
         if (get_node().is_type<kv_cache>() && i != 1) {
             const auto& desc = get_node().as<kv_cache>().get_primitive();
@@ -2189,6 +2198,72 @@ void primitive_inst::execute() {
     }
 
     set_out_event(_impl->execute(_impl_params->dep_events, *this));
+#ifdef GPU_DEBUG_CONFIG
+    const auto& config = get_network().get_config();
+    const bool show_short_debug = GPU_DEBUG_VALUE_OR(config.get_show_short_debug(), false);
+    if (show_short_debug && !can_be_optimized() && !is_constant()) {
+        auto net_id = get_network().get_id();
+        auto iter = get_network().get_current_iteration_num();
+
+        auto is_target_network_id = [](const uint32_t net_id, const std::set<int64_t>& target_net_ids) {
+            if (target_net_ids.empty()) {
+                return false;
+            }
+            return target_net_ids.find(static_cast<int64_t>(net_id)) != target_net_ids.end();
+        };
+
+        auto is_target_iteration = [](int64_t iter, const std::set<int64_t>& target_iterations) {
+            if (target_iterations.empty()) {
+                return true;
+            }
+            return target_iterations.find(iter) != target_iterations.end();
+        };
+
+        // Filtering: Uses OV_GPU_DEBUG_NETWORK_IDS, OV_GPU_DUMP_ITERATIONS environment variables
+        // - OV_GPU_DEBUG_NETWORK_IDS="7" -> network 7 only
+        // - OV_GPU_DUMP_ITERATIONS="" -> all iterations (empty means all)
+        // - OV_GPU_DUMP_ITERATIONS="10,11,12" -> specified iterations only
+        if (is_target_network_id(net_id, config.get_debug_network_ids()) &&
+            is_target_iteration(iter, config.get_dump_iterations())) {
+            // Basic info
+            GPU_DEBUG_COUT << "========== [EXEC] net:" << net_id << " iter:" << iter << " ==========" << std::endl;
+            GPU_DEBUG_COUT << "  id: " << id() << std::endl;
+            GPU_DEBUG_COUT << "  type: " << _impl_params->desc->type_string() << std::endl;
+
+            // Kernel info
+            if (_impl) {
+                GPU_DEBUG_COUT << "  kernel_name: " << _impl->get_kernel_name() << std::endl;
+                auto kernel_log = _impl->get_kernel_log_info();
+                // auto [batch_hash, kernel_entries] = _impl->get_kernels_dump_info();
+                if (!kernel_log.empty()) {
+                    GPU_DEBUG_COUT << "  kernel_entries: " << kernel_log << std::endl;
+                }
+                GPU_DEBUG_COUT << "  is_dynamic: " << _impl->is_dynamic() << std::endl;
+                GPU_DEBUG_COUT << "  is_cpu: " << _impl->is_cpu() << std::endl;
+            }
+
+            // Input nodes and shapes
+            GPU_DEBUG_COUT << "  inputs (" << _deps.size() << "):" << std::endl;
+            for (size_t i = 0; i < _deps.size(); ++i) {
+                GPU_DEBUG_COUT << "    [" << i << "] " << _deps[i].first->id()
+                        << " : " << _impl_params->get_input_layout(i).to_short_string() << std::endl;
+            }
+
+            // Output shapes
+            GPU_DEBUG_COUT << "  outputs (" << _impl_params->output_layouts.size() << "):" << std::endl;
+            for (size_t i = 0; i < _impl_params->output_layouts.size(); ++i) {
+                GPU_DEBUG_COUT << "    [" << i << "] " << _impl_params->get_output_layout(i).to_short_string() <<
+                    ", 0x" << std::hex << reinterpret_cast<uintptr_t>(_outputs[i]->buffer_ptr()) << std::dec << std::endl;
+            }
+
+            // Additional state info
+            GPU_DEBUG_COUT << "  can_be_optimized: " << can_be_optimized() << std::endl;
+            GPU_DEBUG_COUT << "  mem_allocated: " << mem_allocated() << std::endl;
+
+            GPU_DEBUG_COUT << "=================================================" << std::endl;
+        }
+    }
+#endif
 
     GPU_DEBUG_IF(!get_config().get_dump_profiling_data_path().empty()) {
         auto ev = _impl_params->out_event;

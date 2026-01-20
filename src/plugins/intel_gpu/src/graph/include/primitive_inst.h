@@ -132,6 +132,10 @@ struct primitive_impl {
         return std::make_pair("", "");
     }
 
+    virtual std::string get_kernel_log_info() const {
+        return "unknown_kernel";
+    }
+
     // If this flag is set as false, the memory allocated for this primitive is not allowed to be reused
     bool can_reuse_memory = true;
     bool can_share_kernels = false;
