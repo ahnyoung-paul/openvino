@@ -2225,42 +2225,7 @@ void primitive_inst::execute() {
         // - OV_GPU_DUMP_ITERATIONS="10,11,12" -> specified iterations only
         if (is_target_network_id(net_id, config.get_debug_network_ids()) &&
             is_target_iteration(iter, config.get_dump_iterations())) {
-            // Basic info
-            GPU_DEBUG_COUT << "========== [EXEC] net:" << net_id << " iter:" << iter << " ==========" << std::endl;
-            GPU_DEBUG_COUT << "  id: " << id() << std::endl;
-            GPU_DEBUG_COUT << "  type: " << _impl_params->desc->type_string() << std::endl;
-
-            // Kernel info
-            if (_impl) {
-                GPU_DEBUG_COUT << "  kernel_name: " << _impl->get_kernel_name() << std::endl;
-                auto kernel_log = _impl->get_kernel_log_info();
-                // auto [batch_hash, kernel_entries] = _impl->get_kernels_dump_info();
-                if (!kernel_log.empty()) {
-                    GPU_DEBUG_COUT << "  kernel_entries: " << kernel_log << std::endl;
-                }
-                GPU_DEBUG_COUT << "  is_dynamic: " << _impl->is_dynamic() << std::endl;
-                GPU_DEBUG_COUT << "  is_cpu: " << _impl->is_cpu() << std::endl;
-            }
-
-            // Input nodes and shapes
-            GPU_DEBUG_COUT << "  inputs (" << _deps.size() << "):" << std::endl;
-            for (size_t i = 0; i < _deps.size(); ++i) {
-                GPU_DEBUG_COUT << "    [" << i << "] " << _deps[i].first->id()
-                        << " : " << _impl_params->get_input_layout(i).to_short_string() << std::endl;
-            }
-
-            // Output shapes
-            GPU_DEBUG_COUT << "  outputs (" << _impl_params->output_layouts.size() << "):" << std::endl;
-            for (size_t i = 0; i < _impl_params->output_layouts.size(); ++i) {
-                GPU_DEBUG_COUT << "    [" << i << "] " << _impl_params->get_output_layout(i).to_short_string() <<
-                    ", 0x" << std::hex << reinterpret_cast<uintptr_t>(_outputs[i]->buffer_ptr()) << std::dec << std::endl;
-            }
-
-            // Additional state info
-            GPU_DEBUG_COUT << "  can_be_optimized: " << can_be_optimized() << std::endl;
-            GPU_DEBUG_COUT << "  mem_allocated: " << mem_allocated() << std::endl;
-
-            GPU_DEBUG_COUT << "=================================================" << std::endl;
+                debug_message();
         }
     }
 #endif
@@ -2278,6 +2243,47 @@ void primitive_inst::execute() {
             }
         }
     }
+}
+
+void primitive_inst::debug_message() const {
+    auto net_id = get_network().get_id();
+    auto iter = get_network().get_current_iteration_num();
+    // Basic info
+    GPU_DEBUG_COUT << "========== [EXEC] net:" << net_id << " iter:" << iter << " ==========" << std::endl;
+    GPU_DEBUG_COUT << "  id: " << id() << std::endl;
+    GPU_DEBUG_COUT << "  type: " << _impl_params->desc->type_string() << std::endl;
+
+    // Kernel info
+    if (_impl) {
+        GPU_DEBUG_COUT << "  kernel_name: " << _impl->get_kernel_name() << std::endl;
+        auto kernel_log = _impl->get_kernel_log_info();
+        // auto [batch_hash, kernel_entries] = _impl->get_kernels_dump_info();
+        if (!kernel_log.empty()) {
+            GPU_DEBUG_COUT << "  kernel_entries: " << kernel_log << std::endl;
+        }
+        GPU_DEBUG_COUT << "  is_dynamic: " << _impl->is_dynamic() << std::endl;
+        GPU_DEBUG_COUT << "  is_cpu: " << _impl->is_cpu() << std::endl;
+    }
+
+    // Input nodes and shapes
+    GPU_DEBUG_COUT << "  inputs (" << _deps.size() << "):" << std::endl;
+    for (size_t i = 0; i < _deps.size(); ++i) {
+        GPU_DEBUG_COUT << "    [" << i << "] " << _deps[i].first->id()
+                << " : " << _impl_params->get_input_layout(i).to_short_string() << std::endl;
+    }
+
+    // Output shapes
+    GPU_DEBUG_COUT << "  outputs (" << _impl_params->output_layouts.size() << "):" << std::endl;
+    for (size_t i = 0; i < _impl_params->output_layouts.size(); ++i) {
+        GPU_DEBUG_COUT << "    [" << i << "] " << _impl_params->get_output_layout(i).to_short_string() <<
+            ", 0x" << std::hex << reinterpret_cast<uintptr_t>(_outputs[i]->buffer_ptr()) << std::dec << std::endl;
+    }
+
+    // Additional state info
+    GPU_DEBUG_COUT << "  can_be_optimized: " << can_be_optimized() << std::endl;
+    GPU_DEBUG_COUT << "  mem_allocated: " << mem_allocated() << std::endl;
+
+    GPU_DEBUG_COUT << "=================================================" << std::endl;
 }
 
 void primitive_inst::set_arguments() {

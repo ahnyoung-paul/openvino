@@ -549,8 +549,9 @@ NodeDebugHelper::~NodeDebugHelper() {
             if (!is_valid && !first_nan_dumped) {
                 first_nan_dumped = true;
                 std::string dump_path = config.get_dump_tensors_path().empty() ? "./nan_dump/" : config.get_dump_tensors_path() + "/nan_dump/";
-                GPU_DEBUG_COUT << "*** First NaN detected! Dumping src/dst to " << dump_path << " ***" << std::endl;
 
+                GPU_DEBUG_COUT << "*** First NaN detected! Dumping src/dst to " << dump_path << " ***" << std::endl;
+                m_inst.debug_message();
                 // Dump all input (src) buffers
                 for (size_t src_idx = 0; src_idx < m_inst.dependencies().size(); src_idx++) {
                     auto input_mem = m_inst.dep_memory_ptr(src_idx);

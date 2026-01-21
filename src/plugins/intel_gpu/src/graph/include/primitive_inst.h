@@ -202,6 +202,8 @@ public:
         return reinterpret_cast<std::vector<std::pair<const primitive_inst*, int32_t>> const&>(_deps);
     }
 
+    void debug_message() const;
+
     memory& dep_memory(size_t index) const {
         auto dep = dependencies().at(index);
         return dep.first->output_memory(dep.second);
