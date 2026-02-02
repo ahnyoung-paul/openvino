@@ -284,18 +284,25 @@ void kernels_cache::get_program_source(const kernels_code& kernels_source_code, 
 
             std::string dump_sources_dir = GPU_DEBUG_VALUE_OR(_config.get_dump_sources_path(), "");
 
-            // Add -g -s to build options to allow IGC assembly dumper to associate assembler sources with corresponding OpenCL kernel code lines
-            // Should be used with the IGC_ShaderDump option
-            // Note: Skip adding -g -s for CM kernels as these options are not supported by CM compiler
-            if (!dump_sources_dir.empty() && b.language != kernel_language::CM) {
+            // Add debug options to enable assembly dump for kernels
+            // For OpenCL: -g -s options allow IGC assembly dumper to associate assembler sources with kernel code lines (use with IGC_ShaderDump)
+            // For CM: -menableiga -mdump_asm options enable IGA assembly dump
+            if (!dump_sources_dir.empty()) {
                 std::string current_dump_file_name = std::move(dump_sources_dir);
                 if (!current_dump_file_name.empty() && current_dump_file_name.back() != '/')
                     current_dump_file_name += '/';
 
-                current_dump_file_name += "clDNN_program_" + std::to_string(_prog_id) + "_bucket_" + std::to_string(b.bucket_id)
-                                        + "_part_" + std::to_string(b.batch_id) + "_" + std::to_string(b.hash_value) + ".cl";
+                if (b.language == kernel_language::CM) {
+                    current_dump_file_name += "clDNN_program_" + std::to_string(_prog_id) + "_bucket_" + std::to_string(b.bucket_id)
+                                            + "_part_" + std::to_string(b.batch_id) + "_" + std::to_string(b.hash_value) + ".cm";
 
-                b.options += " -g -s " + current_dump_file_name;
+                    b.options += " -menableiga -mdump_asm";
+                } else {
+                    current_dump_file_name += "clDNN_program_" + std::to_string(_prog_id) + "_bucket_" + std::to_string(b.bucket_id)
+                                            + "_part_" + std::to_string(b.batch_id) + "_" + std::to_string(b.hash_value) + ".cl";
+
+                    b.options += " -g -s " + current_dump_file_name;
+                }
             }
 
             all_batches->push_back(b);
