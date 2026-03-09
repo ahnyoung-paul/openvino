@@ -44,9 +44,9 @@ size_t get_x_pitch(const layout& layout) {
 }
 
 template <class T>
-void __validate_data_range(memory::ptr mem, stream& stream, const layout& data_layout, std::string &info) {
+bool __validate_data_range(memory::ptr mem, stream& stream, const layout& data_layout, std::string &info) {
     if (!mem)
-        return;
+        return true;
 
     // Reinterpret buffer to represent actual data layout (same as log_memory_to_file)
     auto actual_mem = mem->get_engine()->reinterpret_buffer(*mem, data_layout);
@@ -66,7 +66,7 @@ void __validate_data_range(memory::ptr mem, stream& stream, const layout& data_l
             if (std::isinf(val) || std::isnan(val)) {
                 std::string err_str = std::isinf(val) ? "inf" : "nan";
                 GPU_DEBUG_COUT << err_str << " WAS FOUND: " << info << "  *********************" << std::endl;
-                return;
+                return false;
             }
             if (val > val_max)
                 val_max = val;
@@ -88,7 +88,7 @@ void __validate_data_range(memory::ptr mem, stream& stream, const layout& data_l
                                     if (std::isinf(val) || std::isnan(val)) {
                                         std::string err_str = std::isinf(val) ? "inf" : "nan";
                                         GPU_DEBUG_COUT << err_str << " WAS FOUND: " << info << "  *********************" << std::endl;
-                                        return;
+                                        return false;
                                     }
                                     if (val > val_max)
                                         val_max = val;
@@ -103,20 +103,22 @@ void __validate_data_range(memory::ptr mem, stream& stream, const layout& data_l
         }
     }
     GPU_DEBUG_INFO << "min, max = " << val_min << ", " << val_max << "  : " << info << "  is_packed " << is_memory_packed << std::endl;
+    return true;
 }
 
-void validate_data_range(memory::ptr mem, stream& stream, const layout& data_layout, std::string &info) {
+bool validate_data_range(memory::ptr mem, stream& stream, const layout& data_layout, std::string &info) {
     auto data_type = data_layout.data_type;
     if (data_type == cldnn::data_types::f32)
-        __validate_data_range<float>(mem, stream, data_layout, info);
+        return __validate_data_range<float>(mem, stream, data_layout, info);
     else if (data_type == cldnn::data_types::f16)
-        __validate_data_range<ov::float16>(mem, stream, data_layout, info);
+        return __validate_data_range<ov::float16>(mem, stream, data_layout, info);
     else if (data_type == cldnn::data_types::i8)
-        __validate_data_range<int8_t>(mem, stream, data_layout, info);
+        return __validate_data_range<int8_t>(mem, stream, data_layout, info);
     else if (data_type == cldnn::data_types::u8)
-        __validate_data_range<uint8_t>(mem, stream, data_layout, info);
+        return __validate_data_range<uint8_t>(mem, stream, data_layout, info);
     else
         GPU_DEBUG_INFO << "Unsupport data type for validating data range " << data_type << std::endl;
+    return true;
 }
 
 template <class T>
@@ -505,11 +507,46 @@ NodeDebugHelper::~NodeDebugHelper() {
     const auto& config = m_network.get_config();
 
     if (config.get_validate_output_buffer() && !m_network.is_internal()) {
+        static int inf_nan_count = 0;
+        static const std::string dump_dir = "C:/dev/debug/cvs_working/dump/outs";
         m_stream.finish(); // Wait for stream completion before checking output buffers
         for (size_t i = 0; i < m_inst.outputs_memory_count(); i++) {
             auto output_mem = m_inst.output_memory_ptr(i);
             std::string info = m_inst.id() + "(" + std::to_string(i) + ") at iteration " + std::to_string(m_network.get_current_iteration_num());
-            validate_data_range(output_mem, m_stream, m_inst.get_output_layout(i), info);
+            bool valid = validate_data_range(output_mem, m_stream, m_inst.get_output_layout(i), info);
+            if (!valid) {
+                if (inf_nan_count == 0) {
+                    // First INF/NAN: dump all src and dst as binary
+                    GPU_DEBUG_COUT << " [validate] First INF/NAN at: " << info << " - dumping to " << dump_dir << std::endl;
+                    ov::util::create_directory_recursive(dump_dir);
+                    // Sanitize info for filename
+                    std::string safe = info;
+                    for (auto& c : safe)
+                        if (c == '/' || c == '\\' || c == ':' || c == ' ' || c == '(' || c == ')')
+                            c = '_';
+                    // Dump dst
+                    if (output_mem) {
+                        auto dst_path = dump_dir + "/nan_dst" + std::to_string(i) + "_" + safe + ".bin";
+                        mem_lock<char, mem_lock_type::read> lock(output_mem, m_stream);
+                        ov::util::save_binary(dst_path, lock.data(), output_mem->size());
+                        GPU_DEBUG_COUT << "  Dumped dst: " << dst_path << std::endl;
+                    }
+                    // Dump all src
+                    for (size_t j = 0; j < m_inst.dependencies().size(); ++j) {
+                        auto dep = m_inst.dependencies().at(j);
+                        auto src_mem = dep.first->output_memory_ptr(dep.second);
+                        if (src_mem) {
+                            auto src_path = dump_dir + "/nan_src" + std::to_string(j) + "_" + safe + ".bin";
+                            mem_lock<char, mem_lock_type::read> slock(src_mem, m_stream);
+                            ov::util::save_binary(src_path, slock.data(), src_mem->size());
+                            GPU_DEBUG_COUT << "  Dumped src" << j << ": " << src_path << std::endl;
+                        }
+                    }
+                }
+                inf_nan_count++;
+                OPENVINO_ASSERT(inf_nan_count < 10,
+                    "[validate_data_range] Aborting: INF/NAN detected ", inf_nan_count, " times (threshold=10). Last at: ", info);
+            }
         }
     }
 
