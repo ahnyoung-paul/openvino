@@ -512,10 +512,11 @@ NodeDebugHelper::~NodeDebugHelper() {
         m_stream.finish(); // Wait for stream completion before checking output buffers
         for (size_t i = 0; i < m_inst.outputs_memory_count(); i++) {
             auto output_mem = m_inst.output_memory_ptr(i);
-            std::string info = m_inst.id() + "(" + std::to_string(i) + ") at iteration " + std::to_string(m_network.get_current_iteration_num());
+            std::string info = m_inst.id() + "(" + std::to_string(i) + ") at iteration " + std::to_string(m_network.get_current_iteration_num())
+                    + " net_id " + std::to_string(m_network.get_id());
             bool valid = validate_data_range(output_mem, m_stream, m_inst.get_output_layout(i), info);
             if (!valid) {
-                if (inf_nan_count == 0) {
+                if (inf_nan_count < 10) {
                     // First INF/NAN: dump all src and dst as binary
                     GPU_DEBUG_COUT << " [validate] First INF/NAN at: " << info << " - dumping to " << dump_dir << std::endl;
                     ov::util::create_directory_recursive(dump_dir);
@@ -544,8 +545,8 @@ NodeDebugHelper::~NodeDebugHelper() {
                     }
                 }
                 inf_nan_count++;
-                OPENVINO_ASSERT(inf_nan_count < 10,
-                    "[validate_data_range] Aborting: INF/NAN detected ", inf_nan_count, " times (threshold=10). Last at: ", info);
+                // OPENVINO_ASSERT(inf_nan_count < 10,
+                //     "[validate_data_range] Aborting: INF/NAN detected ", inf_nan_count, " times (threshold=10). Last at: ", info);
             }
         }
     }
