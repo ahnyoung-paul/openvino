@@ -82,15 +82,17 @@ bool MultiplyPartialTransformation::transform(ov::pass::pattern::Matcher& m) {
         auto multiplyParentConst = multiplyParent.get_node_shared_ptr()->input_value(multiplyBranch.second == 0 ? 1 : 0);
         auto inputDataType = scalingMode ? multiply->get_output_element_type(0) : element::f32;
 
+        auto newConst = fold<ov::opset1::Multiply>(
+            foldConvert(multiplyParentConst, inputDataType),
+            foldConvert(constParent, inputDataType));
+        if (!NetworkHelper::checkConstantNotInf(newConst))
+            return false;
+
         newMultiply = std::make_shared<ov::op::TypeRelaxed<ov::opset1::Multiply>>(
             std::vector<ov::element::Type>{ inputDataType, inputDataType },
             std::vector<ov::element::Type>{ multiply->get_output_element_type(0) },
             ov::op::TemporaryReplaceOutputType(multiplyParentParent, inputDataType).get(),
-            ov::op::TemporaryReplaceOutputType(
-                fold<ov::opset1::Multiply>(
-                    foldConvert(multiplyParentConst, inputDataType),
-                    foldConvert(constParent, inputDataType)),
-                inputDataType).get());
+            ov::op::TemporaryReplaceOutputType(newConst, inputDataType).get());
 
         NetworkHelper::copyInfo(multiplyParent.get_node_shared_ptr(), newMultiply);
         NetworkHelper::copyInfo(multiply, newMultiply);
@@ -142,6 +144,8 @@ bool MultiplyPartialTransformation::transform(ov::pass::pattern::Matcher& m) {
         //     after : Y = ((X1 - SH1) * X2) * SC1' ,  where :
         //             SC1' = SC1 * SC2
         auto newMultiplyValuesFullPath = fold<ov::opset1::Multiply>(multiplyValuesEmptyPath, multiplyValuesFullPath);
+        if (!NetworkHelper::checkConstantNotInf(newMultiplyValuesFullPath))
+            return false;
         OutputVector inputs{ {}, {} };
         inputs[emptyPathIndex] = scalingMode ? newMultiplyValuesFullPath : dequantizationEmptyPath.data;
         auto input_for_fullPath = scalingMode ? dequantizationEmptyPath.data.get_node_shared_ptr() :

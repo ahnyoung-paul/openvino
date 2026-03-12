@@ -200,6 +200,8 @@ bool ConvolutionTransformation::transform(ov::pass::pattern::Matcher &m) {
         NetworkHelper::copyInfo(convolution, relaxedNewConvolution);
 
         newMultiplyAfterConst = foldConvert(newMultiplyAfterConst, deqPrecision);
+        if (!NetworkHelper::checkConstantNotInf(newMultiplyAfterConst))
+            return false;
         newMultiplyAfter = std::make_shared<ov::op::TypeRelaxed<ov::opset1::Multiply>>(
             std::vector<element::Type>{ deqPrecision, deqPrecision },
             std::vector<element::Type>{ dequantization.multiply->get_output_element_type(0) },
@@ -274,6 +276,8 @@ bool ConvolutionTransformation::transform(ov::pass::pattern::Matcher &m) {
                     std::make_shared<ov::opset1::Constant>(element::i32, Shape{newScaleShape.size()}, newScaleShape),
                     false),
                 deqPrecision);
+            if (!NetworkHelper::checkConstantNotInf(newMultiplyAfterConst))
+                return false;
             newMultiplyAfter = std::make_shared<ov::op::TypeRelaxed<ov::opset1::Multiply>>(
                 std::vector<element::Type>{deqPrecision, deqPrecision},
                 std::vector<element::Type>{dequantization.multiply->get_output_element_type(0)},

@@ -1544,12 +1544,13 @@ NetworkHelper::InsertDequantizationResult NetworkHelper::moveDequantizationAfter
         if (parentPrecision.bitwidth() < dequantization.multiplyConstant->get_element_type().bitwidth()) {
             THROW_IE_LPT_EXCEPTION(*parent) <<
                 "unexpected precisions: on data " << parent->get_friendly_name() << ":" << parentPrecision <<
-                ", multiply dequantization constant " << dequantization.multiplyConstant->get_friendly_name() << ":" <<
-                dequantization.multiplyConstant->get_element_type();
+                ", multiply dequantization constant " << dequantization.multiplyConstant->get_friendly_name() << ":" << dequantization.multiplyConstant->get_element_type();
         }
 
-        parent = dequantization.multiply->clone_with_new_inputs(
-            {parent, foldConvert(dequantization.multiplyConstant, parentPrecision)});
+        auto foldedMultiplyConst = foldConvert(dequantization.multiplyConstant->output(0), parentPrecision);
+        if (!checkConstantNotInf(foldedMultiplyConst))
+            foldedMultiplyConst = dequantization.multiplyConstant;
+        parent = dequantization.multiply->clone_with_new_inputs({parent, foldedMultiplyConst});
         ov::copy_runtime_info({ newOperation, parent }, parent);
     }
 
@@ -1634,8 +1635,10 @@ NetworkHelper::InsertDequantizationResult NetworkHelper::moveDequantizationBefor
                     ", multiply dequantization constant " << multiplyConstant->get_friendly_name() << ":" << multiplyConstant->get_element_type();
             }
 
-            parent = dequantization.multiply->clone_with_new_inputs(
-                {parent, foldConvert(multiplyConstant->output(0), parentPrecision)});
+            auto foldedMultiplyConst = foldConvert(multiplyConstant->output(0), parentPrecision);
+            if (!NetworkHelper::checkConstantNotInf(foldedMultiplyConst))
+                foldedMultiplyConst = multiplyConstant;
+            parent = dequantization.multiply->clone_with_new_inputs({parent, foldedMultiplyConst});
             ov::copy_runtime_info(dequantization.multiply, parent);
             parent->set_friendly_name(dequantization.multiply->get_friendly_name() + "_" + std::to_string(i + 1));
         }

@@ -4,6 +4,7 @@
 
 #include "transformations/common_optimizations/lin_op_sequence_fusion.hpp"
 
+#include <cmath>
 #include <memory>
 #include <vector>
 
@@ -29,6 +30,18 @@ const auto is_eltwise_supported_type = [](const Output<Node>& output) -> bool {
     const auto is_single_output = pattern::consumers_count(1);
     return is_single_output(output) && output.get_node()->has_evaluate();
 };
+
+// Returns true if the folded constant contains any INF or NaN values.
+// Used to abort a fusion that would produce an invalid constant (e.g. FP16 overflow).
+bool has_inf_or_nan(const Output<Node>& folded) {
+    const auto constant = ov::as_type_ptr<v0::Constant>(folded.get_node_shared_ptr());
+    if (!constant)
+        return false;
+    const auto values = constant->cast_vector<float>();
+    return std::any_of(values.begin(), values.end(), [](float x) {
+        return std::isinf(x) || std::isnan(x);
+    });
+}
 }  // namespace
 
 AddMultiplyFusion::AddMultiplyFusion() {
@@ -66,6 +79,8 @@ AddMultiplyFusion::AddMultiplyFusion() {
 
         // Add two constants using opset3::Add constant folding and create new Add operation
         auto new_const = op_util::make_try_fold<v1::Multiply>(add_const, mul_const);
+        if (has_inf_or_nan(new_const))
+            return false;
         auto new_add = std::make_shared<v1::Add>(new_mul, new_const);
 
         copy_runtime_info({add, mul}, {new_mul, new_add, new_const});
@@ -100,6 +115,8 @@ AddAddFusion::AddAddFusion() {
         // Replace Add->Add with single Add
         // Add operation will be added to the list of ops requested for pattern matching
         auto new_const = op_util::make_try_fold<v1::Add>(add1_const, add2_const);
+        if (has_inf_or_nan(new_const))
+            return false;
         auto new_add = register_new_node<v1::Add>(input, new_const);
 
         copy_runtime_info({add1, add2}, {new_add, new_const});
@@ -134,6 +151,8 @@ MultiplyMultiplyFusion::MultiplyMultiplyFusion() {
         // Replace Multiply->Multiply with single Multiply
         // Multiply operation will be added to the list of ops requested for pattern matching
         auto new_const = op_util::make_try_fold<v1::Multiply>(mul1_const, mul2_const);
+        if (has_inf_or_nan(new_const))
+            return false;
         auto new_mul = register_new_node<v1::Multiply>(input, new_const);
 
         copy_runtime_info({mul1, mul2}, {new_mul, new_const});

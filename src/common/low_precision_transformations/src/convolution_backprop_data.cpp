@@ -134,6 +134,8 @@ bool ConvolutionBackpropDataTransformation::transform(ov::pass::pattern::Matcher
                                                    Shape{1},
                                                    dequantization.multiplyConstant->cast_vector<float>()[0]),
             deqPrecision);
+        if (!NetworkHelper::checkConstantNotInf(newMultiplyAfterConst))
+            return false;
 
         newMultiplyAfter = std::make_shared<ov::op::TypeRelaxed<ov::opset1::Multiply>>(
             std::vector<element::Type>{ deqPrecision, deqPrecision },
@@ -184,6 +186,8 @@ bool ConvolutionBackpropDataTransformation::transform(ov::pass::pattern::Matcher
                     std::make_shared<ov::opset1::Constant>(element::u64, Shape{newScaleShape.size()}, newScaleShape),
                     false),
                 deqPrecision);
+            if (!NetworkHelper::checkConstantNotInf(newMultiplyAfterConst))
+                return false;
             newMultiplyAfter = std::make_shared<ov::op::TypeRelaxed<ov::opset1::Multiply>>(
                 std::vector<element::Type>{deqPrecision, deqPrecision},
                 std::vector<element::Type>{dequantization.multiply->get_output_element_type(0)},
