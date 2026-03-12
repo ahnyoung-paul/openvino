@@ -594,7 +594,7 @@ std::shared_ptr<ov::Node> NetworkHelper::separateInStandaloneBranch(std::shared_
             return clonedEltwise;
         };
 
-        if (dequantization.subtract != nullptr) {            
+        if (dequantization.subtract != nullptr) {
             parent = cloneEltwiseBranch(dequantization.subtract, dequantization.subtractConstant, dequantization.subtractConvert);
         }
 
@@ -1874,7 +1874,7 @@ bool NetworkHelper::checkConstantNotInf(const std::shared_ptr<Node> constant_nod
     if (constant == nullptr)
         return false;
     const auto values = constant->cast_vector<float>();
-    return std::all_of(values.begin(), values.end(), [](const float x) { return !std::isinf(x); });
+    return std::all_of(values.begin(), values.end(), [](const float x) { return !std::isinf(x) && !std::isnan(x); });
 }
 } // namespace low_precision
 } // namespace pass

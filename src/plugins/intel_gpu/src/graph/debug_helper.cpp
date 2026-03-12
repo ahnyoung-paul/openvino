@@ -506,7 +506,7 @@ NodeDebugHelper::NodeDebugHelper(const primitive_inst& inst)
 NodeDebugHelper::~NodeDebugHelper() {
     const auto& config = m_network.get_config();
 
-    if (config.get_validate_output_buffer() && !m_network.is_internal()) {
+    if (config.get_validate_output_buffer() && !m_network.is_internal() && (m_network.get_id() == 4)) {
         static int inf_nan_count = 0;
         static const std::string dump_dir = "C:/dev/debug/cvs_working/dump/outs";
         m_stream.finish(); // Wait for stream completion before checking output buffers
@@ -516,7 +516,8 @@ NodeDebugHelper::~NodeDebugHelper() {
                     + " net_id " + std::to_string(m_network.get_id());
             bool valid = validate_data_range(output_mem, m_stream, m_inst.get_output_layout(i), info);
             if (!valid) {
-                if (inf_nan_count < 10) {
+                const size_t threshold = 20;
+                if (inf_nan_count < threshold) {
                     // First INF/NAN: dump all src and dst as binary
                     GPU_DEBUG_COUT << " [validate] First INF/NAN at: " << info << " - dumping to " << dump_dir << std::endl;
                     ov::util::create_directory_recursive(dump_dir);
@@ -545,8 +546,8 @@ NodeDebugHelper::~NodeDebugHelper() {
                     }
                 }
                 inf_nan_count++;
-                // OPENVINO_ASSERT(inf_nan_count < 10,
-                //     "[validate_data_range] Aborting: INF/NAN detected ", inf_nan_count, " times (threshold=10). Last at: ", info);
+                        OPENVINO_ASSERT(inf_nan_count < threshold,
+                            "[validate_data_range] Aborting: INF/NAN detected ", inf_nan_count, " times (threshold=", threshold, "). Last at: ", info);
             }
         }
     }
