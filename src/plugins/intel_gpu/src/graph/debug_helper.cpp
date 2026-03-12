@@ -121,6 +121,73 @@ bool validate_data_range(memory::ptr mem, stream& stream, const layout& data_lay
     return true;
 }
 
+struct DataRangeInfo {
+    float min_val = std::numeric_limits<float>::max();
+    float max_val = std::numeric_limits<float>::lowest();
+    bool has_nan = false;
+    bool has_inf = false;
+};
+
+template <class T>
+DataRangeInfo __get_data_range(memory::ptr mem, stream& stream, const layout& data_layout) {
+    DataRangeInfo result;
+    if (!mem) return result;
+    auto actual_mem = mem->get_engine()->reinterpret_buffer(*mem, data_layout);
+    auto&& size = actual_mem->get_layout().get_tensor();
+    mem_lock<T, mem_lock_type::read> lock(actual_mem, stream);
+    auto mem_ptr = lock.data();
+    auto x_pitch = get_x_pitch(actual_mem->get_layout());
+    const bool is_memory_packed = !actual_mem->is_memory_reset_needed(actual_mem->get_layout());
+
+    auto process_val = [&](float val) {
+        if (std::isnan(val)) { result.has_nan = true; return; }
+        if (std::isinf(val)) { result.has_inf = true; return; }
+        if (val > result.max_val) result.max_val = val;
+        if (val < result.min_val) result.min_val = val;
+    };
+    auto found_bad = [&]() { return result.has_nan || result.has_inf; };
+
+    if (is_memory_packed) {
+        for (size_t i = 0; i < actual_mem->count() && !found_bad(); ++i) {
+            process_val(convert_element(mem_ptr[i]));
+        }
+    } else {
+        for (ov::Dimension::value_type g = 0; g < size.group[0] && !found_bad(); ++g) {
+            for (ov::Dimension::value_type b = 0; b < size.batch[0] && !found_bad(); ++b) {
+                for (ov::Dimension::value_type f = 0; f < size.feature[0] && !found_bad(); ++f) {
+                    for (ov::Dimension::value_type w = 0; w < size.spatial[3] && !found_bad(); ++w) {
+                        for (ov::Dimension::value_type z = 0; z < size.spatial[2] && !found_bad(); ++z) {
+                            for (ov::Dimension::value_type y = 0; y < size.spatial[1] && !found_bad(); ++y) {
+                                cldnn::tensor t(cldnn::group(g), cldnn::batch(b), cldnn::feature(f), cldnn::spatial(0, y, z, w));
+                                size_t input_it = actual_mem->get_layout().get_linear_offset(t);
+                                for (ov::Dimension::value_type x = 0; x < size.spatial[0] && !found_bad(); ++x, input_it += x_pitch) {
+                                    process_val(convert_element(mem_ptr[input_it]));
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    return result;
+}
+
+DataRangeInfo get_data_range(memory::ptr mem, stream& stream, const layout& data_layout) {
+    DataRangeInfo result;
+    if (!mem) return result;
+    auto data_type = data_layout.data_type;
+    if (data_type == cldnn::data_types::f32)
+        return __get_data_range<float>(mem, stream, data_layout);
+    else if (data_type == cldnn::data_types::f16)
+        return __get_data_range<ov::float16>(mem, stream, data_layout);
+    else if (data_type == cldnn::data_types::i8)
+        return __get_data_range<int8_t>(mem, stream, data_layout);
+    else if (data_type == cldnn::data_types::u8)
+        return __get_data_range<uint8_t>(mem, stream, data_layout);
+    return result;
+}
+
 template <class T>
 void dump(memory::ptr mem, stream& stream, std::ofstream& file_stream, bool dump_raw) {
     auto&& size = mem->get_layout().get_tensor();
@@ -518,6 +585,30 @@ NodeDebugHelper::~NodeDebugHelper() {
             if (!valid) {
                 const size_t threshold = 20;
                 if (inf_nan_count < threshold) {
+                    // Print input buffer data range
+                    {
+                        auto out_range = get_data_range(output_mem, m_stream, m_inst.get_output_layout(i));
+                        std::string err_type = out_range.has_nan ? "NaN" : "INF";
+                        std::stringstream ss;
+                        ss << "Found " << err_type << " " << m_inst.id()
+                                       << " = input(" << m_inst.dependencies().size() << ")" << std::endl;
+                        for (size_t j = 0; j < m_inst.dependencies().size(); ++j) {
+                            auto dep = m_inst.dependencies().at(j);
+                            auto input_mem = m_inst.dep_memory_ptr(j);
+                            auto input_layout = dep.first->get_output_layout(dep.second);
+                            auto range = get_data_range(input_mem, m_stream, input_layout);
+                            if (range.has_nan)
+                                ss << "* IN[" << j << "]: " << dep.first->id() << " [NaN]" << std::endl;
+                            else if (range.has_inf)
+                                ss << "* IN[" << j << "]: " << dep.first->id() << " [INF]" << std::endl;
+                            else
+                                ss << "* IN[" << j << "]: " << dep.first->id()
+                                               << ": [" << range.min_val << ", " << range.max_val << "]" << std::endl;
+                        }
+                        GPU_DEBUG_COUT << ss.str();
+                    }
+
+#if 0 // Dump all src and dst when INF/NAN is detected for the first few times to investigate the issue. Dumping may cause overhead, so it is disabled by default.
                     // First INF/NAN: dump all src and dst as binary
                     GPU_DEBUG_COUT << " [validate] First INF/NAN at: " << info << " - dumping to " << dump_dir << std::endl;
                     ov::util::create_directory_recursive(dump_dir);
@@ -544,6 +635,7 @@ NodeDebugHelper::~NodeDebugHelper() {
                             GPU_DEBUG_COUT << "  Dumped src" << j << ": " << src_path << std::endl;
                         }
                     }
+#endif
                 }
                 inf_nan_count++;
                         OPENVINO_ASSERT(inf_nan_count < threshold,
