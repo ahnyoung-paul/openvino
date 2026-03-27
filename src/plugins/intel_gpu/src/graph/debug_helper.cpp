@@ -574,114 +574,38 @@ NodeDebugHelper::~NodeDebugHelper() {
     const auto& config = m_network.get_config();
 
     if (config.get_validate_output_buffer() && !m_network.is_internal() && (m_network.get_id() == 4)) {
-        static size_t inf_nan_count = 0;
-        static const std::string dump_dir = "C:/dev/debug/cvs_working/dump/outs";
         m_stream.finish(); // Wait for stream completion before checking output buffers
         for (size_t i = 0; i < m_inst.outputs_memory_count(); i++) {
             auto output_mem = m_inst.output_memory_ptr(i);
             std::string info = m_inst.id() + "(" + std::to_string(i) + ") at iteration " + std::to_string(m_network.get_current_iteration_num())
                     + " net_id " + std::to_string(m_network.get_id());
-            const size_t threshold = 3000000;
             bool valid = validate_data_range(output_mem, m_stream, m_inst.get_output_layout(i), info);
-            if (inf_nan_count < threshold) {
-                // GPU_DEBUG_COUT << "Validating output buffer for " << info << "," << m_inst.get_node().get_primitive()->type_string() << std::endl;
-                // if (m_inst.id().find("linear/ov_ext::linear/MatMul") != std::string::npos) {
-                // if (!valid || m_inst.id() == "fullyconnectedcompressed:__module.transformer_blocks.18.ff_context.net.2/ov_ext::linear/MatMul") { "Result_"
-                if (!valid || m_inst.id().find("Result_") != std::string::npos) {
-                    // if (m_inst.id().find("Result_") != std::string::npos) {
-                    //     inf_nan_count = threshold + 1;
-                    // }
-                    // Print input buffer data range
-                    {
-                        auto out_range = get_data_range(output_mem, m_stream, m_inst.get_output_layout(i));
-                        std::string err_type = out_range.has_nan ? "NaN"
-                        : ( out_range.has_inf ? "INF" : "[" + std::to_string(out_range.min_val) + ", " + std::to_string(out_range.max_val) + "]" );
-                        std::stringstream ss;
-                        ss << "Found " << err_type << " " << m_inst.id()
-                                        << " = input(" << m_inst.dependencies().size() << "), m_net_id " << m_network.get_id()
-                                        << ", m_iter " << m_network.get_current_iteration_num() << std::endl;
-                        for (size_t j = 0; j < m_inst.dependencies().size(); ++j) {
-                            auto dep = m_inst.dependencies().at(j);
-                            auto input_mem = m_inst.dep_memory_ptr(j);
-                            auto input_layout = dep.first->get_output_layout(dep.second);
-                            auto range = get_data_range(input_mem, m_stream, input_layout);
-                            if (range.has_nan)
-                                ss << "* IN[" << j << "]: " << dep.first->id() << " [NaN]" << std::endl;
-                            else if (range.has_inf)
-                                ss << "* IN[" << j << "]: " << dep.first->id() << " [INF]" << std::endl;
-                            else
-                                ss << "* IN[" << j << "]: " << dep.first->id()
-                                                << ": [" << range.min_val << ", " << range.max_val << "]" << std::endl;
-                        }
-                        GPU_DEBUG_COUT << ss.str();
+            if (!valid || m_inst.id().find("Result_") != std::string::npos) {
+                // Print input buffer data range
+                {
+                    auto out_range = get_data_range(output_mem, m_stream, m_inst.get_output_layout(i));
+                    std::string err_type = out_range.has_nan ? "NaN"
+                    : ( out_range.has_inf ? "INF" : "[" + std::to_string(out_range.min_val) + ", " + std::to_string(out_range.max_val) + "]" );
+                    std::stringstream ss;
+                    ss << "Found " << err_type << " " << m_inst.id()
+                                    << " = input(" << m_inst.dependencies().size() << "), m_net_id " << m_network.get_id()
+                                    << ", m_iter " << m_network.get_current_iteration_num() << std::endl;
+                    for (size_t j = 0; j < m_inst.dependencies().size(); ++j) {
+                        auto dep = m_inst.dependencies().at(j);
+                        auto input_mem = m_inst.dep_memory_ptr(j);
+                        auto input_layout = dep.first->get_output_layout(dep.second);
+                        auto range = get_data_range(input_mem, m_stream, input_layout);
+                        if (range.has_nan)
+                            ss << "* IN[" << j << "]: " << dep.first->id() << " [NaN]" << std::endl;
+                        else if (range.has_inf)
+                            ss << "* IN[" << j << "]: " << dep.first->id() << " [INF]" << std::endl;
+                        else
+                            ss << "* IN[" << j << "]: " << dep.first->id()
+                                            << ": [" << range.min_val << ", " << range.max_val << "]" << std::endl;
                     }
-                    inf_nan_count++;
-                    OPENVINO_ASSERT(inf_nan_count < threshold,
-                        "[validate_data_range] Aborting: INF/NAN detected ", inf_nan_count, " times (threshold=", threshold, "). Last at: ", info);
+                    GPU_DEBUG_COUT << ss.str();
                 }
-            // } else {
-            //     validate_data_range(output_mem, m_stream, m_inst.get_output_layout(i), info);
             }
-            // bool valid = validate_data_range(output_mem, m_stream, m_inst.get_output_layout(i), info);
-            // const size_t threshold = 20;
-//             if (!valid) {
-//                 if (inf_nan_count < threshold) {
-//                     // Print input buffer data range
-//                     // {
-//                     //     auto out_range = get_data_range(output_mem, m_stream, m_inst.get_output_layout(i));
-//                     //     std::string err_type = out_range.has_nan ? "NaN" : "INF";
-//                     //     std::stringstream ss;
-//                     //     ss << "Found " << err_type << " " << m_inst.id()
-//                     //                    << " = input(" << m_inst.dependencies().size() << ")" << std::endl;
-//                     //     for (size_t j = 0; j < m_inst.dependencies().size(); ++j) {
-//                     //         auto dep = m_inst.dependencies().at(j);
-//                     //         auto input_mem = m_inst.dep_memory_ptr(j);
-//                     //         auto input_layout = dep.first->get_output_layout(dep.second);
-//                     //         auto range = get_data_range(input_mem, m_stream, input_layout);
-//                     //         if (range.has_nan)
-//                     //             ss << "* IN[" << j << "]: " << dep.first->id() << " [NaN]" << std::endl;
-//                     //         else if (range.has_inf)
-//                     //             ss << "* IN[" << j << "]: " << dep.first->id() << " [INF]" << std::endl;
-//                     //         else
-//                     //             ss << "* IN[" << j << "]: " << dep.first->id()
-//                     //                            << ": [" << range.min_val << ", " << range.max_val << "]" << std::endl;
-//                     //     }
-//                     //     GPU_DEBUG_COUT << ss.str();
-//                     // }
-
-// #if 0 // Dump all src and dst when INF/NAN is detected for the first few times to investigate the issue. Dumping may cause overhead, so it is disabled by default.
-//                     // First INF/NAN: dump all src and dst as binary
-//                     GPU_DEBUG_COUT << " [validate] First INF/NAN at: " << info << " - dumping to " << dump_dir << std::endl;
-//                     ov::util::create_directory_recursive(dump_dir);
-//                     // Sanitize info for filename
-//                     std::string safe = info;
-//                     for (auto& c : safe)
-//                         if (c == '/' || c == '\\' || c == ':' || c == ' ' || c == '(' || c == ')')
-//                             c = '_';
-//                     // Dump dst
-//                     if (output_mem) {
-//                         auto dst_path = dump_dir + "/nan_dst" + std::to_string(i) + "_" + safe + ".bin";
-//                         mem_lock<char, mem_lock_type::read> lock(output_mem, m_stream);
-//                         ov::util::save_binary(dst_path, lock.data(), output_mem->size());
-//                         GPU_DEBUG_COUT << "  Dumped dst: " << dst_path << std::endl;
-//                     }
-//                     // Dump all src
-//                     for (size_t j = 0; j < m_inst.dependencies().size(); ++j) {
-//                         auto dep = m_inst.dependencies().at(j);
-//                         auto src_mem = dep.first->output_memory_ptr(dep.second);
-//                         if (src_mem) {
-//                             auto src_path = dump_dir + "/nan_src" + std::to_string(j) + "_" + safe + ".bin";
-//                             mem_lock<char, mem_lock_type::read> slock(src_mem, m_stream);
-//                             ov::util::save_binary(src_path, slock.data(), src_mem->size());
-//                             GPU_DEBUG_COUT << "  Dumped src" << j << ": " << src_path << std::endl;
-//                         }
-//                     }
-// #endif
-//                 }
-//                 inf_nan_count++;
-//                         OPENVINO_ASSERT(inf_nan_count < threshold,
-//                             "[validate_data_range] Aborting: INF/NAN detected ", inf_nan_count, " times (threshold=", threshold, "). Last at: ", info);
-//             }
         }
     }
 
