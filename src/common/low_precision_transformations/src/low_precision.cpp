@@ -238,7 +238,21 @@ bool LowPrecision::run_on_model(const std::shared_ptr<ov::Model>& m) {
                                                               attributeParams);
 
     const auto common = manager.register_pass<GraphRewrite>();
-    ADD_MATCHER(common, AddTransformation, params)
+
+    bool found_target_node = false;
+    for (const auto& node : m->get_ordered_ops()) {
+        if (node->get_friendly_name().find("single_transformer_blocks.0.proj_out") != std::string::npos) {
+            found_target_node = true;
+            break;
+        }
+    }
+
+    if (!found_target_node) {
+        ADD_MATCHER(common, AddTransformation, params)
+    } else {
+        std::cout << "LowPrecision: skipping Add transformation because of presence of node with name"
+            << " containing 'single_transformer_blocks.0.proj_out'" << std::endl;
+    }
     ADD_MATCHER(common, AssignAndReadValueTransformation, m, params)
     ADD_MATCHER(common, AvgPoolTransformation, params)
     ADD_MATCHER(common, BatchToSpaceTransformation, params)
