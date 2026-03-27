@@ -200,6 +200,9 @@ bool ConvolutionTransformation::transform(ov::pass::pattern::Matcher &m) {
         NetworkHelper::copyInfo(convolution, relaxedNewConvolution);
 
         newMultiplyAfterConst = foldConvert(newMultiplyAfterConst, deqPrecision);
+        // CVS-180452: Abort if constant folding to deqPrecision produced INF/NaN (FP16 overflow).
+        if (!NetworkHelper::checkConstantNotInf(newMultiplyAfterConst))
+            return false;
         newMultiplyAfter = std::make_shared<ov::op::TypeRelaxed<ov::opset1::Multiply>>(
             std::vector<element::Type>{ deqPrecision, deqPrecision },
             std::vector<element::Type>{ dequantization.multiply->get_output_element_type(0) },
@@ -274,6 +277,9 @@ bool ConvolutionTransformation::transform(ov::pass::pattern::Matcher &m) {
                     std::make_shared<ov::opset1::Constant>(element::i32, Shape{newScaleShape.size()}, newScaleShape),
                     false),
                 deqPrecision);
+            // CVS-180452: Abort if reshaped scale constant overflows in deqPrecision.
+            if (!NetworkHelper::checkConstantNotInf(newMultiplyAfterConst))
+                return false;
             newMultiplyAfter = std::make_shared<ov::op::TypeRelaxed<ov::opset1::Multiply>>(
                 std::vector<element::Type>{deqPrecision, deqPrecision},
                 std::vector<element::Type>{dequantization.multiply->get_output_element_type(0)},

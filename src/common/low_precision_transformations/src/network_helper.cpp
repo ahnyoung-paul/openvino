@@ -594,7 +594,7 @@ std::shared_ptr<ov::Node> NetworkHelper::separateInStandaloneBranch(std::shared_
             return clonedEltwise;
         };
 
-        if (dequantization.subtract != nullptr) {            
+        if (dequantization.subtract != nullptr) {
             parent = cloneEltwiseBranch(dequantization.subtract, dequantization.subtractConstant, dequantization.subtractConvert);
         }
 
@@ -1544,12 +1544,17 @@ NetworkHelper::InsertDequantizationResult NetworkHelper::moveDequantizationAfter
         if (parentPrecision.bitwidth() < dequantization.multiplyConstant->get_element_type().bitwidth()) {
             THROW_IE_LPT_EXCEPTION(*parent) <<
                 "unexpected precisions: on data " << parent->get_friendly_name() << ":" << parentPrecision <<
-                ", multiply dequantization constant " << dequantization.multiplyConstant->get_friendly_name() << ":" <<
-                dequantization.multiplyConstant->get_element_type();
+                ", multiply dequantization constant " << dequantization.multiplyConstant->get_friendly_name() << ":" << dequantization.multiplyConstant->get_element_type();
         }
 
-        parent = dequantization.multiply->clone_with_new_inputs(
-            {parent, foldConvert(dequantization.multiplyConstant, parentPrecision)});
+        // CVS-180452: foldConvert to lower precision (e.g. FP32→FP16) can produce INF/NaN
+        // when the scale constant exceeds the target type's representable range.
+        // Fall back to the original (higher-precision) constant to avoid propagating
+        // invalid values through the graph.
+        auto foldedMultiplyConst = foldConvert(dequantization.multiplyConstant->output(0), parentPrecision);
+        if (!checkConstantNotInf(foldedMultiplyConst))
+            foldedMultiplyConst = dequantization.multiplyConstant;
+        parent = dequantization.multiply->clone_with_new_inputs({parent, foldedMultiplyConst});
         ov::copy_runtime_info({ newOperation, parent }, parent);
     }
 
@@ -1634,8 +1639,11 @@ NetworkHelper::InsertDequantizationResult NetworkHelper::moveDequantizationBefor
                     ", multiply dequantization constant " << multiplyConstant->get_friendly_name() << ":" << multiplyConstant->get_element_type();
             }
 
-            parent = dequantization.multiply->clone_with_new_inputs(
-                {parent, foldConvert(multiplyConstant->output(0), parentPrecision)});
+            // CVS-180452: Same foldConvert overflow guard as moveDequantizationAfter above.
+            auto foldedMultiplyConst = foldConvert(multiplyConstant->output(0), parentPrecision);
+            if (!NetworkHelper::checkConstantNotInf(foldedMultiplyConst))
+                foldedMultiplyConst = multiplyConstant;
+            parent = dequantization.multiply->clone_with_new_inputs({parent, foldedMultiplyConst});
             ov::copy_runtime_info(dequantization.multiply, parent);
             parent->set_friendly_name(dequantization.multiply->get_friendly_name() + "_" + std::to_string(i + 1));
         }
@@ -1874,8 +1882,8 @@ bool NetworkHelper::checkConstantNotInf(const std::shared_ptr<Node> constant_nod
     if (constant == nullptr)
         return false;
     const auto values = constant->cast_vector<float>();
-    return std::all_of(values.begin(), values.end(), [](const float x) { return !std::isinf(x); });
-}
+    return std::all_of(values.begin(), values.end(), [](const float x) { return !std::isinf(x) && !std::isnan(x); });
+}  // CVS-180452: extended to reject NaN in addition to INF
 } // namespace low_precision
 } // namespace pass
 } // namespace ov
