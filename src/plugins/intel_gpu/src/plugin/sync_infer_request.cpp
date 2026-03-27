@@ -294,6 +294,11 @@ void SyncInferRequest::enqueue() {
         exit(0);
     }
 
+    GPU_DEBUG_IF(config.get_validate_output_buffer() && !network->is_internal() && (network->get_id() == 4)) {
+        GPU_DEBUG_INFO << "Only run first inference to dump layers." << std::endl;
+        exit(0);
+    }
+
     auto enqueue_end = std::chrono::high_resolution_clock::now();
     GPU_DEBUG_IF(config.get_host_time_profiling()) {
         network_enqueue_time = std::chrono::duration_cast<std::chrono::microseconds>(network_enqueue_end - network_enqueue_start).count();
