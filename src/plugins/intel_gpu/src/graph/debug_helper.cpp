@@ -126,8 +126,9 @@ struct DataRangeInfo {
     float max_val = std::numeric_limits<float>::lowest();
     bool has_nan = false;
     bool has_inf = false;
+    cldnn::layout layout;
 
-    bool is_valid(float threshold = 0.0f) const {
+    bool is_valid(float threshold = 1000.0f) const {
         if (has_nan || has_inf) return false;
         if (threshold > 0.0f && (std::fabs(min_val) > threshold || std::fabs(max_val) > threshold)) return false;
         return true;
@@ -136,13 +137,17 @@ struct DataRangeInfo {
     std::string to_string() const {
         if (has_nan) return "NaN";
         if (has_inf) return "INF";
-        return "[" + std::to_string(min_val) + ", " + std::to_string(max_val) + "]";
+        if (min_val > max_val) return "{" + layout.to_short_string() + ", [unsupported dtype]}";
+        if (min_val == max_val) return "{" + layout.to_short_string() + ", [" + std::to_string(min_val) + "]}";
+        return "{" + layout.to_short_string() + ", [" + std::to_string(min_val) + ", " + std::to_string(max_val) + "]}";
     }
 };
 
 template <class T>
 DataRangeInfo __get_data_range(memory::ptr mem, stream& stream, const layout& data_layout) {
     DataRangeInfo result;
+    result.layout = data_layout;
+
     if (!mem) return result;
     auto actual_mem = mem->get_engine()->reinterpret_buffer(*mem, data_layout);
     auto&& size = actual_mem->get_layout().get_tensor();
@@ -187,12 +192,17 @@ DataRangeInfo __get_data_range(memory::ptr mem, stream& stream, const layout& da
 
 DataRangeInfo get_data_range(memory::ptr mem, stream& stream, const layout& data_layout) {
     DataRangeInfo result;
+    result.layout = data_layout;
     if (!mem) return result;
     auto data_type = data_layout.data_type;
     if (data_type == cldnn::data_types::f32)
         return __get_data_range<float>(mem, stream, data_layout);
     else if (data_type == cldnn::data_types::f16)
         return __get_data_range<ov::float16>(mem, stream, data_layout);
+    else if (data_type == cldnn::data_types::i32)
+        return __get_data_range<int32_t>(mem, stream, data_layout);
+    else if (data_type == cldnn::data_types::i64)
+        return __get_data_range<int64_t>(mem, stream, data_layout);
     else if (data_type == cldnn::data_types::i8)
         return __get_data_range<int8_t>(mem, stream, data_layout);
     else if (data_type == cldnn::data_types::u8)
