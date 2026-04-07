@@ -126,6 +126,18 @@ struct DataRangeInfo {
     float max_val = std::numeric_limits<float>::lowest();
     bool has_nan = false;
     bool has_inf = false;
+
+    bool is_valid(float threshold = 0.0f) const {
+        if (has_nan || has_inf) return false;
+        if (threshold > 0.0f && (std::fabs(min_val) > threshold || std::fabs(max_val) > threshold)) return false;
+        return true;
+    }
+
+    std::string to_string() const {
+        if (has_nan) return "NaN";
+        if (has_inf) return "INF";
+        return "[" + std::to_string(min_val) + ", " + std::to_string(max_val) + "]";
+    }
 };
 
 template <class T>
@@ -573,38 +585,24 @@ NodeDebugHelper::NodeDebugHelper(const primitive_inst& inst)
 NodeDebugHelper::~NodeDebugHelper() {
     const auto& config = m_network.get_config();
 
-    if (config.get_validate_output_buffer() && !m_network.is_internal() && (m_network.get_id() == 4)) {
+    if (config.get_validate_output_buffer() && !m_network.is_internal()) {
         m_stream.finish(); // Wait for stream completion before checking output buffers
         for (size_t i = 0; i < m_inst.outputs_memory_count(); i++) {
             auto output_mem = m_inst.output_memory_ptr(i);
-            std::string info = m_inst.id() + "(" + std::to_string(i) + ") at iteration " + std::to_string(m_network.get_current_iteration_num())
-                    + " net_id " + std::to_string(m_network.get_id());
-            bool valid = validate_data_range(output_mem, m_stream, m_inst.get_output_layout(i), info);
-            if (!valid || m_inst.id().find("Result_") != std::string::npos) {
-                // Print input buffer data range
-                {
-                    auto out_range = get_data_range(output_mem, m_stream, m_inst.get_output_layout(i));
-                    std::string err_type = out_range.has_nan ? "NaN"
-                    : ( out_range.has_inf ? "INF" : "[" + std::to_string(out_range.min_val) + ", " + std::to_string(out_range.max_val) + "]" );
-                    std::stringstream ss;
-                    ss << "Found " << err_type << " " << m_inst.id()
-                                    << " = input(" << m_inst.dependencies().size() << "), m_net_id " << m_network.get_id()
-                                    << ", m_iter " << m_network.get_current_iteration_num() << std::endl;
-                    for (size_t j = 0; j < m_inst.dependencies().size(); ++j) {
-                        auto dep = m_inst.dependencies().at(j);
-                        auto input_mem = m_inst.dep_memory_ptr(j);
-                        auto input_layout = dep.first->get_output_layout(dep.second);
-                        auto range = get_data_range(input_mem, m_stream, input_layout);
-                        if (range.has_nan)
-                            ss << "* IN[" << j << "]: " << dep.first->id() << " [NaN]" << std::endl;
-                        else if (range.has_inf)
-                            ss << "* IN[" << j << "]: " << dep.first->id() << " [INF]" << std::endl;
-                        else
-                            ss << "* IN[" << j << "]: " << dep.first->id()
-                                            << ": [" << range.min_val << ", " << range.max_val << "]" << std::endl;
-                    }
-                    GPU_DEBUG_COUT << ss.str();
+            auto out_range = get_data_range(output_mem, m_stream, m_inst.get_output_layout(i));
+            if ((!out_range.is_valid() && m_network.get_id() == 1) || m_inst.id().find("Result_") != std::string::npos) {
+                std::stringstream ss;
+                ss << "Found " << out_range.to_string() << " " << m_inst.id()
+                                << " = input(" << m_inst.dependencies().size() << "), m_net_id " << m_network.get_id()
+                                << ", m_iter " << m_network.get_current_iteration_num() << std::endl;
+                for (size_t j = 0; j < m_inst.dependencies().size(); ++j) {
+                    auto dep = m_inst.dependencies().at(j);
+                    auto input_mem = m_inst.dep_memory_ptr(j);
+                    auto input_layout = dep.first->get_output_layout(dep.second);
+                    auto range = get_data_range(input_mem, m_stream, input_layout);
+                    ss << "* IN[" << j << "]: " << dep.first->id() << " " << range.to_string() << std::endl;
                 }
+                GPU_DEBUG_COUT << ss.str();
             }
         }
     }
