@@ -597,9 +597,42 @@ NodeDebugHelper::~NodeDebugHelper() {
 
     if (config.get_validate_output_buffer() && !m_network.is_internal()) {
         m_stream.finish(); // Wait for stream completion before checking output buffers
+        const size_t target_net_id = 1;
         for (size_t i = 0; i < m_inst.outputs_memory_count(); i++) {
             auto output_mem = m_inst.output_memory_ptr(i);
             auto out_range = get_data_range(output_mem, m_stream, m_inst.get_output_layout(i));
+#if 1
+            if (m_network.get_id() == target_net_id) {
+                if (!out_range.is_valid()) {
+                    std::stringstream ss;
+                    ss << "Found " << out_range.to_string() << " " << m_inst.id()
+                                    << " = input(" << m_inst.dependencies().size() << "), m_net_id " << m_network.get_id()
+                                    << ", m_iter " << m_network.get_current_iteration_num() << std::endl;
+                    for (size_t j = 0; j < m_inst.dependencies().size(); ++j) {
+                        auto dep = m_inst.dependencies().at(j);
+                        auto input_mem = m_inst.dep_memory_ptr(j);
+                        auto input_layout = dep.first->get_output_layout(dep.second);
+                        auto range = get_data_range(input_mem, m_stream, input_layout);
+                        ss << "* IN[" << j << "]: " << dep.first->id() << " " << range.to_string() << std::endl;
+                    }
+                    GPU_DEBUG_COUT << ss.str();
+                } else {
+                    std::stringstream ss;
+                    ss << out_range.to_string() << " " << m_inst.id()
+                                    << " = input(" << m_inst.dependencies().size() << "), m_net_id " << m_network.get_id()
+                                    << ", m_iter " << m_network.get_current_iteration_num() << std::endl;
+                    GPU_DEBUG_COUT << ss.str();
+                }
+            } else {
+                if ( m_inst.id().find("Result_") != std::string::npos) {
+                    std::stringstream ss;
+                    ss << out_range.to_string() << " " << m_inst.id()
+                                    << " = input(" << m_inst.dependencies().size() << "), m_net_id " << m_network.get_id()
+                                    << ", m_iter " << m_network.get_current_iteration_num() << std::endl;
+                    GPU_DEBUG_COUT << ss.str();
+                }
+            }
+#else // remain original behavior for debugging
             if ((!out_range.is_valid() && m_network.get_id() == 1) || m_inst.id().find("Result_") != std::string::npos) {
                 std::stringstream ss;
                 ss << "Found " << out_range.to_string() << " " << m_inst.id()
@@ -614,6 +647,7 @@ NodeDebugHelper::~NodeDebugHelper() {
                 }
                 GPU_DEBUG_COUT << ss.str();
             }
+#endif
         }
     }
 
