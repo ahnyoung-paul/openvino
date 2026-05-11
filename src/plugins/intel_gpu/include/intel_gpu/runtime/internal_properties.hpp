@@ -230,6 +230,8 @@ static constexpr Property<bool, ov::PropertyMutability::RW> print_input_data_sha
 static constexpr Property<bool, ov::PropertyMutability::RW> pa_integrity_check{"GPU_PA_INTEGRITY_CHECK"};
 static constexpr Property<std::vector<int>, ov::PropertyMutability::RW> micro_sdpa_workgroup_config{"GPU_MICRO_SDPA_WORKGROUP_CONFIG"};
 static constexpr Property<std::string, ov::PropertyMutability::RW> pa_mixed_route_mode{"GPU_PA_MIXED_ROUTE_MODE"};
+static constexpr Property<std::vector<std::string>, ov::PropertyMutability::RW> force_fp32_layer_types{"GPU_FORCE_FP32_LAYER_TYPES"};
+static constexpr Property<std::vector<std::string>, ov::PropertyMutability::RW> force_fp32_layer_names{"GPU_FORCE_FP32_LAYER_NAMES"};
 }  // namespace ov::intel_gpu
 
 namespace cldnn {
