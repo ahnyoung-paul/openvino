@@ -531,6 +531,7 @@ NodeDebugHelper::~NodeDebugHelper() {
 
     if (config.get_validate_output_buffer()
             && is_target_network(m_network.get_id(), config.get_dump_net_ids())
+            && is_target_iteration(m_iter, config.get_dump_iterations())
             && !m_network.is_internal()) {
         m_stream.finish(); // Wait for stream completion before checking output buffers
         for (size_t i = 0; i < m_inst.outputs_memory_count(); i++) {
