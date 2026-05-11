@@ -59,6 +59,9 @@ void __validate_data_range(memory::ptr mem, stream& stream, const layout& data_l
     std::stringstream buffer;
     float val_min = std::numeric_limits<float>::max();
     float val_max = std::numeric_limits<float>::lowest();
+    double sum = 0.0;
+    double sum_sq = 0.0;
+    size_t count = 0;
     const bool is_memory_packed = !actual_mem->is_memory_reset_needed(actual_mem->get_layout());
 
     if (is_memory_packed) {
@@ -73,7 +76,10 @@ void __validate_data_range(memory::ptr mem, stream& stream, const layout& data_l
                 val_max = val;
             if (val < val_min)
                 val_min = val;
+            sum += val;
+            sum_sq += static_cast<double>(val) * val;
         }
+        count = actual_mem->count();
     } else {
         for (ov::Dimension::value_type g = 0; g < size.group[0]; ++g) {
             for (ov::Dimension::value_type b = 0; b < size.batch[0]; ++b) {
@@ -95,6 +101,9 @@ void __validate_data_range(memory::ptr mem, stream& stream, const layout& data_l
                                         val_max = val;
                                     if (val < val_min)
                                         val_min = val;
+                                    sum += val;
+                                    sum_sq += static_cast<double>(val) * val;
+                                    count++;
                                 }
                             }
                         }
@@ -103,7 +112,11 @@ void __validate_data_range(memory::ptr mem, stream& stream, const layout& data_l
             }
         }
     }
-    GPU_DEBUG_INFO << "min, max = " << val_min << ", " << val_max << "  : " << info << "  is_packed " << is_memory_packed << std::endl;
+    double mean = (count > 0) ? sum / count : 0.0;
+    double rms = (count > 0) ? std::sqrt(sum_sq / count) : 0.0;
+    GPU_DEBUG_INFO << "min, max, mean, rms = " << val_min << ", " << val_max
+                  << ", " << mean << ", " << rms
+                  << "  : " << info << " (n=" << count << ")" << std::endl;
 }
 
 void validate_data_range(memory::ptr mem, stream& stream, const layout& data_layout, std::string &info) {
@@ -505,7 +518,9 @@ NodeDebugHelper::NodeDebugHelper(const primitive_inst& inst)
 NodeDebugHelper::~NodeDebugHelper() {
     const auto& config = m_network.get_config();
 
-    if (config.get_validate_output_buffer() && !m_network.is_internal()) {
+    if (config.get_validate_output_buffer()
+        && !m_network.is_internal()
+        && is_target_iteration(m_iter, config.get_dump_iterations())) {
         m_stream.finish(); // Wait for stream completion before checking output buffers
         for (size_t i = 0; i < m_inst.outputs_memory_count(); i++) {
             auto output_mem = m_inst.output_memory_ptr(i);

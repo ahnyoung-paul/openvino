@@ -111,6 +111,7 @@
 #include "plugin/transformations/swiglu_fusion_with_clamp.hpp"
 #include "plugin/transformations/disable_fp16_comp_sin_gen.hpp"
 #include "plugin/transformations/increase_rms_input_precision.hpp"
+#include "plugin/transformations/force_fp32_selective.hpp"
 #include "transformations/common_optimizations/activations_scaling.hpp"
 #include "transformations/common_optimizations/broadcast_elementwise_fusion.hpp"
 #include "transformations/common_optimizations/broadcast_transition.hpp"
@@ -1681,5 +1682,46 @@ void TransformationsPipeline::apply(std::shared_ptr<ov::Model> func) {
         manager.register_pass<ov::pass::Validate>();
         manager.run_passes(func);
     }
+#ifdef GPU_DEBUG_CONFIG
+    // === Selective FP32 forcing (debug feature) ===
+    // This must be executed at the very end, after all other transformations
+    {
+        auto forced_types_str = config.get_force_fp32_layer_types();
+        auto forced_names_str = config.get_force_fp32_layer_names();
+
+        if (!forced_types_str.empty() || !forced_names_str.empty()) {
+            // Parse comma-separated layer types
+            auto parse_csv = [](const std::string& csv) {
+                std::vector<std::string> result;
+                std::stringstream ss(csv);
+                std::string token;
+                while (std::getline(ss, token, ',')) {
+                    token.erase(0, token.find_first_not_of(" \t"));
+                    token.erase(token.find_last_not_of(" \t") + 1);
+                    if (!token.empty()) {
+                        result.push_back(token);
+                    }
+                }
+                return result;
+            };
+
+            std::vector<std::string> forced_types = parse_csv(forced_types_str);
+            std::vector<std::string> forced_names = parse_csv(forced_names_str);
+
+            GPU_DEBUG_IF(config.get_verbose() >= 1) {
+                if (!forced_types_str.empty())
+                    GPU_DEBUG_INFO << "[GPU] Forcing FP32 for layer types: " << forced_types_str << std::endl;
+                if (!forced_names_str.empty())
+                    GPU_DEBUG_INFO << "[GPU] Forcing FP32 for layer names: " << forced_names_str << std::endl;
+            }
+
+            // Run selective FP32 forcing pass
+            ov::pass::Manager fp32_manager;
+            fp32_manager.register_pass<ov::intel_gpu::ForceFP32Selective>(forced_types, forced_names);
+            fp32_manager.register_pass<ov::pass::Validate>();
+            fp32_manager.run_passes(func);
+        }
+    }
+#endif
 }
 }  // namespace ov::intel_gpu
