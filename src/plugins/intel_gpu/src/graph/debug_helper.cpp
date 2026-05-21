@@ -528,7 +528,6 @@ NodeDebugHelper::NodeDebugHelper(const primitive_inst& inst)
 
 NodeDebugHelper::~NodeDebugHelper() {
     const auto& config = m_network.get_config();
-
     if (config.get_validate_output_buffer()
             && is_target_network(m_network.get_id(), config.get_dump_net_ids())
             && is_target_iteration(m_iter, config.get_dump_iterations())
