@@ -309,6 +309,19 @@ std::string get_file_path_for_binary_dump(cldnn::layout layout, const std::strin
     return filename;
 }
 
+bool is_target_network(int64_t net_id, const std::set<int64_t> dump_net_ids) {
+    if (net_id < 0)
+        return true;
+
+    if (dump_net_ids.empty())
+        return true;
+
+    if (dump_net_ids.find(net_id) == std::end(dump_net_ids))
+        return false;
+
+    return true;
+}
+
 bool is_target_iteration(int64_t iteration, const std::set<int64_t> dump_iteration) {
     if (iteration < 0)
         return true;
@@ -475,7 +488,8 @@ NodeDebugHelper::NodeDebugHelper(const primitive_inst& inst)
     if (config.get_dump_tensors_path().length() > 0) {
         const std::string& layer_name = inst.id();
 
-        if (is_target_iteration(m_iter, config.get_dump_iterations()) &&
+        if (is_target_network(m_network.get_id(), config.get_dump_net_ids()) &&
+            is_target_iteration(m_iter, config.get_dump_iterations()) &&
             config.get_dump_tensors() != ov::intel_gpu::DumpTensors::out && is_layer_for_dumping(config, layer_name)) {
             m_stream.finish(); // Wait for stream completion before dumping input buffers
             std::string debug_str_for_bin_load = " Command for loading : OV_LOAD_DUMP_RAW_BINARY=\"" + layer_name + ":";
@@ -521,11 +535,14 @@ NodeDebugHelper::NodeDebugHelper(const primitive_inst& inst)
 NodeDebugHelper::~NodeDebugHelper() {
     const auto& config = m_network.get_config();
 
-    if (config.get_validate_output_buffer() && !m_network.is_internal()) {
+    if (config.get_validate_output_buffer()
+            && is_target_network(m_network.get_id(), config.get_dump_net_ids())
+            && !m_network.is_internal()) {
         m_stream.finish(); // Wait for stream completion before checking output buffers
         for (size_t i = 0; i < m_inst.outputs_memory_count(); i++) {
             auto output_mem = m_inst.output_memory_ptr(i);
-            std::string info = m_inst.id() + "(" + std::to_string(i) + ") at iteration " + std::to_string(m_network.get_current_iteration_num());
+            std::string info = m_inst.id() + "(" + std::to_string(i) + ") at iteration " + std::to_string(m_network.get_current_iteration_num())
+                                + " in net " + std::to_string(m_network.get_id());
             validate_data_range(output_mem, m_stream, m_inst.get_output_layout(i), info);
         }
 
@@ -538,7 +555,8 @@ NodeDebugHelper::~NodeDebugHelper() {
                 auto dep = m_inst.dependencies().at(0);
                 auto input_layout = dep.first->get_output_layout(dep.second);
                 if (input_layout.data_type == cldnn::data_types::f16) {
-                    std::string input_info = m_inst.id() + " (sincos_input) at iteration " + std::to_string(m_network.get_current_iteration_num());
+                    std::string input_info = m_inst.id() + " (sincos_input) at iteration " + std::to_string(m_network.get_current_iteration_num())
+                                                + " in net " + std::to_string(m_network.get_id());
                     auto [val_min, val_max] = validate_data_range(input_mem, m_stream, input_layout, input_info);
                     float abs_max = std::max(std::abs(val_min), std::abs(val_max));
                     constexpr float threshold = 1024.0f;
@@ -557,7 +575,8 @@ NodeDebugHelper::~NodeDebugHelper() {
     if (config.get_dump_tensors_path().length() > 0) {
         const std::string layer_name = m_inst.id();
 
-        if (is_target_iteration(m_iter, config.get_dump_iterations()) &&
+        if (is_target_network(m_network.get_id(), config.get_dump_net_ids()) &&
+            is_target_iteration(m_iter, config.get_dump_iterations()) &&
             config.get_dump_tensors() != ov::intel_gpu::DumpTensors::in &&
             is_layer_for_dumping(config, layer_name)) {
             m_stream.finish(); // Wait for stream completion before dumping output buffers
@@ -729,7 +748,9 @@ NetworkDebugHelper::~NetworkDebugHelper() {
                        << data_shape_str.str() << std::endl;
     }
 
-    if (!config.get_dump_graphs_path().empty() && is_target_iteration(m_iter, config.get_dump_iterations())) {
+    if (!config.get_dump_graphs_path().empty() && 
+        is_target_network(m_network.get_id(), config.get_dump_net_ids()) &&
+        is_target_iteration(m_iter, config.get_dump_iterations())) {
         auto get_fixed_str = [](int64_t value, int length = 2) -> std::string {
             std::ostringstream ss;
             ss << std::setw(length) << std::setfill('0') << std::to_string(value);
