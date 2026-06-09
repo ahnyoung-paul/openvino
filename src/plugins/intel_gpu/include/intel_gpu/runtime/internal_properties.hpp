@@ -1,4 +1,5 @@
 // Copyright (C) 2018-2026 Intel Corporation
+// Copyright (C) 2018-2026 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
 //
 
@@ -157,6 +158,7 @@ static constexpr Property<std::string, ov::PropertyMutability::RW> dump_memory_p
 static constexpr Property<size_t, ov::PropertyMutability::RW> dump_memory_pool{"GPU_DUMP_MEMORY_POOL"};
 static constexpr Property<int32_t, ov::PropertyMutability::RW> dump_batch_limit{"GPU_DUMP_BATCH_LIMIT"};
 static constexpr Property<std::set<int64_t>, ov::PropertyMutability::RW> dump_iterations{"GPU_DUMP_ITERATIONS"};
+static constexpr Property<std::set<int64_t>, ov::PropertyMutability::RW> dump_net_ids{"GPU_DUMP_NET_IDS"};
 static constexpr Property<size_t, ov::PropertyMutability::RW> host_time_profiling{"GPU_HOST_TIME_PROFILING"};
 static constexpr Property<size_t, ov::PropertyMutability::RW> impls_cache_capacity{"GPU_IMPLS_CACHE_CAPACITY"};
 static constexpr Property<bool, ov::PropertyMutability::RW> disable_async_compilation{"GPU_DISABLE_ASYNC_COMPILATION"};
