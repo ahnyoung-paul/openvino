@@ -536,7 +536,7 @@ NodeDebugHelper::~NodeDebugHelper() {
         for (size_t i = 0; i < m_inst.outputs_memory_count(); i++) {
             auto output_mem = m_inst.output_memory_ptr(i);
             std::string info = m_inst.id() + "(" + std::to_string(i) + ") at iteration " + std::to_string(m_network.get_current_iteration_num())
-                                + " in net " + std::to_string(m_network.get_id());
+                                + " in net " + std::to_string(m_network.get_id()) + " shape " + m_inst.get_output_layout(i).to_short_string();
             validate_data_range(output_mem, m_stream, m_inst.get_output_layout(i), info);
         }
 
@@ -550,7 +550,7 @@ NodeDebugHelper::~NodeDebugHelper() {
                 auto input_layout = dep.first->get_output_layout(dep.second);
                 if (input_layout.data_type == cldnn::data_types::f16) {
                     std::string input_info = m_inst.id() + " (sincos_input) at iteration " + std::to_string(m_network.get_current_iteration_num())
-                                                + " in net " + std::to_string(m_network.get_id());
+                                                + " in net " + std::to_string(m_network.get_id()) + " shape " + input_layout.to_short_string();
                     auto [val_min, val_max] = validate_data_range(input_mem, m_stream, input_layout, input_info);
                     float abs_max = std::max(std::abs(val_min), std::abs(val_max));
                     constexpr float threshold = 1024.0f;
