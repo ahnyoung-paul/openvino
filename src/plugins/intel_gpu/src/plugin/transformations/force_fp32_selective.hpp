@@ -4,12 +4,12 @@
 
 #pragma once
 
+#include "openvino/pass/pass.hpp"
+#ifdef GPU_DEBUG_CONFIG
+
 #include <memory>
 #include <string>
 #include <vector>
-
-#include "openvino/pass/pass.hpp"
-#ifdef GPU_DEBUG_CONFIG
 
 namespace ov {
 namespace intel_gpu {
