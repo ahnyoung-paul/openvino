@@ -68,11 +68,11 @@ std::unordered_set<ov::Node*> collect_seeds(
         if (!type_match || !name_match)
             continue;
 
-        // Skip already-f32, Placeholder, and Result/Parameter boundary ops
+        // Skip non-floating types, Constants, Placeholder, and Result/Parameter boundary ops
         const auto et = node->get_output_element_type(0);
-        if (et == ov::element::f32)
+        if (et != ov::element::f16 && et != ov::element::f32)
             continue;
-        if (et != ov::element::f16)
+        if (ov::is_type<ov::op::v0::Constant>(node))
             continue;
         if (node_name.find("Placeholder") != std::string::npos)
             continue;
@@ -238,7 +238,21 @@ void restore_outputs(const std::shared_ptr<ov::Model>& model,
             std::vector<ov::Input<ov::Node>> outside_consumers;
             for (const auto& target_input : output.get_target_inputs()) {
                 if (!f32_region.count(target_input.get_node())) {
-                    outside_consumers.push_back(target_input);
+                    // Skip restore if the consumer already has any f32 input
+                    // (e.g., f32 Constant), to avoid type mismatch
+                    auto* consumer = target_input.get_node();
+                    bool consumer_has_f32_input = false;
+                    for (const auto& other_input : consumer->inputs()) {
+                        if (&other_input == &target_input)
+                            continue;
+                        if (other_input.get_element_type() == ov::element::f32) {
+                            consumer_has_f32_input = true;
+                            break;
+                        }
+                    }
+                    if (!consumer_has_f32_input) {
+                        outside_consumers.push_back(target_input);
+                    }
                 }
             }
             for (auto& target_input : outside_consumers) {
