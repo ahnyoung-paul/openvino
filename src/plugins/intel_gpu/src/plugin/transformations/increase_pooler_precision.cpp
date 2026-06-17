@@ -66,7 +66,7 @@ IncreasePrecisionForVisionPooler::IncreasePrecisionForVisionPooler() {
         // Marking reduce_mean is sufficient — ConvertPrecision propagates f32
         // to connected nodes (pooler MatMul, GatherND, Multiply, Power upstream
         // and Add, Power, Multiply downstream in decomposed RMSNorm).
-        ov::disable_fp16_compression(pattern_map.at(reduce_mean).get_node_shared_ptr());
+        pattern_map.at(reduce_mean).get_node_shared_ptr()->get_rt_info()["disable_fp16_compression"] = true;
 
         return true;
     };

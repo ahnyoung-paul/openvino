@@ -694,8 +694,8 @@ void TransformationsPipeline::apply(std::shared_ptr<ov::Model> func) {
             ov::element::TypeVector{ov::element::i32, ov::element::u32, ov::element::u16}, add_precision_sensitive_convert);
         // Keep xattention threshold in fp32 to avoid boundary issues caused by fp16 quantization.
         manager.register_pass<ov::intel_gpu::KeepXAttentionThresholdPrecision>();
-        // Keep vision pooler subgraph in fp32 to prevent overflow (pooling_weight × vision_features × 33.9375 > fp16 max)
-        manager.register_pass<ov::intel_gpu::IncreasePrecisionForVisionPooler>();
+        // // Keep vision pooler subgraph in fp32 to prevent overflow (pooling_weight × vision_features × 33.9375 > fp16 max)
+        // manager.register_pass<ov::intel_gpu::IncreasePrecisionForVisionPooler>();
 
         manager.register_pass<ov::pass::ConvertPrecision>(fp_convert_precision_map,
                                                           empty_fuse_map,
