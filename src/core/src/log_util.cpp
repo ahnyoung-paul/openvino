@@ -84,7 +84,7 @@ static std::string arguments_str(const OutputVector& input_values, bool verbose)
 }
 
 std::string node_version_type_name_str(const ov::Node& node) {
-    return ov::util::node_version_type_str(node) + " " + node.get_name();
+    return ov::util::node_version_type_str(node) + " " + node.get_name() + " (" + node.get_friendly_name() + ")";
 }
 
 std::string node_version_type_str(const ov::Node& node) {

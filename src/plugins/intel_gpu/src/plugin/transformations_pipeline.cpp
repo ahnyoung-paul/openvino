@@ -693,6 +693,7 @@ void TransformationsPipeline::apply(std::shared_ptr<ov::Model> func) {
             ov::element::TypeVector{ov::element::i32, ov::element::u32, ov::element::u16}, add_precision_sensitive_convert);
         // Keep xattention threshold in fp32 to avoid boundary issues caused by fp16 quantization.
         manager.register_pass<ov::intel_gpu::KeepXAttentionThresholdPrecision>();
+        manager.register_pass<ov::intel_gpu::IncreasePrecisionForVisionPooler>();
 
         manager.register_pass<ov::pass::ConvertPrecision>(fp_convert_precision_map,
                                                           empty_fuse_map,
@@ -1717,10 +1718,6 @@ void TransformationsPipeline::apply(std::shared_ptr<ov::Model> func) {
 
         // This is supposed to be the last pass to ensure that we don't have name collisions until
         // GPU plugin stops using friendly names for program creation
-        // ASF-style scale_down/scale_up for vision pooler overflow prevention.
-        // Registered last so no subsequent pass can fuse/remove the inserted scale nodes.
-        manager.register_pass<ov::intel_gpu::IncreasePrecisionForVisionPooler>();
-
         manager.register_pass<ov::pass::ResolveNameCollisions>(true);
         GPU_DEBUG_IF(config.get_verbose() >= 1) {
             manager.register_pass<ov::intel_gpu::PrintModelStatistics>();

@@ -4,15 +4,14 @@
 
 #pragma once
 
-#include "openvino/pass/pass.hpp"
+#include "openvino/pass/graph_rewrite.hpp"
 
 namespace ov::intel_gpu {
 
-class IncreasePrecisionForVisionPooler : public ov::pass::ModelPass {
+class IncreasePrecisionForVisionPooler : public ov::pass::MatcherPass {
 public:
-    OPENVINO_MODEL_PASS_RTTI("IncreasePrecisionForVisionPooler");
+    OPENVINO_MATCHER_PASS_RTTI("IncreasePrecisionForVisionPooler");
     IncreasePrecisionForVisionPooler();
-    bool run_on_model(const std::shared_ptr<ov::Model>& model) override;
 };
 
 }  // namespace ov::intel_gpu
