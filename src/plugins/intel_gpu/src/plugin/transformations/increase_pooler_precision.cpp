@@ -22,7 +22,11 @@ bool IncreasePrecisionForVisionPooler::run_on_model(const std::shared_ptr<ov::Mo
     const std::string scale_down_target2 = "matmul";
     const std::string scale_up_target = "embedding_pre_projection_norm";
     const std::string scale_up_target2 = "mul";
-    const float scale_factor = 4096.0f;
+    // const float scale_factor = 4096.0f;
+    // const float scale_factor = 256.0f;
+    // const float scale_factor = 16.0f;
+    // const float scale_factor = 8.0f;
+    const float scale_factor = 2.0f;
 
     std::shared_ptr<ov::Node> pooler_matmul = nullptr;
     std::shared_ptr<ov::Node> rms_mul = nullptr;
@@ -49,7 +53,7 @@ bool IncreasePrecisionForVisionPooler::run_on_model(const std::shared_ptr<ov::Mo
         return false;
 
     GPU_DEBUG_COUT << "IncreasePrecisionForVisionPooler: scale_down on " << pooler_matmul->get_friendly_name()
-                   << ", scale_up after " << rms_mul->get_friendly_name() << std::endl;
+                   << ", scale_up after " << rms_mul->get_friendly_name() << ", scale_factor=" << scale_factor << std::endl;
 
     // 1. Insert scale_down (÷4096) on input(1) of pooler MatMul
     auto input1_et = pooler_matmul->input(1).get_element_type();
