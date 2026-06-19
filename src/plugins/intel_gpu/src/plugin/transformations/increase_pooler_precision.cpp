@@ -26,7 +26,7 @@ bool IncreasePrecisionForVisionPooler::run_on_model(const std::shared_ptr<ov::Mo
     // const float scale_factor = 256.0f;
     // const float scale_factor = 16.0f;
     // const float scale_factor = 8.0f;
-    const float scale_factor = 2.0f;
+    const float scale_factor = 4.0f;
 
     std::shared_ptr<ov::Node> pooler_matmul = nullptr;
     std::shared_ptr<ov::Node> rms_mul = nullptr;
