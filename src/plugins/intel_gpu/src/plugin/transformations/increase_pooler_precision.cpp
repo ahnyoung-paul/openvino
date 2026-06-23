@@ -4,6 +4,7 @@
 
 #include "increase_pooler_precision.hpp"
 
+#include <cstdlib>
 #include "intel_gpu/runtime/debug_configuration.hpp"
 #include "openvino/core/rt_info.hpp"
 #include "openvino/op/constant.hpp"
@@ -11,6 +12,8 @@
 #include "openvino/op/multiply.hpp"
 #include "openvino/op/matmul.hpp"
 #include "openvino/pass/pattern/op/wrap_type.hpp"
+#include "openvino/pass/visualize_tree.hpp"
+#include "openvino/util/file_util.hpp"
 #include "transformations/utils/utils.hpp"
 
 namespace ov::intel_gpu {
@@ -18,6 +21,18 @@ namespace ov::intel_gpu {
 IncreasePrecisionForVisionPooler::IncreasePrecisionForVisionPooler() {}
 
 bool IncreasePrecisionForVisionPooler::run_on_model(const std::shared_ptr<ov::Model>& model) {
+    // Dump model graph before transformation if OV_GPU_DUMP_GRAPHS_PATH is set
+    GPU_DEBUG_CODE({
+        const char* dump_path_env = std::getenv("OV_GPU_DUMP_GRAPHS_PATH");
+        if (dump_path_env != nullptr && dump_path_env[0] != '\0') {
+            auto dump_path = ov::util::make_path(dump_path_env);
+            auto path_before = dump_path / (model->get_name() + "_before_increase_pooler_precision.svg");
+            ov::pass::VisualizeTree(path_before).run_on_model(model);
+            GPU_DEBUG_COUT << "IncreasePrecisionForVisionPooler: Dumped model graph before transformation to: "
+                           << path_before << std::endl;
+        }
+    });
+
     const std::string scale_down_target = "vision_tower.pooler";
     const std::string scale_down_target2 = "matmul";
     const std::string scale_up_target = "embedding_pre_projection_norm";
@@ -103,6 +118,18 @@ bool IncreasePrecisionForVisionPooler::run_on_model(const std::shared_ptr<ov::Mo
     // for (auto& input : consumers) {
     //     input.replace_source_output(final_output->output(0));
     // }
+
+    // Dump model graph after transformation if OV_GPU_DUMP_GRAPHS_PATH is set
+    GPU_DEBUG_CODE({
+        const char* dump_path_env = std::getenv("OV_GPU_DUMP_GRAPHS_PATH");
+        if (dump_path_env != nullptr && dump_path_env[0] != '\0') {
+            auto dump_path = ov::util::make_path(dump_path_env);
+            auto path_after = dump_path / (model->get_name() + "_after_increase_pooler_precision.svg");
+            ov::pass::VisualizeTree(path_after).run_on_model(model);
+            GPU_DEBUG_COUT << "IncreasePrecisionForVisionPooler: Dumped model graph after transformation to: "
+                           << path_after << std::endl;
+        }
+    });
 
     return true;
 }
