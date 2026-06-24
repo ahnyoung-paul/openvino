@@ -11,6 +11,8 @@
 #include <unordered_set>
 #include <vector>
 
+#ifdef GPU_DEBUG_CONFIG
+
 #include "openvino/core/node.hpp"
 #include "openvino/core/type/element_type.hpp"
 #include "openvino/op/constant.hpp"
@@ -51,8 +53,7 @@ bool matches_name(const std::vector<std::string>& forced_names, const std::strin
 std::unordered_set<ov::Node*> collect_seeds(
     const std::shared_ptr<ov::Model>& model,
     const std::vector<std::string>& forced_types,
-    const std::vector<std::string>& forced_names,
-    std::vector<std::string>& skipped_types) {
+    const std::vector<std::string>& forced_names) {
     const bool has_types = !forced_types.empty();
     const bool has_names = !forced_names.empty();
     std::unordered_set<ov::Node*> f32_region;
@@ -64,19 +65,14 @@ std::unordered_set<ov::Node*> collect_seeds(
         bool type_match = !has_types || matches_type(forced_types, node_type);
         bool name_match = !has_names || matches_name(forced_names, node_name);
 
-        if (!type_match &&
-            std::find(skipped_types.begin(), skipped_types.end(), node_type) == skipped_types.end()) {
-            skipped_types.push_back(node_type);
-        }
-
         if (!type_match || !name_match)
             continue;
 
-        // Skip already-f32, Placeholder, and Result/Parameter boundary ops
+        // Skip non-floating types, Constants, Placeholder, and Result/Parameter boundary ops
         const auto et = node->get_output_element_type(0);
-        if (et == ov::element::f32)
+        if (et != ov::element::f16 && et != ov::element::f32)
             continue;
-        if (et != ov::element::f16)
+        if (ov::is_type<ov::op::v0::Constant>(node))
             continue;
         if (node_name.find("Placeholder") != std::string::npos)
             continue;
@@ -242,7 +238,21 @@ void restore_outputs(const std::shared_ptr<ov::Model>& model,
             std::vector<ov::Input<ov::Node>> outside_consumers;
             for (const auto& target_input : output.get_target_inputs()) {
                 if (!f32_region.count(target_input.get_node())) {
-                    outside_consumers.push_back(target_input);
+                    // Skip restore if the consumer already has any f32 input
+                    // (e.g., f32 Constant), to avoid type mismatch
+                    auto* consumer = target_input.get_node();
+                    bool consumer_has_f32_input = false;
+                    for (const auto& other_input : consumer->inputs()) {
+                        if (&other_input == &target_input)
+                            continue;
+                        if (other_input.get_element_type() == ov::element::f32) {
+                            consumer_has_f32_input = true;
+                            break;
+                        }
+                    }
+                    if (!consumer_has_f32_input) {
+                        outside_consumers.push_back(target_input);
+                    }
                 }
             }
             for (auto& target_input : outside_consumers) {
@@ -271,8 +281,7 @@ bool ForceFP32Selective::run_on_model(const std::shared_ptr<ov::Model>& model) {
 
 
     // Phase 1: Seed Collection
-    std::vector<std::string> skipped_types;
-    auto f32_region = collect_seeds(model, m_forced_types, m_forced_names, skipped_types);
+    auto f32_region = collect_seeds(model, m_forced_types, m_forced_names);
 
     // Phase 2: Region Expansion
     expand_region(model, f32_region);
@@ -286,15 +295,10 @@ bool ForceFP32Selective::run_on_model(const std::shared_ptr<ov::Model>& model) {
     GPU_DEBUG_LOG << "[ForceFP32Selective] Done. Region=" << f32_region.size()
                   << "  Forced=" << forced_count << std::endl;
 
-    if (!skipped_types.empty()) {
-        std::stringstream ss;
-        ss << "[ForceFP32Selective] Skipped types: ";
-        for (const auto& t : skipped_types) ss << t << ",";
-        GPU_DEBUG_LOG << ss.str() << std::endl;
-    }
-
     return changed;
 }
 
 }  // namespace intel_gpu
 }  // namespace ov
+
+#endif // GPU_DEBUG_CONFIG
