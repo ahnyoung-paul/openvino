@@ -33,34 +33,87 @@ bool IncreasePrecisionForVisionPooler::run_on_model(const std::shared_ptr<ov::Mo
         }
     });
 
-    const std::string scale_down_target = "vision_tower.pooler";
-    const std::string scale_down_target2 = "matmul";
-    const std::string scale_up_target = "embedding_pre_projection_norm";
-    const std::string scale_up_target2 = "mul";
-    // const float scale_factor = 4096.0f;
-    // const float scale_factor = 256.0f;
-    // const float scale_factor = 16.0f;
-    // const float scale_factor = 8.0f;
     const float scale_factor = 4.0f;
 
     std::shared_ptr<ov::Node> pooler_matmul = nullptr;
     std::shared_ptr<ov::Node> rms_mul = nullptr;
 
+    // Pattern-based matching for Vision Pooler MatMul
+    // Pattern: MatMul → Multiply (with constant ~33.9375) → GatherND
     for (const auto& node : model->get_ordered_ops()) {
-        const auto& name = node->get_friendly_name();
+        if (!pooler_matmul && ov::is_type<ov::op::v0::MatMul>(node)) {
+            // Check if this MatMul has the expected output pattern
+            auto matmul_output = node->output(0);
+            bool has_expected_pattern = false;
 
-        if (!pooler_matmul &&
-            name.find(scale_down_target) != std::string::npos &&
-            name.find(scale_down_target2) != std::string::npos &&
-            ov::is_type<ov::op::v0::MatMul>(node)) {
-            pooler_matmul = node;
+            for (auto& target_input : matmul_output.get_target_inputs()) {
+                auto consumer = target_input.get_node()->shared_from_this();
+
+                // Check for Multiply consumer
+                if (auto multiply = ov::as_type_ptr<ov::op::v1::Multiply>(consumer)) {
+                    // Check if Multiply has a constant input with value ~33.9375 (tolerance for FP16)
+                    for (size_t i = 0; i < multiply->get_input_size(); ++i) {
+                        if (auto constant = ov::as_type_ptr<ov::op::v0::Constant>(
+                                multiply->get_input_node_shared_ptr(i))) {
+                            auto values = constant->cast_vector<float>();
+                            if (!values.empty() && values[0] > 30.0f && values[0] < 40.0f) {
+                                // Check if this Multiply feeds into GatherND
+                                for (auto& mul_target : multiply->output(0).get_target_inputs()) {
+                                    auto mul_consumer = mul_target.get_node()->shared_from_this();
+                                    if (mul_consumer->get_type_info().name == std::string("GatherND")) {
+                                        has_expected_pattern = true;
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                        if (has_expected_pattern) break;
+                    }
+                }
+                if (has_expected_pattern) break;
+            }
+
+            if (has_expected_pattern) {
+                pooler_matmul = node;
+            }
         }
 
-        if (!rms_mul &&
-            name.find(scale_up_target) != std::string::npos &&
-            name.find(scale_up_target2) != std::string::npos &&
-            ov::is_type<ov::op::v1::Multiply>(node)) {
-            rms_mul = node;
+        // Pattern-based matching for RMS Norm end
+        // Pattern: Multiply (RMS norm) → Convert (f32→f16) → FullyConnectedCompressed → Result
+        if (!rms_mul && ov::is_type<ov::op::v1::Multiply>(node)) {
+            auto multiply_output = node->output(0);
+            bool has_rms_norm_pattern = false;
+
+            for (auto& target_input : multiply_output.get_target_inputs()) {
+                auto consumer = target_input.get_node()->shared_from_this();
+
+                // Check for Convert (f32 → f16)
+                if (auto convert = ov::as_type_ptr<ov::op::v0::Convert>(consumer)) {
+                    if (convert->get_input_element_type(0) == ov::element::f32 &&
+                        convert->get_output_element_type(0) == ov::element::f16) {
+
+                        // Check if Convert feeds into FullyConnectedCompressed
+                        for (auto& conv_target : convert->output(0).get_target_inputs()) {
+                            auto fc_consumer = conv_target.get_node()->shared_from_this();
+                            if (fc_consumer->get_type_info().name == std::string("FullyConnectedCompressed")) {
+                                // Check if FullyConnectedCompressed feeds into Result
+                                for (auto& fc_target : fc_consumer->output(0).get_target_inputs()) {
+                                    if (ov::is_type<ov::op::v0::Result>(fc_target.get_node()->shared_from_this())) {
+                                        has_rms_norm_pattern = true;
+                                        break;
+                                    }
+                                }
+                            }
+                            if (has_rms_norm_pattern) break;
+                        }
+                    }
+                }
+                if (has_rms_norm_pattern) break;
+            }
+
+            if (has_rms_norm_pattern) {
+                rms_mul = node;
+            }
         }
     }
 
