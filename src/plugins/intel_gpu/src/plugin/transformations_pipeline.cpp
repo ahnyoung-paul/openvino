@@ -116,6 +116,7 @@
 #include "plugin/transformations/swiglu_fusion_with_clamp.hpp"
 #include "plugin/transformations/disable_fp16_comp_cumsum_sin_gen.hpp"
 #include "plugin/transformations/disable_fp16_comp_sin_gen.hpp"
+#include "plugin/transformations/increase_pooler_precision.hpp"
 #include "plugin/transformations/increase_rms_input_precision.hpp"
 #include "plugin/transformations/force_fp32_selective.hpp"
 #include "transformations/common_optimizations/activations_scaling.hpp"
@@ -1717,6 +1718,10 @@ void TransformationsPipeline::apply(std::shared_ptr<ov::Model> func) {
 
         // This is supposed to be the last pass to ensure that we don't have name collisions until
         // GPU plugin stops using friendly names for program creation
+        // ASF-style scale_down/scale_up for vision pooler overflow prevention.
+        // Registered last so no subsequent pass can fuse/remove the inserted scale nodes.
+        manager.register_pass<ov::intel_gpu::IncreasePrecisionForVisionPooler>();
+
         manager.register_pass<ov::pass::ResolveNameCollisions>(true);
         GPU_DEBUG_IF(config.get_verbose() >= 1) {
             manager.register_pass<ov::intel_gpu::PrintModelStatistics>();
