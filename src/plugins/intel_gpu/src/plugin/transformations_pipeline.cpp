@@ -1715,16 +1715,16 @@ void TransformationsPipeline::apply(std::shared_ptr<ov::Model> func) {
         manager.register_pass<ov::pass::EliminatePad>();
 
         manager.register_pass<ov::pass::ConstantsReduce>();
-        {
-            auto dynamic_quantization_group_size = config.get_dynamic_quantization_group_size();
-            if (dynamic_quantization_group_size == 0) {
-                // This is supposed to be the last pass to ensure that we don't have name collisions until
-                // GPU plugin stops using friendly names for program creation
-                // ASF-style scale_down/scale_up for vision pooler overflow prevention.
-                // Registered last so no subsequent pass can fuse/remove the inserted scale nodes.
-                manager.register_pass<ov::intel_gpu::IncreasePrecisionForVisionPooler>();
-            }
-        }
+        // {
+        //     auto dynamic_quantization_group_size = config.get_dynamic_quantization_group_size();
+        //     if (dynamic_quantization_group_size == 0) {
+        //         // This is supposed to be the last pass to ensure that we don't have name collisions until
+        //         // GPU plugin stops using friendly names for program creation
+        //         // ASF-style scale_down/scale_up for vision pooler overflow prevention.
+        //         // Registered last so no subsequent pass can fuse/remove the inserted scale nodes.
+        //         manager.register_pass<ov::intel_gpu::IncreasePrecisionForVisionPooler>();
+        //     }
+        // }
 
         manager.register_pass<ov::pass::ResolveNameCollisions>(true);
         GPU_DEBUG_IF(config.get_verbose() >= 1) {
