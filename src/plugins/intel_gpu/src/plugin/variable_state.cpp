@@ -12,8 +12,36 @@
 #include "intel_gpu/runtime/layout.hpp"
 #include "intel_gpu/runtime/debug_configuration.hpp"
 #include <memory>
+#include <chrono>
+#include <cstdlib>
+#include <iostream>
 
 namespace ov::intel_gpu {
+
+// [LORA-DIAG] Accumulators to split VariableState::set_state cost into
+// buffer (re)allocation vs host->device convert_and_copy. Enabled via env
+// OV_LORA_DIAG=1. Reported by AdapterController through stderr on the genai side;
+// here we just accumulate and dump periodically.
+namespace {
+struct SetStateDiag {
+    // per-window accumulators (window = one reported line)
+    double update_buffer_us = 0.0;   // sum of update_device_buffer() time
+    double convert_copy_us = 0.0;    // sum of convert_and_copy() time
+    size_t copy_count = 0;           // number of convert_and_copy() calls in window
+    size_t copy_bytes = 0;           // total bytes copied H2D in window
+    double copy_min_us = 0.0;        // fastest single copy in window
+    double copy_max_us = 0.0;        // slowest single copy in window
+    size_t calls = 0;                // total set_state calls (monotonic)
+    bool enabled = []{
+        const char* e = std::getenv("OV_LORA_DIAG");
+        return e && e[0] == '1';
+    }();
+};
+SetStateDiag& set_state_diag() {
+    static SetStateDiag d;
+    return d;
+}
+}  // namespace
 
 VariableState::VariableState(const VariableStateInfo& info, RemoteContextImpl::Ptr context, std::shared_ptr<cldnn::ShapePredictor> shape_predictor)
     : VariableStateBase{info.m_id, context}
@@ -76,7 +104,15 @@ void VariableState::set_state(const ov::SoPtr<ov::ITensor>& state) {
         src_stride[i] /= state->get_element_type().bitwidth() / 8;
     }
     m_layout.set_partial_shape(src_shape);
+
+    auto& diag = set_state_diag();
+    auto t_alloc0 = std::chrono::steady_clock::now();
     update_device_buffer();
+    auto t_alloc1 = std::chrono::steady_clock::now();
+    if (diag.enabled) {
+        diag.update_buffer_us +=
+            std::chrono::duration<double, std::micro>(t_alloc1 - t_alloc0).count();
+    }
 
     if (actual_size == 0) {
         set();
@@ -102,7 +138,39 @@ void VariableState::set_state(const ov::SoPtr<ov::ITensor>& state) {
     auto src_fmt = cldnn::format::get_default_format(src_rank);
     auto src_layout = cldnn::layout(ov::PartialShape(src_shape), state->get_element_type(), src_fmt, src_padd);
 
+    auto t_copy0 = std::chrono::steady_clock::now();
     convert_and_copy(state._ptr.get(), m_memory, m_context->get_engine().get_service_stream(), src_layout, m_transpose_required);
+    auto t_copy1 = std::chrono::steady_clock::now();
+    if (diag.enabled) {
+        double this_copy_us = std::chrono::duration<double, std::micro>(t_copy1 - t_copy0).count();
+        diag.convert_copy_us += this_copy_us;
+        diag.copy_count += 1;
+        diag.copy_bytes += state->get_byte_size();
+        if (diag.copy_min_us == 0.0 || this_copy_us < diag.copy_min_us) diag.copy_min_us = this_copy_us;
+        if (this_copy_us > diag.copy_max_us) diag.copy_max_us = this_copy_us;
+        if (++diag.calls % 252 == 0) {  // report every 252 set_state calls (1/3 of a switch)
+            double total_ms = diag.convert_copy_us / 1000.0;
+            double avg_us = diag.copy_count ? diag.convert_copy_us / diag.copy_count : 0.0;
+            double mb = diag.copy_bytes / (1024.0 * 1024.0);
+            double gbps = total_ms > 0.0 ? (diag.copy_bytes / (1024.0 * 1024.0 * 1024.0)) / (total_ms / 1000.0) : 0.0;
+            std::cerr << "[LORA-DIAG][GPU] set_state calls=" << diag.calls
+                      << "  alloc=" << diag.update_buffer_us / 1000.0 << "ms"
+                      << "  | H2D copies=" << diag.copy_count
+                      << "  total=" << total_ms << "ms"
+                      << "  avg=" << avg_us << "us"
+                      << "  min=" << diag.copy_min_us << "us"
+                      << "  max=" << diag.copy_max_us << "us"
+                      << "  bytes=" << mb << "MB"
+                      << "  eff_bw=" << gbps << "GB/s"
+                      << std::endl;
+            diag.update_buffer_us = 0.0;
+            diag.convert_copy_us = 0.0;
+            diag.copy_count = 0;
+            diag.copy_bytes = 0;
+            diag.copy_min_us = 0.0;
+            diag.copy_max_us = 0.0;
+        }
+    }
     set();
 }
 
