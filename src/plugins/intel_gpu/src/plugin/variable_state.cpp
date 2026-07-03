@@ -15,6 +15,7 @@
 #include <chrono>
 #include <cstdlib>
 #include <iostream>
+#include <typeinfo>
 
 namespace ov::intel_gpu {
 
@@ -31,6 +32,8 @@ struct SetStateDiag {
     size_t copy_bytes = 0;           // total bytes copied H2D in window
     double copy_min_us = 0.0;        // fastest single copy in window
     double copy_max_us = 0.0;        // slowest single copy in window
+    double swap_us = 0.0;            // sum of no-copy pointer-swap time (RemoteTensor path)
+    size_t swap_count = 0;           // number of no-copy swaps in window
     size_t calls = 0;                // total set_state calls (monotonic)
     bool enabled = []{
         const char* e = std::getenv("OV_LORA_DIAG");
@@ -90,6 +93,50 @@ void VariableState::set_layout(const cldnn::layout& new_layout) {
 }
 
 void VariableState::set_state(const ov::SoPtr<ov::ITensor>& state) {
+    // [LORA-DIAG] report the runtime type of the FIRST non-remote tensor seen after any remote
+    // ones, so we can identify which tensors fall back to the host->copy path.
+    if (set_state_diag().enabled) {
+        const ov::ITensor* p = state._ptr.get();
+        bool is_remote = dynamic_cast<const ov::intel_gpu::RemoteTensorImpl*>(p) != nullptr;
+        static int shown = 0;
+        static bool seen_remote = false;
+        if (is_remote) seen_remote = true;
+        if (seen_remote && !is_remote && shown < 5) {
+            shown++;
+            std::cerr << "[LORA-DIAG][SETSTATE] NON-REMOTE after remote: type=" << (p ? typeid(*p).name() : "null")
+                      << "  shape_rank=" << state->get_shape().size()
+                      << "  bytes=" << state->get_byte_size() << std::endl;
+        }
+    }
+    // PoC (CVS-187607): if the incoming tensor already lives in this device's memory
+    // (a RemoteTensor), skip the host->device convert_and_copy entirely and just adopt
+    // its memory buffer (pointer swap). This turns the ~95% LoRA-switch bottleneck into
+    // an O(1) rebind, provided the caller keeps the source tensor alive (resident adapter).
+    if (auto remote = dynamic_cast<const ov::intel_gpu::RemoteTensorImpl*>(state._ptr.get())) {
+        auto& diag = set_state_diag();
+        auto t0 = std::chrono::steady_clock::now();
+        auto mem = remote->get_original_memory();
+        m_layout.set_partial_shape(state->get_shape());
+        m_memory = mem;
+        actual_size = m_memory->size();
+        set();
+        auto t1 = std::chrono::steady_clock::now();
+        if (diag.enabled) {
+            diag.swap_us += std::chrono::duration<double, std::micro>(t1 - t0).count();
+            diag.swap_count += 1;
+            if (++diag.calls % 252 == 0) {
+                std::cerr << "[LORA-DIAG][GPU] set_state calls=" << diag.calls
+                          << "  MODE=SWAP(no-copy)  swaps=" << diag.swap_count
+                          << "  total=" << diag.swap_us / 1000.0 << "ms"
+                          << "  avg=" << (diag.swap_count ? diag.swap_us / diag.swap_count : 0.0) << "us"
+                          << std::endl;
+                diag.swap_us = 0.0;
+                diag.swap_count = 0;
+            }
+        }
+        return;
+    }
+
     auto src_shape = state->get_shape();
     size_t src_rank = src_shape.size();
     cldnn::padding::DynamicDimsMask dynamic_pad_dims;
