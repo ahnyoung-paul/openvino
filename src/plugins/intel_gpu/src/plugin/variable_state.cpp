@@ -25,9 +25,9 @@ namespace ov::intel_gpu {
 // here we just accumulate and dump periodically.
 namespace {
 struct SetStateDiag {
-    // per-window accumulators (window = one reported line)
+    // per-window accumulators (window = one reported line = one full LoRA switch)
     double update_buffer_us = 0.0;   // sum of update_device_buffer() time
-    double convert_copy_us = 0.0;    // sum of convert_and_copy() time
+    double convert_copy_us = 0.0;    // sum of convert_and_copy() time (H2D copy path)
     size_t copy_count = 0;           // number of convert_and_copy() calls in window
     size_t copy_bytes = 0;           // total bytes copied H2D in window
     double copy_min_us = 0.0;        // fastest single copy in window
@@ -35,6 +35,13 @@ struct SetStateDiag {
     double swap_us = 0.0;            // sum of no-copy pointer-swap time (RemoteTensor path)
     size_t swap_count = 0;           // number of no-copy swaps in window
     size_t calls = 0;                // total set_state calls (monotonic)
+    // Window size = one full LoRA switch. Default 756 = 252 layers x 3 tensors (alpha/A/B).
+    // Override via OV_LORA_DIAG_WINDOW if the layer/tensor count differs for a given model.
+    size_t window = []{
+        const char* w = std::getenv("OV_LORA_DIAG_WINDOW");
+        if (w && w[0] != '\0') { long v = std::atol(w); if (v > 0) return static_cast<size_t>(v); }
+        return static_cast<size_t>(756);
+    }();
     bool enabled = []{
         const char* e = std::getenv("OV_LORA_DIAG");
         return e && e[0] == '1';
@@ -43,6 +50,45 @@ struct SetStateDiag {
 SetStateDiag& set_state_diag() {
     static SetStateDiag d;
     return d;
+}
+
+// [LORA-DIAG] Emit one line per full switch, distinguishing the no-copy (RemoteTensor swap)
+// portion from the H2D-copy portion so mixed switches are unambiguous. MODE classifies the
+// whole switch: SWAP = all no-copy, H2D = all copy, MIXED = both (partial fallback).
+void set_state_diag_maybe_report(SetStateDiag& diag) {
+    if (!diag.enabled || diag.window == 0 || (diag.calls % diag.window) != 0)
+        return;
+    const char* mode = (diag.copy_count == 0) ? "SWAP(no-copy)"
+                     : (diag.swap_count == 0) ? "H2D(copy)"
+                                              : "MIXED";
+    const double swap_ms = diag.swap_us / 1000.0;
+    const double copy_ms = diag.convert_copy_us / 1000.0;
+    const double mb = diag.copy_bytes / (1024.0 * 1024.0);
+    const double avg_copy_us = diag.copy_count ? diag.convert_copy_us / diag.copy_count : 0.0;
+    const double eff_gbps = copy_ms > 0.0
+        ? (diag.copy_bytes / (1024.0 * 1024.0 * 1024.0)) / (copy_ms / 1000.0)
+        : 0.0;
+    std::cerr << "[LORA-DIAG][GPU] switch calls=" << diag.calls
+              << "  MODE=" << mode
+              << "  | no-copy swaps=" << diag.swap_count
+              << " swap_time=" << swap_ms << "ms"
+              << "  | H2D copies=" << diag.copy_count
+              << " copy_time=" << copy_ms << "ms"
+              << " avg=" << avg_copy_us << "us"
+              << " min=" << diag.copy_min_us << "us"
+              << " max=" << diag.copy_max_us << "us"
+              << " bytes=" << mb << "MB"
+              << " eff_bw=" << eff_gbps << "GB/s"
+              << "  | alloc=" << diag.update_buffer_us / 1000.0 << "ms"
+              << std::endl;
+    diag.update_buffer_us = 0.0;
+    diag.convert_copy_us = 0.0;
+    diag.copy_count = 0;
+    diag.copy_bytes = 0;
+    diag.copy_min_us = 0.0;
+    diag.copy_max_us = 0.0;
+    diag.swap_us = 0.0;
+    diag.swap_count = 0;
 }
 }  // namespace
 
@@ -124,15 +170,8 @@ void VariableState::set_state(const ov::SoPtr<ov::ITensor>& state) {
         if (diag.enabled) {
             diag.swap_us += std::chrono::duration<double, std::micro>(t1 - t0).count();
             diag.swap_count += 1;
-            if (++diag.calls % 252 == 0) {
-                std::cerr << "[LORA-DIAG][GPU] set_state calls=" << diag.calls
-                          << "  MODE=SWAP(no-copy)  swaps=" << diag.swap_count
-                          << "  total=" << diag.swap_us / 1000.0 << "ms"
-                          << "  avg=" << (diag.swap_count ? diag.swap_us / diag.swap_count : 0.0) << "us"
-                          << std::endl;
-                diag.swap_us = 0.0;
-                diag.swap_count = 0;
-            }
+            ++diag.calls;
+            set_state_diag_maybe_report(diag);
         }
         return;
     }
@@ -195,28 +234,8 @@ void VariableState::set_state(const ov::SoPtr<ov::ITensor>& state) {
         diag.copy_bytes += state->get_byte_size();
         if (diag.copy_min_us == 0.0 || this_copy_us < diag.copy_min_us) diag.copy_min_us = this_copy_us;
         if (this_copy_us > diag.copy_max_us) diag.copy_max_us = this_copy_us;
-        if (++diag.calls % 252 == 0) {  // report every 252 set_state calls (1/3 of a switch)
-            double total_ms = diag.convert_copy_us / 1000.0;
-            double avg_us = diag.copy_count ? diag.convert_copy_us / diag.copy_count : 0.0;
-            double mb = diag.copy_bytes / (1024.0 * 1024.0);
-            double gbps = total_ms > 0.0 ? (diag.copy_bytes / (1024.0 * 1024.0 * 1024.0)) / (total_ms / 1000.0) : 0.0;
-            std::cerr << "[LORA-DIAG][GPU] set_state calls=" << diag.calls
-                      << "  alloc=" << diag.update_buffer_us / 1000.0 << "ms"
-                      << "  | H2D copies=" << diag.copy_count
-                      << "  total=" << total_ms << "ms"
-                      << "  avg=" << avg_us << "us"
-                      << "  min=" << diag.copy_min_us << "us"
-                      << "  max=" << diag.copy_max_us << "us"
-                      << "  bytes=" << mb << "MB"
-                      << "  eff_bw=" << gbps << "GB/s"
-                      << std::endl;
-            diag.update_buffer_us = 0.0;
-            diag.convert_copy_us = 0.0;
-            diag.copy_count = 0;
-            diag.copy_bytes = 0;
-            diag.copy_min_us = 0.0;
-            diag.copy_max_us = 0.0;
-        }
+        ++diag.calls;
+        set_state_diag_maybe_report(diag);
     }
     set();
 }
