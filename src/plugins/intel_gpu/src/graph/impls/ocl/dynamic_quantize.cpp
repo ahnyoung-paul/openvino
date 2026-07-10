@@ -44,6 +44,17 @@ struct dynamic_quantize_impl : typed_primitive_impl_ocl<dynamic_quantize> {
         if (user_node != nullptr && user_node->is_type<fully_connected>()) {
             auto& fc_node = user_node->as<fully_connected>();
             params.fc_ifm_size = fc_node.weights().get_output_layout().feature();
+            if (fc_node.id() == "fullyconnectedcompressed:__module.model.language_model.layers.0.self_attn.o_proj/ov_ext::linear/MatMul") {
+                auto wl = fc_node.weights().get_output_layout();
+                GPU_DEBUG_COUT << "DQ fc_ifm_size debug: fc_id=" << fc_node.id()
+                    << " weight_layout=" << wl.to_short_string()
+                    << " batch=" << wl.batch()
+                    << " feature=" << wl.feature()
+                    << " spatial(0)=" << wl.spatial(0)
+                    << " spatial(1)=" << wl.spatial(1)
+                    << " fc_ifm_size=" << params.fc_ifm_size
+                    << std::endl;
+            }
         }
 
         if (impl_param.output_layouts.size() > 2)
