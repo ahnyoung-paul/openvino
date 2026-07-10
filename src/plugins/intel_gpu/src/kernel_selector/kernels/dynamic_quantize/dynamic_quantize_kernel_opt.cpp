@@ -84,6 +84,15 @@ JitConstants DynamicQuantizeKernelOpt::GetJitConstants(const dynamic_quantize_pa
     auto vec_size = get_match_vector_size(params);
     auto bf_size = get_input_bf_size(params);
     auto total_block_num = bf_size.second / (simd * vec_size);
+    // if (params.name == "dynamicquantize:DynamicQuantize_323093") {
+    {
+        GPU_DEBUG_COUT << "DynamicQuantizeKernelOpt::GetJitConstants (" << params.name << ")"
+                << " bf_size.first: " << bf_size.first
+                << ", bf_size.second: " << bf_size.second
+                << ", total_block_num: " << total_block_num
+                << ", vec_size: " << vec_size
+                << std::endl;
+    }
     auto mode = get_dynamic_quantize_mode(params);
 
     jit.AddConstant(MakeJitConstant("VEC_SIZE", vec_size));
@@ -106,6 +115,14 @@ JitConstants DynamicQuantizeKernelOpt::GetJitConstants(const dynamic_quantize_pa
     if (mode == DynQuanMode::PER_TOKEN)  {
         size_t aligned_block_num = (total_block_num > 32) ? Align(total_block_num, 32) : total_block_num;
         jit.AddConstant(MakeJitConstant("ALIGNED_BLOCK_NUM", aligned_block_num));
+        // if (params.name == "dynamicquantize:DynamicQuantize_323093") {
+        {
+            GPU_DEBUG_COUT << "DynamicQuantizeKernelOpt::GetJitConstants (" << params.name << ")"
+                    << " total_block_num: " << total_block_num
+                    << ", block_num: " << block_num
+                    << ", aligned_block_num: " << aligned_block_num
+                    << std::endl;
+        }
     }
 
     return jit;
@@ -172,6 +189,16 @@ KernelsData DynamicQuantizeKernelOpt::GetKernelsData(const Params& params) const
     auto cldnn_jit = GetJitConstants(prim_params);
     auto entry_point = GetEntryPoint(kernelName, prim_params.layerID, params);
     auto jit = CreateJit(kernelName, cldnn_jit, entry_point);
+    // if (prim_params.name == "dynamicquantize:DynamicQuantize_323093") {
+    {
+        GPU_DEBUG_COUT << "DynamicQuantizeKernelOpt::GetKernelsData (" << prim_params.name << ")"
+                << " gws: " << dispatchData.gws[0] << ", " << dispatchData.gws[1] << ", " << dispatchData.gws[2]
+                << ", lws: " << dispatchData.lws[0] << ", " << dispatchData.lws[1] << ", " << dispatchData.lws[2]
+                << ", entry_point: " << entry_point
+                << std::endl;
+        // GPU_DEBUG_COUT << "DynamicQuantizeKernelOpt::GetKernelsData (" << prim_params.name << ")"
+        //         << " jit: " << jit.first << std::endl;
+    }
 
     GetUpdateDispatchDataFunc(kd);
 
