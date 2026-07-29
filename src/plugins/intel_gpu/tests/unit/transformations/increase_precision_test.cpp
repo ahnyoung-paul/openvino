@@ -1151,11 +1151,14 @@ TEST_F(TransformationTestsF, IncreasePositionIdsPrecisionForGemma4) {
         auto cos = std::make_shared<ov::op::v0::Cos>(concat);
         auto sin = std::make_shared<ov::op::v0::Sin>(concat);
 
-        // Reshape (unsqueeze) → RoPE (no restore converts — f32 cos/sin directly to RoPE)
+        // Cos/Sin → restore converts (f32→f16) → Reshape (unsqueeze) → RoPE
+        auto cos_restore = std::make_shared<ov::op::v0::Convert>(cos, ov::element::f16);
+        auto sin_restore = std::make_shared<ov::op::v0::Convert>(sin, ov::element::f16);
+
         auto reshape_cos_const = std::make_shared<ov::op::v0::Constant>(ov::element::i32, ov::Shape{4}, std::vector<int32_t>{-1, 1, 1, 256});
-        auto cos_reshape = std::make_shared<ov::op::v1::Reshape>(cos, reshape_cos_const, false);
+        auto cos_reshape = std::make_shared<ov::op::v1::Reshape>(cos_restore, reshape_cos_const, false);
         auto reshape_sin_const = std::make_shared<ov::op::v0::Constant>(ov::element::i32, ov::Shape{4}, std::vector<int32_t>{-1, 1, 1, 256});
-        auto sin_reshape = std::make_shared<ov::op::v1::Reshape>(sin, reshape_sin_const, false);
+        auto sin_reshape = std::make_shared<ov::op::v1::Reshape>(sin_restore, reshape_sin_const, false);
 
         auto rope_input = std::make_shared<ov::op::v0::Parameter>(ov::element::f16, ov::PartialShape::dynamic(4));
         auto rope = std::make_shared<ov::op::internal::RoPE>(ov::OutputVector{rope_input, cos_reshape, sin_reshape}, ov::op::internal::RoPE::Config());

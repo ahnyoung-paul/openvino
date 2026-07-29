@@ -101,7 +101,6 @@ IncreasePositionIdsPrecisionForRoPE::IncreasePositionIdsPrecisionForRoPE() {
             return false;
 
         // Step 1: Ensure MatMul inputs are f32
-        bool replace_convert_dt = false;
         size_t input_idx = 0;
         for (auto& input : matmul_node->inputs()) {
             auto src_output = input.get_source_output();
@@ -115,9 +114,11 @@ IncreasePositionIdsPrecisionForRoPE::IncreasePositionIdsPrecisionForRoPE() {
                 new_convert->set_friendly_name(src_convert->get_friendly_name());
                 ov::copy_runtime_info(src_convert, new_convert);
                 ov::replace_node(src_convert, new_convert);
-                replace_convert_dt = true;
             } else {
-                insert_converts_before_if_needed(matmul_node, desired_et, input_idx);
+                auto new_convert = std::make_shared<ov::op::v0::Convert>(src_output, desired_et);
+                new_convert->set_friendly_name(src_node->get_friendly_name() + "_to_f32");
+                ov::copy_runtime_info(src_node, new_convert);
+                input.replace_source_output(new_convert);
             }
         }
 
@@ -126,16 +127,14 @@ IncreasePositionIdsPrecisionForRoPE::IncreasePositionIdsPrecisionForRoPE() {
         // and RoPE can consume f32 cos/sin directly — no restore convert needed.
         // For other models, restore converts are inserted conservatively; they could potentially be
         // removed once verified that RoPE handles f32 inputs without issues across all models.
-        if (!replace_convert_dt) {
-            size_t output_idx = 0;
-            auto rope_cos_et = rope_node->get_input_element_type(1);
-            if (rope_cos_et != desired_et) {
-                insert_converts_after_if_needed(cos_node, rope_cos_et, output_idx);
-            }
-            auto rope_sin_et = rope_node->get_input_element_type(2);
-            if (rope_sin_et != desired_et) {
-                insert_converts_after_if_needed(sin_node, rope_sin_et, output_idx);
-            }
+        size_t output_idx = 0;
+        auto rope_cos_et = rope_node->get_input_element_type(1);
+        if (rope_cos_et != desired_et) {
+            insert_converts_after_if_needed(cos_node, rope_cos_et, output_idx);
+        }
+        auto rope_sin_et = rope_node->get_input_element_type(2);
+        if (rope_sin_et != desired_et) {
+            insert_converts_after_if_needed(sin_node, rope_sin_et, output_idx);
         }
         return true;
     };
