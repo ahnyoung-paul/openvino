@@ -11,9 +11,39 @@
 #include "intel_gpu/runtime/memory_caps.hpp"
 #include "intel_gpu/runtime/layout.hpp"
 #include "intel_gpu/runtime/debug_configuration.hpp"
+#include <cstdlib>
 #include <memory>
 
 namespace ov::intel_gpu {
+
+namespace {
+
+// CVS-187607: LoRA switch time optimization.
+//
+// The default set_state() path uploads the incoming tensor into the state's device
+// buffer with a blocking convert_and_copy() on the service stream. For LoRA adapter
+// switching this happens 756 times per switch (252 layers x {alpha, A, B}) and
+// accounts for ~95% of the total switch time.
+//
+// When the caller (GenAI) already produced the state contents in device memory, the
+// copy is redundant: the state can simply adopt the incoming device buffer, which is
+// O(1). This is the same no-copy principle already used by set_memory().
+//
+// Gated at runtime so a single binary can A/B the two paths:
+//   OV_LORA_NO_COPY_SWAP=1  -> adopt RemoteTensor memory (no copy)
+//   unset / 0               -> original host->device copy path
+//
+// Precondition for the swap: the caller must keep the source device tensor alive for
+// as long as the state is in use (resident adapter tensors).
+bool no_copy_swap_enabled() {
+    static const bool enabled = []() {
+        const char* e = std::getenv("OV_LORA_NO_COPY_SWAP");
+        return e != nullptr && e[0] != '\0' && e[0] != '0';
+    }();
+    return enabled;
+}
+
+}  // namespace
 
 VariableState::VariableState(const VariableStateInfo& info, RemoteContextImpl::Ptr context, std::shared_ptr<cldnn::ShapePredictor> shape_predictor)
     : VariableStateBase{info.m_id, context}
@@ -62,6 +92,21 @@ void VariableState::set_layout(const cldnn::layout& new_layout) {
 }
 
 void VariableState::set_state(const ov::SoPtr<ov::ITensor>& state) {
+    // CVS-187607: no-copy fast path. If the incoming tensor already lives in device
+    // memory, adopt its buffer instead of copying into ours. Falls through to the
+    // regular copy path for host tensors, so mixed callers stay correct.
+    if (no_copy_swap_enabled()) {
+        if (auto remote = dynamic_cast<const RemoteTensorImpl*>(state._ptr.get())) {
+            m_memory = remote->get_original_memory();
+            m_layout.set_partial_shape(state->get_shape());
+            actual_size = m_memory->size();
+            GPU_DEBUG_TRACE_DETAIL << m_name << " : LoRA no-copy swap (Ptr : " << m_memory->buffer_ptr()
+                                   << ", layout : " << m_layout.to_short_string() << ")" << std::endl;
+            set();
+            return;
+        }
+    }
+
     auto src_shape = state->get_shape();
     size_t src_rank = src_shape.size();
     cldnn::padding::DynamicDimsMask dynamic_pad_dims;
