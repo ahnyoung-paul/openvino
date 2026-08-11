@@ -13,6 +13,8 @@
 #include "intel_gpu/runtime/debug_configuration.hpp"
 #include <cstdlib>
 #include <memory>
+#include <chrono>
+#include <iostream>
 
 namespace ov::intel_gpu {
 
@@ -41,6 +43,52 @@ bool no_copy_swap_enabled() {
         return e != nullptr && e[0] != '\0' && e[0] != '0';
     }();
     return enabled;
+}
+
+// CVS-187607: diagnostic-only wall-time vs GPU-copy-event breakdown for set_state().
+// Gate: OV_LORA_SET_STATE_PROFILE=1. Accumulates instead of printing per call (252
+// calls/switch would otherwise interleave), dumps totals once at process exit.
+bool set_state_profile_enabled() {
+    static const bool enabled = []() {
+        const char* e = std::getenv("OV_LORA_SET_STATE_PROFILE");
+        return e != nullptr && e[0] != '\0' && e[0] != '0';
+    }();
+    return enabled;
+}
+
+struct SetStateProfileStats {
+    uint64_t calls = 0, bytes = 0;
+    uint64_t layout_alloc_ns = 0;    // update_device_buffer() + layout bookkeeping
+    uint64_t copy_enqueue_ns = 0;    // host-side cost of issuing the copy
+    uint64_t copy_wait_ns = 0;       // host-side wait (queue wait + GPU exec, from host view)
+    uint64_t gpu_submission_ns = 0;  // OpenCL profiling: queued -> submitted
+    uint64_t gpu_starting_ns = 0;    // OpenCL profiling: submitted -> start
+    uint64_t gpu_executing_ns = 0;   // OpenCL profiling: start -> end
+    uint64_t gpu_profiled_calls = 0;
+
+    ~SetStateProfileStats() {
+        if (calls == 0)
+            return;
+        auto ms = [](uint64_t ns) { return ns / 1.0e6; };
+        std::cerr << "[CVS-187607] set_state profile: calls=" << calls << " bytes=" << bytes
+                   << " layout/alloc=" << ms(layout_alloc_ns) << "ms"
+                   << " copy_enqueue=" << ms(copy_enqueue_ns) << "ms"
+                   << " copy_wait(host)=" << ms(copy_wait_ns) << "ms";
+        if (gpu_profiled_calls > 0) {
+            std::cerr << " gpu[queued->submit]=" << ms(gpu_submission_ns) << "ms"
+                       << " gpu[submit->start]=" << ms(gpu_starting_ns) << "ms"
+                       << " gpu[start->end]=" << ms(gpu_executing_ns) << "ms"
+                       << " (profiled_calls=" << gpu_profiled_calls << ")";
+        } else {
+            std::cerr << " gpu profiling unavailable (need ov::enable_profiling(true))";
+        }
+        std::cerr << std::endl;
+    }
+};
+
+SetStateProfileStats& set_state_profile_stats() {
+    static SetStateProfileStats stats;
+    return stats;
 }
 
 }  // namespace
@@ -107,6 +155,9 @@ void VariableState::set_state(const ov::SoPtr<ov::ITensor>& state) {
         }
     }
 
+    const bool profile = set_state_profile_enabled();
+    auto t_begin = std::chrono::steady_clock::now();
+
     auto src_shape = state->get_shape();
     size_t src_rank = src_shape.size();
     cldnn::padding::DynamicDimsMask dynamic_pad_dims;
@@ -122,6 +173,12 @@ void VariableState::set_state(const ov::SoPtr<ov::ITensor>& state) {
     }
     m_layout.set_partial_shape(src_shape);
     update_device_buffer();
+
+    auto t_layout_done = std::chrono::steady_clock::now();
+    if (profile) {
+        set_state_profile_stats().layout_alloc_ns +=
+            std::chrono::duration_cast<std::chrono::nanoseconds>(t_layout_done - t_begin).count();
+    }
 
     if (actual_size == 0) {
         set();
@@ -147,7 +204,50 @@ void VariableState::set_state(const ov::SoPtr<ov::ITensor>& state) {
     auto src_fmt = cldnn::format::get_default_format(src_rank);
     auto src_layout = cldnn::layout(ov::PartialShape(src_shape), state->get_element_type(), src_fmt, src_padd);
 
-    convert_and_copy(state._ptr.get(), m_memory, m_context->get_engine().get_service_stream(), src_layout, m_transpose_required);
+    auto& stream = m_context->get_engine().get_service_stream();
+
+    // Fast-path condition mirrors convert_and_copy(ITensor*, memory::ptr, ...): same dtype,
+    // no transpose, host tensor -> plain device copy. Bypass the helper only when profiling
+    // is on, so we can request a non-blocking copy and read the real OpenCL event timings
+    // (queued->submit->start->end) instead of one opaque blocking wall-clock number.
+    if (profile && !m_transpose_required && state->get_element_type() == m_memory->get_layout().data_type &&
+        !dynamic_cast<const RemoteTensorImpl*>(state._ptr.get())) {
+        auto& stats = set_state_profile_stats();
+        auto t_enqueue_start = std::chrono::steady_clock::now();
+        auto event = m_memory->copy_from(stream, state->data(), /*blocking=*/false);
+        auto t_enqueue_done = std::chrono::steady_clock::now();
+        if (event)
+            event->wait();
+        auto t_wait_done = std::chrono::steady_clock::now();
+
+        stats.calls++;
+        stats.bytes += m_memory->size();
+        stats.copy_enqueue_ns += std::chrono::duration_cast<std::chrono::nanoseconds>(t_enqueue_done - t_enqueue_start).count();
+        stats.copy_wait_ns += std::chrono::duration_cast<std::chrono::nanoseconds>(t_wait_done - t_enqueue_done).count();
+
+        if (event) {
+            for (const auto& interval : event->get_profiling_info()) {
+                auto ns = static_cast<uint64_t>(interval.value->value().count());
+                if (interval.stage == cldnn::instrumentation::profiling_stage::submission)
+                    stats.gpu_submission_ns += ns;
+                else if (interval.stage == cldnn::instrumentation::profiling_stage::starting)
+                    stats.gpu_starting_ns += ns;
+                else if (interval.stage == cldnn::instrumentation::profiling_stage::executing) {
+                    stats.gpu_executing_ns += ns;
+                    stats.gpu_profiled_calls++;
+                }
+            }
+        }
+    } else {
+        auto t_copy_start = std::chrono::steady_clock::now();
+        convert_and_copy(state._ptr.get(), m_memory, stream, src_layout, m_transpose_required);
+        if (profile) {
+            auto& stats = set_state_profile_stats();
+            stats.calls++;
+            stats.bytes += m_memory->size();
+            stats.copy_wait_ns += std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - t_copy_start).count();
+        }
+    }
     set();
 }
 

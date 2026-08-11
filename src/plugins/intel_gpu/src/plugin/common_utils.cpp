@@ -15,11 +15,87 @@
 
 #include <algorithm>
 #include <memory>
+#include <chrono>
+#include <iostream>
+#include <map>
 
 namespace {
 
 using namespace cldnn;
 using namespace std;
+
+// CVS-187607: diagnostic-only call count / wall-time for the scalar CPU transpose
+// path taken by convert_and_copy() when transpose=true (e.g. LoRA A/B state upload
+// with m_transpose_required=true). Always tracked (2 clock reads / call is
+// negligible next to the transpose loop itself); printed once at process exit so it
+// can be compared against variable_state.cpp's "[CVS-187607] set_state profile"
+// calls= count from the same run.
+struct TransposeCopyStats {
+    uint64_t calls = 0;
+    uint64_t ns = 0;
+
+    void add(std::chrono::nanoseconds d) {
+        calls++;
+        ns += static_cast<uint64_t>(d.count());
+    }
+
+    ~TransposeCopyStats() {
+        if (calls == 0)
+            return;
+        std::cerr << "[CVS-187607] convert_and_copy_transposed: calls=" << calls
+                   << " total=" << (ns / 1.0e6) << "ms"
+                   << " avg=" << (ns / 1.0e3 / calls) << "us" << std::endl;
+    }
+};
+
+TransposeCopyStats& transpose_copy_stats() {
+    static TransposeCopyStats stats;
+    return stats;
+}
+
+// CVS-187607: measured (test_20260811_195248.log) that the fallback path in
+// convert_and_copy() always lands in convert_and_copy_no_pad (part3) — never
+// padded_source or transposed — with two dtype pairs actually seen:
+// bf16->f16 and f32->f16. Track per-dtype-pair call count / wall-time so the
+// no-pad scalar cast loop's share of set_state's 543ms/switch can be quantified.
+struct NoPadCopyStats {
+    struct Entry {
+        uint64_t calls = 0;
+        uint64_t ns = 0;
+        uint64_t elems = 0;
+        uint64_t max_elems = 0;
+    };
+    std::map<std::pair<ov::element::Type, ov::element::Type>, Entry> by_dtype;
+
+    void add(ov::element::Type src_et, ov::element::Type dst_et, size_t size, std::chrono::nanoseconds d) {
+        auto& e = by_dtype[{src_et, dst_et}];
+        e.calls++;
+        e.ns += static_cast<uint64_t>(d.count());
+        e.elems += static_cast<uint64_t>(size);
+        e.max_elems = std::max(e.max_elems, static_cast<uint64_t>(size));
+    }
+
+    ~NoPadCopyStats() {
+        for (auto& kv : by_dtype) {
+            const auto& e = kv.second;
+            if (e.calls == 0)
+                continue;
+            std::cerr << "[CVS-187607] convert_and_copy_no_pad: src=" << kv.first.first
+                       << " dst=" << kv.first.second
+                       << " calls=" << e.calls
+                       << " total=" << (e.ns / 1.0e6) << "ms"
+                       << " avg=" << (e.ns / 1.0e3 / e.calls) << "us"
+                       << " elems_sum=" << e.elems
+                       << " elems_avg=" << (e.elems / e.calls)
+                       << " elems_max=" << e.max_elems << std::endl;
+        }
+    }
+};
+
+NoPadCopyStats& nopad_copy_stats() {
+    static NoPadCopyStats stats;
+    return stats;
+}
 
 static inline void get_linear_offset_params(layout& layout, tensor& start_pos, tensor& end_pos, vector<int64_t>& padded_sizes, vector<int64_t>& axes_map) {
     auto fmt = layout.get_format();
@@ -136,9 +212,15 @@ void convert_and_copy(const void* src_ptr, ov::element::Type src_et, void* dst_p
             if (static_cast<bool>(layout.data_padding)) {                                                                                   \
                 return convert_and_copy_padded_source(static_cast<const s_type*>(src_ptr), static_cast<d_type*>(dst_ptr), layout);          \
             } else if (transpose) {                                                                                                         \
-                return convert_and_copy_transposed(static_cast<const s_type*>(src_ptr), static_cast<d_type*>(dst_ptr), layout.get_shape()); \
+                auto t0 = std::chrono::steady_clock::now();                                                                                 \
+                convert_and_copy_transposed(static_cast<const s_type*>(src_ptr), static_cast<d_type*>(dst_ptr), layout.get_shape());        \
+                transpose_copy_stats().add(std::chrono::steady_clock::now() - t0);                                                          \
+                return;                                                                                                                     \
             } else {                                                                                                                        \
-                return convert_and_copy_no_pad(static_cast<const s_type*>(src_ptr), static_cast<d_type*>(dst_ptr), size);                   \
+                auto t0 = std::chrono::steady_clock::now();                                                                                 \
+                convert_and_copy_no_pad(static_cast<const s_type*>(src_ptr), static_cast<d_type*>(dst_ptr), size);                          \
+                nopad_copy_stats().add(s_et, d_et, size, std::chrono::steady_clock::now() - t0);                                            \
+                return;                                                                                                                     \
             }                                                                                                                               \
         }
 
