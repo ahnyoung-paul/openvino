@@ -829,6 +829,7 @@ void TransformationsPipeline::apply(std::shared_ptr<ov::Model> func) {
         // (the intact op requires fp32 scales; it is decomposed later in CommonOptimizations).
         manager.register_pass<ov::intel_gpu::KeepGQAKVScalePrecision>();
         manager.register_pass<ov::intel_gpu::EliminateEmptySelectiveSSM>();
+        manager.register_pass<ov::intel_gpu::DisableFP16CompForLTXVideo>();
 
         manager.register_pass<ov::pass::ConvertPrecision>(fp_convert_precision_map,
                                                           empty_fuse_map,

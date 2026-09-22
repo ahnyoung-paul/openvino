@@ -32,6 +32,12 @@ public:
     IncreasePositionIdsPrecisionForLtxVideo();
 };
 
+class DisableFP16CompForLTXVideo : public ov::pass::MatcherPass {
+public:
+    OPENVINO_MATCHER_PASS_RTTI("DisableFP16CompForLTXVideo");
+    DisableFP16CompForLTXVideo();
+};
+
 class IncreasePositionIdsPrecisionForGPTOSS : public ov::pass::MatcherPass {
 public:
     OPENVINO_MATCHER_PASS_RTTI("IncreasePositionIdsPrecisionForGPTOSS");

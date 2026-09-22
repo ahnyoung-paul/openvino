@@ -323,6 +323,53 @@ IncreasePositionIdsPrecisionForQwen3VL::IncreasePositionIdsPrecisionForQwen3VL()
     this->register_matcher(m, callback);
 }
 
+DisableFP16CompForLTXVideo::DisableFP16CompForLTXVideo() {
+    using namespace ov::pass::pattern;
+
+    auto sin_or_cos = wrap_type<ov::op::v0::Sin, ov::op::v0::Cos>([](const ov::Output<ov::Node>& output) {
+        const auto& name = output.get_node()->get_friendly_name();
+        return name == "sin:__module.rope/aten::sin/Sin" || name == "cos:__module.rope/aten::cos/Cos";
+    });
+
+    ov::matcher_pass_callback callback = [OV_CAPTURE_CPY_AND_THIS](ov::pass::pattern::Matcher& m) {
+        auto sin_or_cos_node = m.get_match_root();
+        if (transformation_callback(sin_or_cos_node)) {
+            return false;
+        }
+
+        std::set<ov::Node*> visited;
+        ov::NodeVector nodes_to_visit{sin_or_cos_node};
+
+        while (!nodes_to_visit.empty()) {
+            auto node = nodes_to_visit.back();
+            nodes_to_visit.pop_back();
+
+            if (!visited.insert(node.get()).second || !node->get_output_element_type(0).is_real()) {
+                continue;
+            }
+
+            ov::disable_conversion(node, ov::element::f16);
+
+            if (ov::is_type<ov::op::v0::Constant>(node) || ov::is_type<ov::op::v0::Parameter>(node)) {
+                continue;
+            }
+
+            for (const auto& input : node->input_values()) {
+                if (input.get_element_type().is_real()) {
+                    nodes_to_visit.push_back(input.get_node_shared_ptr());
+                }
+            }
+        }
+
+        size_t output_idx = 0;
+        insert_converts_after_if_needed(sin_or_cos_node, ov::element::f16, output_idx);
+        return true;
+    };
+
+    auto m = std::make_shared<ov::pass::pattern::Matcher>(sin_or_cos, "DisableFP16CompForLTXVideo");
+    this->register_matcher(m, callback);
+}
+
 IncreasePositionIdsPrecisionForLtxVideo::IncreasePositionIdsPrecisionForLtxVideo() {
     using namespace ov::pass::pattern;
     using ov::pass::pattern::op::Or;
