@@ -4,9 +4,13 @@
 
 #pragma once
 
+#include <string>
+
 #include "openvino/pass/graph_rewrite.hpp"
 
 namespace ov::intel_gpu {
+
+struct ExecutionConfig;
 
 class IncreasePositionIdsPrecisionForRoPE : public ov::pass::MatcherPass {
 public:
@@ -35,7 +39,19 @@ public:
 class DisableFP16CompForLTXVideo : public ov::pass::MatcherPass {
 public:
     OPENVINO_MATCHER_PASS_RTTI("DisableFP16CompForLTXVideo");
-    DisableFP16CompForLTXVideo();
+    explicit DisableFP16CompForLTXVideo(const std::shared_ptr<ov::Model>& model);
+};
+
+class DumpLTXVideoGraph : public ov::pass::ModelPass {
+public:
+    OPENVINO_MODEL_PASS_RTTI("DumpLTXVideoGraph");
+    DumpLTXVideoGraph(const ExecutionConfig& config, const std::string& file_name);
+
+    bool run_on_model(const std::shared_ptr<ov::Model>& model) override;
+
+private:
+    const ExecutionConfig& m_config;
+    std::string m_file_name;
 };
 
 class IncreasePositionIdsPrecisionForGPTOSS : public ov::pass::MatcherPass {

@@ -829,13 +829,14 @@ void TransformationsPipeline::apply(std::shared_ptr<ov::Model> func) {
         // (the intact op requires fp32 scales; it is decomposed later in CommonOptimizations).
         manager.register_pass<ov::intel_gpu::KeepGQAKVScalePrecision>();
         manager.register_pass<ov::intel_gpu::EliminateEmptySelectiveSSM>();
-        manager.register_pass<ov::intel_gpu::DisableFP16CompForLTXVideo>();
-
+        manager.register_pass<ov::intel_gpu::DisableFP16CompForLTXVideo>(func);
+        manager.register_pass<ov::intel_gpu::DumpLTXVideoGraph>(config, "convert_precision_00_before");
         manager.register_pass<ov::pass::ConvertPrecision>(fp_convert_precision_map,
                                                           empty_fuse_map,
                                                           keep_precision_sensitive_in_fp32_1,
                                                           convert_input_output_precision,
                                                           store_original_precision_as_rt_attribute);
+        manager.register_pass<ov::intel_gpu::DumpLTXVideoGraph>(config, "convert_precision_01_after");
 
         // The one_hot primitive takes on/off as compile time values,
         // so OneHot ops fed by a runtime scalar are turned into a boolean mask + Select.

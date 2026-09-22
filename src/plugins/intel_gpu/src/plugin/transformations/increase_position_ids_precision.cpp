@@ -4,9 +4,12 @@
 
 #include "increase_position_ids_precision.hpp"
 
+#include <filesystem>
 #include <set>
 
 #include "intel_gpu/op/gemm.hpp"
+#include "intel_gpu/runtime/debug_configuration.hpp"
+#include "intel_gpu/runtime/execution_config.hpp"
 #include "openvino/core/graph_util.hpp"
 #include "openvino/core/rt_info.hpp"
 #include "openvino/op/add.hpp"
@@ -34,6 +37,7 @@
 #include "openvino/pass/pattern/op/optional.hpp"
 #include "openvino/pass/pattern/op/or.hpp"
 #include "openvino/pass/pattern/op/wrap_type.hpp"
+#include "openvino/pass/visualize_tree.hpp"
 #include "ov_ops/rms.hpp"
 #include "ov_ops/rotary_positional_embeddings.hpp"
 #include "transformations/rt_info/disable_precision_conversion.hpp"
@@ -323,23 +327,38 @@ IncreasePositionIdsPrecisionForQwen3VL::IncreasePositionIdsPrecisionForQwen3VL()
     this->register_matcher(m, callback);
 }
 
-DisableFP16CompForLTXVideo::DisableFP16CompForLTXVideo() {
+DisableFP16CompForLTXVideo::DisableFP16CompForLTXVideo(const std::shared_ptr<ov::Model>& model) {
     using namespace ov::pass::pattern;
 
-    auto sin_or_cos = wrap_type<ov::op::v0::Sin, ov::op::v0::Cos>([](const ov::Output<ov::Node>& output) {
-        const auto& name = output.get_node()->get_friendly_name();
-        return name == "sin:__module.rope/aten::sin/Sin" || name == "cos:__module.rope/aten::cos/Cos";
+    auto concat = wrap_type<ov::op::v0::Concat>([](const ov::Output<ov::Node>& output) {
+        return output.get_node()->get_friendly_name() == "__module.rope/aten::cat/Concat_1";
     });
 
-    ov::matcher_pass_callback callback = [OV_CAPTURE_CPY_AND_THIS](ov::pass::pattern::Matcher& m) {
-        auto sin_or_cos_node = m.get_match_root();
-        if (transformation_callback(sin_or_cos_node)) {
+    ov::matcher_pass_callback callback = [this, model](ov::pass::pattern::Matcher& m) {
+        auto concat_node = m.get_match_root();
+        if (transformation_callback(concat_node)) {
+            return false;
+        }
+
+        std::shared_ptr<ov::op::v0::Sin> sin_node;
+        std::shared_ptr<ov::op::v0::Cos> cos_node;
+        for (const auto& node : model->get_ordered_ops()) {
+            const auto& name = node->get_friendly_name();
+            if (name == "__module.rope/aten::sin/Sin") {
+                sin_node = ov::as_type_ptr<ov::op::v0::Sin>(node);
+            } else if (name == "__module.rope/aten::cos/Cos") {
+                cos_node = ov::as_type_ptr<ov::op::v0::Cos>(node);
+            }
+        }
+
+        if (!sin_node || !cos_node) {
             return false;
         }
 
         std::set<ov::Node*> visited;
-        ov::NodeVector nodes_to_visit{sin_or_cos_node};
-
+        ov::NodeVector nodes_to_visit{sin_node, cos_node};
+        GPU_DEBUG_COUT << "Starting FP16 conversion disabling for LTX Video nodes." << std::endl;
+        GPU_DEBUG_COUT << "===============================================================" << std::endl;
         while (!nodes_to_visit.empty()) {
             auto node = nodes_to_visit.back();
             nodes_to_visit.pop_back();
@@ -349,6 +368,7 @@ DisableFP16CompForLTXVideo::DisableFP16CompForLTXVideo() {
             }
 
             ov::disable_conversion(node, ov::element::f16);
+            GPU_DEBUG_COUT << " * " << node->get_friendly_name() << " is disabled for FP16 conversion." << std::endl;
 
             if (ov::is_type<ov::op::v0::Constant>(node) || ov::is_type<ov::op::v0::Parameter>(node)) {
                 continue;
@@ -362,12 +382,33 @@ DisableFP16CompForLTXVideo::DisableFP16CompForLTXVideo() {
         }
 
         size_t output_idx = 0;
-        insert_converts_after_if_needed(sin_or_cos_node, ov::element::f16, output_idx);
+        insert_converts_after_if_needed(cos_node, ov::element::f16, output_idx);
+        insert_converts_after_if_needed(sin_node, ov::element::f16, output_idx);
+        GPU_DEBUG_COUT << "===============================================================" << std::endl;
         return true;
     };
 
-    auto m = std::make_shared<ov::pass::pattern::Matcher>(sin_or_cos, "DisableFP16CompForLTXVideo");
+    auto m = std::make_shared<ov::pass::pattern::Matcher>(concat, "DisableFP16CompForLTXVideo");
     this->register_matcher(m, callback);
+}
+
+DumpLTXVideoGraph::DumpLTXVideoGraph(const ExecutionConfig& config, const std::string& file_name)
+    : m_config(config), m_file_name(file_name) {}
+
+bool DumpLTXVideoGraph::run_on_model(const std::shared_ptr<ov::Model>& model) {
+    const auto dump_graphs_path = GPU_DEBUG_VALUE_OR(m_config.get_dump_graphs_path(), "");
+    if (dump_graphs_path.empty()) {
+        return false;
+    }
+
+    std::filesystem::create_directories(dump_graphs_path);
+    const auto file_path = std::filesystem::path(dump_graphs_path) /
+                           std::filesystem::path(m_file_name).filename();
+    ov::pass::VisualizeTree(file_path).run_on_model(model);
+    GPU_DEBUG_COUT << "===============================================================" << std::endl;
+    GPU_DEBUG_COUT << "Dumped LTX Video graph to: " << file_path << std::endl;
+    GPU_DEBUG_COUT << "===============================================================" << std::endl;
+    return false;
 }
 
 IncreasePositionIdsPrecisionForLtxVideo::IncreasePositionIdsPrecisionForLtxVideo() {
