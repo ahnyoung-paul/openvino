@@ -9,6 +9,7 @@
 #include "intel_gpu/runtime/memory_caps.hpp"
 
 #include "openvino/core/type/element_type.hpp"
+#include "openvino/reference/convert.hpp"
 #include "openvino/runtime/tensor.hpp"
 #include "openvino/runtime/make_tensor.hpp"
 #include "openvino/op/util/op_types.hpp"
@@ -99,8 +100,7 @@ void convert_and_copy_padded_source(const src_t* src, dst_t* dst, layout& layout
 template <typename src_t, typename dst_t>
 void convert_and_copy_no_pad(const src_t* src, dst_t* dst, size_t size) {
     OPENVINO_ASSERT(src && dst, "[GPU] Src or Dst ptr is null");
-    for (size_t i = 0; i < size; i++)
-        dst[i] = static_cast<dst_t>(src[i]);
+    ov::reference::convert(src, dst, size);
 }
 
 template <typename src_t, typename dst_t>
