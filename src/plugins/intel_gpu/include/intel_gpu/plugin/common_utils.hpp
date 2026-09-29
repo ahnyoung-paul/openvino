@@ -5,6 +5,7 @@
 #pragma once
 
 #include <ostream>
+#include <memory>
 #include <tuple>
 #include "intel_gpu/runtime/layout.hpp"
 #include "intel_gpu/runtime/memory.hpp"
@@ -15,6 +16,10 @@
 #include "openvino/core/layout.hpp"
 #include "openvino/core/node.hpp"
 #include "openvino/core/type/element_type.hpp"
+
+namespace cldnn {
+class state_conversion_executor;
+}
 
 namespace ov {
 namespace intel_gpu {
@@ -143,7 +148,8 @@ void convert_and_copy(
     cldnn::memory::ptr dst,
     cldnn::stream& stream,
     const cldnn::layout& src_layout = cldnn::layout({}, ov::element::dynamic, cldnn::format::bfyx, cldnn::padding()),
-    bool transpose = false);
+    bool transpose = false,
+    std::shared_ptr<cldnn::state_conversion_executor> executor = nullptr);
 void convert_and_copy(const cldnn::memory::ptr src, ov::ITensor* dst, const cldnn::stream& stream);
 void convert_and_copy(const ov::ITensor* src, ov::ITensor* dst, const cldnn::stream& stream);
 void convert_and_copy(const cldnn::memory::ptr src, cldnn::memory::ptr dst, cldnn::stream& stream);

@@ -12,6 +12,7 @@
 #include "intel_gpu/runtime/layout.hpp"
 #include "intel_gpu/runtime/debug_configuration.hpp"
 #include <memory>
+#include <utility>
 
 namespace ov::intel_gpu {
 
@@ -22,6 +23,8 @@ VariableState::VariableState(const VariableStateInfo& info, RemoteContextImpl::P
     , m_shape_predictor(shape_predictor)
     , m_prim_inst(info.m_release_variable_inst)
     , m_transpose_required(info.transpose_required)
+    , m_conversion_executor(info.m_conversion_executor)
+    , m_has_conversion_executor(!info.m_conversion_executor.expired())
     , m_initial_layout(info.m_layout) {
     update_device_buffer();
 }
@@ -102,7 +105,12 @@ void VariableState::set_state(const ov::SoPtr<ov::ITensor>& state) {
     auto src_fmt = cldnn::format::get_default_format(src_rank);
     auto src_layout = cldnn::layout(ov::PartialShape(src_shape), state->get_element_type(), src_fmt, src_padd);
 
-    convert_and_copy(state._ptr.get(), m_memory, m_context->get_engine().get_service_stream(), src_layout, m_transpose_required);
+    auto conversion_executor = m_conversion_executor.lock();
+    OPENVINO_ASSERT(!m_has_conversion_executor || conversion_executor, "[GPU] State conversion executor expired");
+    if (state->get_element_type() != get_user_specified_type())
+        conversion_executor.reset();
+    convert_and_copy(state._ptr.get(), m_memory, m_context->get_engine().get_service_stream(),
+                     src_layout, m_transpose_required, std::move(conversion_executor));
     set();
 }
 

@@ -12,6 +12,10 @@
 #include <functional>
 #include <unordered_map>
 
+namespace cldnn {
+class state_conversion_executor;
+}
+
 namespace ov::intel_gpu {
 class RemoteContextImpl;
 
@@ -28,6 +32,7 @@ struct VariableStateInfo {
     cldnn::layout m_layout;
     ov::element::Type m_user_specified_type;
     bool transpose_required;
+    std::weak_ptr<cldnn::state_conversion_executor> m_conversion_executor;
     std::set<const cldnn::primitive*> m_primitives;
     std::vector<std::weak_ptr<cldnn::memory_state::releasable_variable>> m_release_variable_inst;
 };
@@ -80,6 +85,8 @@ protected:
     std::vector<std::weak_ptr<cldnn::memory_state::releasable_variable>> m_prim_inst;
     cldnn::memory::ptr m_memory = nullptr;
     bool m_transpose_required = false;
+    std::weak_ptr<cldnn::state_conversion_executor> m_conversion_executor;
+    bool m_has_conversion_executor = false;
     size_t actual_size = 0;
 
     const cldnn::layout m_initial_layout;

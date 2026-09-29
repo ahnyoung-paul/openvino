@@ -1254,12 +1254,15 @@ void network::set_variables_state_info(const std::string& variable_id,
                                        const std::shared_ptr<memory_state::releasable_variable>& releasable_var,
                                        bool transpose_required) {
     auto& info = _variables_state_info.emplace(variable_id, ov::intel_gpu::VariableStateInfo{variable_id, variable_layout, user_specified_type}).first->second;
+    info.m_conversion_executor = _program->get_state_conversion_executor();
+    if (user_specified_type != ov::element::dynamic)
+        info.m_user_specified_type = user_specified_type;
 
     [[maybe_unused]] const auto [_, inserted] = info.m_primitives.insert(p);
     if (inserted && releasable_var) {
         info.m_release_variable_inst.emplace_back(releasable_var);
     }
-    info.transpose_required = transpose_required;
+    info.transpose_required = info.transpose_required || transpose_required;
 }
 
 void network::set_reuse_variable_mem(bool reuse) {

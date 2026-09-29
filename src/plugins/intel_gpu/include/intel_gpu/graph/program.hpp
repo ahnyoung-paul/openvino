@@ -30,6 +30,7 @@ class pass_manager;
 class base_pass;
 class program_wrapper;
 class kernels_cache;
+class state_conversion_executor;
 class ICompilationContext;
 
 
@@ -276,6 +277,10 @@ public:
                              bool is_internal);
     static void init_primitives();
     kernels_cache& get_kernels_cache() const;
+    std::shared_ptr<state_conversion_executor> get_state_conversion_executor() const { return _state_conversion_executor; }
+    void set_state_conversion_executor(std::shared_ptr<state_conversion_executor> executor) {
+        _state_conversion_executor = std::move(executor);
+    }
 
     // returns {-1, -1} if it failed to estimate by allocating given batch size
     std::pair<int64_t/*const alloc*/, int64_t/*general alloc*/> get_estimated_device_mem_usage();
@@ -305,6 +310,7 @@ private:
     stream::ptr _stream;
     // TODO: Consider moving it to engine
     std::unique_ptr<kernels_cache> _kernels_cache;
+    std::shared_ptr<state_conversion_executor> _state_conversion_executor;
     ExecutionConfig _config;
     std::shared_ptr<ov::threading::IStreamsExecutor> _task_executor = nullptr;
     std::list<program_node*> inputs;
