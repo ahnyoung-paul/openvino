@@ -11,7 +11,6 @@
 #include "openvino/reference/convert.hpp"
 
 #include <memory>
-#include <utility>
 #include <vector>
 
 using namespace cldnn;
@@ -21,26 +20,16 @@ using namespace ::tests;
 namespace {
 
 template <typename Src, typename Dst>
-void check_usm_conversion(const ov::Shape& shape,
-                          const ov::element::Type& src_type,
-                          const ov::element::Type& dst_type,
-                          allocation_type src_allocation) {
+void check_usm_host_to_device_conversion(const ov::Shape& shape,
+                                         const ov::element::Type& src_type,
+                                         const ov::element::Type& dst_type) {
     auto& engine = get_test_engine();
     auto& stream = get_test_stream();
     auto context = std::make_shared<RemoteContextImpl>("GPU", std::vector<cldnn::device::ptr>{engine.get_device()});
 
-    std::shared_ptr<ov::ITensor> src;
-    cldnn::memory::ptr src_mem;
-    if (src_allocation == allocation_type::usm_host) {
-        auto host = std::make_shared<USMHostTensor>(context, src_type, shape);
-        src_mem = host->get_impl()->get_original_memory();
-        src = std::move(host);
-    } else {
-        auto device = std::make_shared<RemoteTensorImpl>(context, shape, src_type, TensorType::BT_USM_DEVICE_INTERNAL);
-        src_mem = device->get_original_memory();
-        src = std::move(device);
-    }
-    ASSERT_EQ(src_mem->get_allocation_type(), src_allocation);
+    auto src = std::make_shared<USMHostTensor>(context, src_type, shape);
+    auto src_mem = src->get_impl()->get_original_memory();
+    ASSERT_EQ(src_mem->get_allocation_type(), allocation_type::usm_host);
 
     const auto count = ov::shape_size(shape);
     std::vector<Src> values(count);
@@ -54,7 +43,8 @@ void check_usm_conversion(const ov::Shape& shape,
     const auto fmt = format::get_default_format(shape.size());
     layout src_layout{shape, src_type, fmt};
     layout dst_layout{shape, dst_type, fmt};
-    auto dst_mem = engine.allocate_memory(dst_layout);
+    auto dst_mem = engine.allocate_memory(dst_layout, allocation_type::usm_device);
+    ASSERT_EQ(dst_mem->get_allocation_type(), allocation_type::usm_device);
 
     OV_ASSERT_NO_THROW(convert_and_copy(src.get(), dst_mem, stream, src_layout, false));
 
@@ -93,16 +83,18 @@ TEST(convert_and_copy_test, remote_tensor_fast_path_does_not_fall_through) {
 }
 
 TEST(convert_and_copy_test_paul, usm_host_bf16_to_f16_small_and_large) {
-    if (!get_test_engine().supports_allocation(allocation_type::usm_host))
-        GTEST_SKIP() << "USM host allocation is not supported";
+    if (!get_test_engine().supports_allocation(allocation_type::usm_host) ||
+        !get_test_engine().supports_allocation(allocation_type::usm_device))
+        GTEST_SKIP() << "USM host or device allocation is not supported";
 
-    check_usm_conversion<ov::bfloat16, ov::float16>({1, 2, 2, 3}, ov::element::bf16, ov::element::f16, allocation_type::usm_host);
-    check_usm_conversion<ov::bfloat16, ov::float16>({1, 1, 256, 256}, ov::element::bf16, ov::element::f16, allocation_type::usm_host);
+    check_usm_host_to_device_conversion<ov::bfloat16, ov::float16>({1, 2, 2, 3}, ov::element::bf16, ov::element::f16);
+    check_usm_host_to_device_conversion<ov::bfloat16, ov::float16>({1, 1, 256, 256}, ov::element::bf16, ov::element::f16);
 }
 
-TEST(convert_and_copy_test_paul, usm_device_f32_to_f16) {
-    if (!get_test_engine().supports_allocation(allocation_type::usm_device))
-        GTEST_SKIP() << "USM device allocation is not supported";
+TEST(convert_and_copy_test_paul, usm_host_f32_to_f16) {
+    if (!get_test_engine().supports_allocation(allocation_type::usm_host) ||
+        !get_test_engine().supports_allocation(allocation_type::usm_device))
+        GTEST_SKIP() << "USM host or device allocation is not supported";
 
-    check_usm_conversion<float, ov::float16>({1, 2, 3, 4, 5}, ov::element::f32, ov::element::f16, allocation_type::usm_device);
+    check_usm_host_to_device_conversion<float, ov::float16>({1, 2, 3, 4, 5}, ov::element::f32, ov::element::f16);
 }
