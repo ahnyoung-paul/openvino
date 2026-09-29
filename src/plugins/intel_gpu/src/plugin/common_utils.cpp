@@ -4,8 +4,6 @@
 
 #include "intel_gpu/plugin/common_utils.hpp"
 #include "intel_gpu/plugin/remote_tensor.hpp"
-#include "intel_gpu/plugin/usm_host_tensor.hpp"
-#include "intel_gpu/graph/state_conversion_executor.hpp"
 #include "intel_gpu/runtime/layout.hpp"
 #include "intel_gpu/runtime/memory.hpp"
 #include "intel_gpu/runtime/memory_caps.hpp"
@@ -17,7 +15,6 @@
 #include "openvino/op/util/op_types.hpp"
 
 #include <algorithm>
-#include <limits>
 #include <memory>
 
 namespace {
@@ -184,62 +181,6 @@ void convert_and_copy(const void* src_ptr, ov::element::Type src_et, void* dst_p
 
 namespace ov::intel_gpu {
 
-namespace {
-
-bool convert_and_copy_no_pad_gpu_offloading(const ov::ITensor* src,
-                                            cldnn::memory::ptr dst,
-                                            cldnn::stream& stream,
-                                            const cldnn::layout& src_layout,
-                                            const std::shared_ptr<cldnn::state_conversion_executor>& executor) {
-    if (!executor)
-        return false;
-
-    const auto& dst_layout = dst->get_layout();
-    const cldnn::state_conversion_key key{src->get_element_type().get_type_enum(), dst_layout.data_type};
-    if (!executor->has_kernel(key) || src_layout.data_padding || dst_layout.data_padding)
-        return false;
-    if (!cldnn::format::is_default_format(src_layout.format) ||
-        src_layout.format != dst_layout.format || src->get_shape() != src_layout.get_shape() ||
-        src->get_shape() != dst_layout.get_shape())
-        return false;
-
-    const auto& shape = src->get_shape();
-    const auto& strides = src->get_strides();
-    if (shape.empty() || strides.size() != shape.size())
-        return false;
-    size_t contiguous_stride = src->get_element_type().size();
-    for (size_t i = shape.size(); i-- > 0;) {
-        if (strides[i] != contiguous_stride ||
-            shape[i] > std::numeric_limits<size_t>::max() / contiguous_stride)
-            return false;
-        contiguous_stride *= shape[i];
-    }
-
-    cldnn::memory::ptr src_mem;
-    if (const auto* host = dynamic_cast<const USMHostTensor*>(src)) {
-        src_mem = host->get_impl()->get_original_memory();
-    } else if (const auto* remote = dynamic_cast<const RemoteTensorImpl*>(src)) {
-        src_mem = remote->get_original_memory();
-    } else {
-        return false;
-    }
-    if (!src_mem || (src_mem->get_allocation_type() != cldnn::allocation_type::usm_host &&
-                     src_mem->get_allocation_type() != cldnn::allocation_type::usm_device))
-        return false;
-    auto* src_engine = src_mem->get_engine();
-    auto* dst_engine = dst->get_engine();
-    if (!src_engine || !dst_engine || src_engine->runtime_type() != cldnn::runtime_types::ocl ||
-        dst_engine->runtime_type() != cldnn::runtime_types::ocl ||
-        src_engine->get_user_context(cldnn::runtime_types::ocl) !=
-            dst_engine->get_user_context(cldnn::runtime_types::ocl))
-        return false;
-
-    executor->execute(key, src_mem, dst, stream, ov::shape_size(shape));
-    return true;
-}
-
-}  // namespace
-
 bool is_supported(ov::element::Type_t et) {
     switch (et) {
         case ov::element::Type_t::dynamic: return true;
@@ -288,7 +229,7 @@ bool data_types_are_supported(const ov::Node* node) {
 }
 
 void convert_and_copy(const ov::ITensor* src, cldnn::memory::ptr dst, cldnn::stream& stream, const cldnn::layout& src_layout,
-                      bool transpose, std::shared_ptr<cldnn::state_conversion_executor> executor) {
+                      bool transpose) {
     const bool blocking = true;
     auto src_et = src->get_element_type();
     auto dst_et = dst->get_layout().data_type;
@@ -302,9 +243,6 @@ void convert_and_copy(const ov::ITensor* src, cldnn::memory::ptr dst, cldnn::str
         }
         return;
     }
-
-    if (!transpose && convert_and_copy_no_pad_gpu_offloading(src, dst, stream, src_layout, executor))
-        return;
 
     OPENVINO_ASSERT(!dynamic_cast<const ov::intel_gpu::RemoteTensorImpl*>(src),
                     "[GPU] CPU conversion cannot access a remote source tensor");

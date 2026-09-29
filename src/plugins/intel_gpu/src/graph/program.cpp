@@ -280,6 +280,10 @@ kernels_cache& program::get_kernels_cache() const {
     return *_kernels_cache;
 }
 
+std::shared_ptr<state_conversion_executor> program::get_state_conversion_executor() const {
+    return _state_conversion_executor;
+}
+
 program::ptr program::build_program(engine& engine,
                                     const topology& topology,
                                     const ExecutionConfig& config,
@@ -2183,6 +2187,7 @@ void program::load(cldnn::BinaryInputBuffer& ib,
             executor->set_kernels(conversion_keys, conversion_kernels);
             _state_conversion_executor = std::move(executor);
         }
+        _state_conversions_prepared = true;
     }
 
     size_t optimized_out_size;

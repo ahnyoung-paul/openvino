@@ -6,12 +6,14 @@
 
 #include "intel_gpu/runtime/kernel.hpp"
 #include "intel_gpu/runtime/kernel_args.hpp"
+#include "intel_gpu/runtime/engine.hpp"
 #include "intel_gpu/runtime/layout.hpp"
 #include "intel_gpu/runtime/stream.hpp"
 
 #include "openvino/core/except.hpp"
 
 #include <cstdint>
+#include <algorithm>
 #include <limits>
 #include <map>
 #include <mutex>
@@ -22,6 +24,8 @@ namespace cldnn {
 
 using state_conversion_key = std::pair<data_types, data_types>;
 
+// Holds compiled kernels shared by all states of one program.
+// execute() keeps argument binding and completion serialized across InferRequests.
 class state_conversion_executor {
 public:
     static bool supports(state_conversion_key key) {
@@ -73,7 +77,9 @@ public:
             return;
 
         kernel_arguments_desc desc;
-        constexpr size_t local_size = 64;
+        const auto local_size = std::min(count,
+                                         static_cast<size_t>(src->get_engine()->get_device_info().max_work_group_size));
+        OPENVINO_ASSERT(local_size > 0, "[GPU] Invalid state conversion work-group limit");
         OPENVINO_ASSERT(count <= std::numeric_limits<size_t>::max() - (local_size - 1),
                         "[GPU] State conversion work size is too large");
         desc.workGroups.global = {((count - 1) / local_size + 1) * local_size, 1, 1};

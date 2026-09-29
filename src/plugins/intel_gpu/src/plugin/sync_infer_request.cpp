@@ -911,7 +911,6 @@ void SyncInferRequest::allocate_outputs() {
 
 void SyncInferRequest::allocate_states() {
     const auto& network = m_graph->get_network();
-    network->get_program()->get_kernels_cache();
     const auto& variables_info = network->get_variables_info();
     for (const auto& vi : variables_info) {
         const auto& state_prims = vi.second.m_primitives;
@@ -951,7 +950,8 @@ void SyncInferRequest::allocate_states() {
         } else {
             m_variables.emplace(vi.first, std::make_shared<VariableState>(vi.second,
                                                                           m_context,
-                                                                          m_shape_predictor));
+                                                                          m_shape_predictor,
+                                                                          network->get_program()));
         }
     }
 }
