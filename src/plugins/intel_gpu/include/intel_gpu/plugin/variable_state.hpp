@@ -12,6 +12,10 @@
 #include <functional>
 #include <unordered_map>
 
+namespace cldnn {
+class program;
+}
+
 namespace ov::intel_gpu {
 class RemoteContextImpl;
 
@@ -51,7 +55,8 @@ protected:
 
 class VariableState : public VariableStateBase {
 public:
-    VariableState(const VariableStateInfo& info, std::shared_ptr<RemoteContextImpl> context, ShapePredictor::Ptr shape_predictor);
+    VariableState(const VariableStateInfo& info, std::shared_ptr<RemoteContextImpl> context,
+                  ShapePredictor::Ptr shape_predictor, std::shared_ptr<cldnn::program> program = nullptr);
     using Ptr = std::shared_ptr<VariableState>;
 
     void reset() override;
@@ -80,6 +85,7 @@ protected:
     std::vector<std::weak_ptr<cldnn::memory_state::releasable_variable>> m_prim_inst;
     cldnn::memory::ptr m_memory = nullptr;
     bool m_transpose_required = false;
+    std::shared_ptr<cldnn::program> m_program;
     size_t actual_size = 0;
 
     const cldnn::layout m_initial_layout;

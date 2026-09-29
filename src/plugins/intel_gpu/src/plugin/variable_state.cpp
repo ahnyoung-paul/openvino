@@ -7,21 +7,91 @@
 #include "intel_gpu/plugin/remote_context.hpp"
 #include "intel_gpu/plugin/common_utils.hpp"
 #include "intel_gpu/plugin/remote_tensor.hpp"
+#include "intel_gpu/plugin/usm_host_tensor.hpp"
 #include "intel_gpu/plugin/variable_state.hpp"
+#include "intel_gpu/graph/program.hpp"
+#include "intel_gpu/graph/state_conversion_executor.hpp"
 #include "intel_gpu/runtime/memory_caps.hpp"
 #include "intel_gpu/runtime/layout.hpp"
 #include "intel_gpu/runtime/debug_configuration.hpp"
 #include <memory>
+#include <limits>
+#include <utility>
 
 namespace ov::intel_gpu {
 
-VariableState::VariableState(const VariableStateInfo& info, RemoteContextImpl::Ptr context, std::shared_ptr<cldnn::ShapePredictor> shape_predictor)
+namespace {
+
+bool try_gpu_conversion(const ov::ITensor* src, const cldnn::memory::ptr& dst,
+                        cldnn::stream& stream, const cldnn::layout& src_layout,
+                        const std::shared_ptr<cldnn::program>& program) {
+    if (!program || program->get_engine().runtime_type() != cldnn::runtime_types::ocl ||
+        src_layout.data_padding || dst->get_layout().data_padding ||
+        !cldnn::format::is_default_format(src_layout.format) ||
+        src_layout.format != dst->get_layout().format ||
+        src->get_shape() != dst->get_layout().get_shape())
+        return false;
+
+    const cldnn::state_conversion_key key{src->get_element_type().get_type_enum(), dst->get_layout().data_type};
+    const auto& device_info = program->get_engine().get_device_info();
+    if (!cldnn::state_conversion_executor::supports(key) ||
+        ((key.first == cldnn::data_types::f64 || key.second == cldnn::data_types::f64) && !device_info.supports_fp64) ||
+        ((key.first == cldnn::data_types::f16 || key.second == cldnn::data_types::f16) && !device_info.supports_fp16))
+        return false;
+
+    const auto& shape = src->get_shape();
+    const auto& strides = src->get_strides();
+    if (shape.empty() || strides.size() != shape.size())
+        return false;
+    size_t expected_stride = src->get_element_type().size();
+    for (size_t i = shape.size(); i-- > 0;) {
+        if (strides[i] != expected_stride ||
+            shape[i] > std::numeric_limits<size_t>::max() / expected_stride)
+            return false;
+        expected_stride *= shape[i];
+    }
+
+    cldnn::memory::ptr src_memory;
+    if (const auto* host = dynamic_cast<const USMHostTensor*>(src))
+        src_memory = host->get_impl()->get_original_memory();
+    else if (const auto* remote = dynamic_cast<const RemoteTensorImpl*>(src))
+        src_memory = remote->get_original_memory();
+    else
+        return false;
+
+    if (!src_memory || (src_memory->get_allocation_type() != cldnn::allocation_type::usm_host &&
+                        src_memory->get_allocation_type() != cldnn::allocation_type::usm_device) ||
+        (dst->get_allocation_type() != cldnn::allocation_type::usm_device &&
+         dst->get_allocation_type() != cldnn::allocation_type::cl_mem))
+        return false;
+    auto* src_engine = src_memory->get_engine();
+    auto* dst_engine = dst->get_engine();
+    if (!src_engine || !dst_engine || src_engine->runtime_type() != cldnn::runtime_types::ocl ||
+        dst_engine->runtime_type() != cldnn::runtime_types::ocl ||
+        src_engine->get_user_context(cldnn::runtime_types::ocl) !=
+            dst_engine->get_user_context(cldnn::runtime_types::ocl) ||
+        program->get_engine().get_user_context(cldnn::runtime_types::ocl) !=
+            dst_engine->get_user_context(cldnn::runtime_types::ocl))
+        return false;
+
+    auto executor = program->get_state_conversion_executor();
+    OPENVINO_ASSERT(executor && executor->has_kernel(key), "[GPU] State conversion kernel was not prepared");
+    executor->execute(key, src_memory, dst, stream, ov::shape_size(shape));
+    return true;
+}
+
+}  // namespace
+
+VariableState::VariableState(const VariableStateInfo& info, RemoteContextImpl::Ptr context,
+                             std::shared_ptr<cldnn::ShapePredictor> shape_predictor,
+                             std::shared_ptr<cldnn::program> program)
     : VariableStateBase{info.m_id, context}
     , m_layout(info.m_layout)
     , m_user_specified_type(info.m_user_specified_type)
     , m_shape_predictor(shape_predictor)
     , m_prim_inst(info.m_release_variable_inst)
     , m_transpose_required(info.transpose_required)
+    , m_program(std::move(program))
     , m_initial_layout(info.m_layout) {
     update_device_buffer();
 }
@@ -102,7 +172,14 @@ void VariableState::set_state(const ov::SoPtr<ov::ITensor>& state) {
     auto src_fmt = cldnn::format::get_default_format(src_rank);
     auto src_layout = cldnn::layout(ov::PartialShape(src_shape), state->get_element_type(), src_fmt, src_padd);
 
-    convert_and_copy(state._ptr.get(), m_memory, m_context->get_engine().get_service_stream(), src_layout, m_transpose_required);
+    auto& stream = m_context->get_engine().get_service_stream();
+    if (!m_transpose_required && state->get_element_type() == get_user_specified_type() &&
+        state->get_element_type() != m_layout.data_type &&
+        try_gpu_conversion(state._ptr.get(), m_memory, stream, src_layout, m_program)) {
+        set();
+        return;
+    }
+    convert_and_copy(state._ptr.get(), m_memory, stream, src_layout, m_transpose_required);
     set();
 }
 

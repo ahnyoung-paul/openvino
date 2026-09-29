@@ -226,6 +226,26 @@ void Graph::build(std::shared_ptr<cldnn::program> program) {
         m_network = std::make_shared<cldnn::network>(program, m_stream_id);
     }
 
+    std::vector<cldnn::state_conversion_key> conversion_keys;
+    for (const auto& variable : m_network->get_variables_info()) {
+        const auto& info = variable.second;
+        if (info.transpose_required)
+            continue;
+        const bool special_kv_state = std::any_of(info.m_primitives.begin(), info.m_primitives.end(),
+            [](const cldnn::primitive* primitive) {
+                const auto* kv = dynamic_cast<const cldnn::kv_cache*>(primitive);
+                return kv && (kv->compressed || kv->indirect);
+            });
+        if (special_kv_state)
+            continue;
+
+        const auto source_type = info.m_user_specified_type == ov::element::dynamic
+                                     ? info.m_layout.data_type
+                                     : info.m_user_specified_type.get_type_enum();
+        conversion_keys.emplace_back(source_type, info.m_layout.data_type);
+    }
+    program->prepare_state_conversions(conversion_keys);
+
     std::string dry_run_path = GPU_DEBUG_VALUE_OR(m_config.get_dry_run_path(), "");
     std::string dump_graphs_path = GPU_DEBUG_VALUE_OR(m_config.get_dump_graphs_path(), "");
     GPU_DEBUG_IF(!dry_run_path.empty()) {
