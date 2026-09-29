@@ -15,6 +15,7 @@
 #include "intel_gpu/primitives/input_layout.hpp"
 #include "intel_gpu/primitives/read_value.hpp"
 
+#include <cstdint>
 #include <memory>
 #include <vector>
 
@@ -71,6 +72,24 @@ void check_usm_host_to_device_conversion(const ov::Shape& shape,
     cldnn::mem_lock<Dst, mem_lock_type::read> actual(dst_mem, stream);
     for (size_t i = 0; i < count; ++i)
         ASSERT_EQ(actual[i], expected[i]) << "element " << i;
+}
+
+template <typename Src, typename Dst>
+void check_compiled_state_conversion(const ov::Shape& shape,
+                                     const ov::element::Type& src_type,
+                                     const ov::element::Type& dst_type) {
+    auto& engine = get_test_engine();
+    const layout state_layout{shape, dst_type, format::bfyx};
+    topology state_topology;
+    state_topology.add(input_layout("input", state_layout));
+    state_topology.add(read_value{"read_value", {input_info("input")}, "state", {state_layout}, src_type});
+    state_topology.add(assign{"assign", {input_info("read_value")}, "state", state_layout});
+
+    auto network = get_network(engine, state_topology, get_test_default_config(engine), get_test_stream_ptr(), true);
+    auto executor = network->get_program()->get_state_conversion_executor();
+    ASSERT_NE(executor, nullptr);
+    ASSERT_TRUE(executor->has_kernel({src_type.get_type_enum(), dst_type.get_type_enum()}));
+    check_usm_host_to_device_conversion<Src, Dst>(shape, src_type, dst_type, executor, true);
 }
 
 }  // namespace
@@ -139,4 +158,35 @@ TEST(convert_and_copy_test_paul, cached_state_conversion_kernel) {
     ASSERT_TRUE(executor->has_kernel({data_types::bf16, data_types::f16}));
     check_usm_host_to_device_conversion<ov::bfloat16, ov::float16>(shape, ov::element::bf16, ov::element::f16,
                                                                    executor, true);
+}
+
+TEST(convert_and_copy_test_paul, supported_state_conversion_pairs) {
+    EXPECT_TRUE(state_conversion_executor::supports({data_types::bf16, data_types::f16}));
+    EXPECT_TRUE(state_conversion_executor::supports({data_types::f32, data_types::f16}));
+    EXPECT_TRUE(state_conversion_executor::supports({data_types::f64, data_types::f32}));
+    EXPECT_TRUE(state_conversion_executor::supports({data_types::f32, data_types::f64}));
+    EXPECT_TRUE(state_conversion_executor::supports({data_types::i32, data_types::i64}));
+    EXPECT_TRUE(state_conversion_executor::supports({data_types::i32, data_types::u64}));
+    EXPECT_TRUE(state_conversion_executor::supports({data_types::i32, data_types::u32}));
+    EXPECT_FALSE(state_conversion_executor::supports({data_types::i8, data_types::f16}));
+}
+
+TEST(convert_and_copy_test_paul, cached_i32_to_u64_conversion) {
+    auto& engine = get_test_engine();
+    if (engine.runtime_type() != runtime_types::ocl ||
+        !engine.supports_allocation(allocation_type::usm_host) ||
+        !engine.supports_allocation(allocation_type::usm_device))
+        GTEST_SKIP() << "OpenCL USM host/device allocations are required";
+
+    check_compiled_state_conversion<int32_t, uint64_t>({2, 6}, ov::element::i32, ov::element::u64);
+}
+
+TEST(convert_and_copy_test_paul, cached_f64_to_f32_conversion) {
+    auto& engine = get_test_engine();
+    if (engine.runtime_type() != runtime_types::ocl || !engine.get_device_info().supports_fp64 ||
+        !engine.supports_allocation(allocation_type::usm_host) ||
+        !engine.supports_allocation(allocation_type::usm_device))
+        GTEST_SKIP() << "OpenCL FP64 and USM host/device allocations are required";
+
+    check_compiled_state_conversion<double, float>({2, 6}, ov::element::f64, ov::element::f32);
 }

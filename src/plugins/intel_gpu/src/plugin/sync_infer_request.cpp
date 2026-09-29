@@ -838,7 +838,7 @@ void SyncInferRequest::allocate_output(const ov::Output<const ov::Node>& port,
     const auto& device_info = engine.get_device_info();
     // In the case of dynamic shapes, the total_output_bytes is useless as the actual output size is determined only at runtime.
     // For dGPUs, using USM Host memory for outputs may lead to performance degradation in some scenarios (see can_use_usm_host impl).
-    // We have to be conservative and enable USM Host memory for dynamic outputs only on iGPUs. 
+    // We have to be conservative and enable USM Host memory for dynamic outputs only on iGPUs.
     if (cldnn::device_type::integrated_gpu == device_info.dev_type &&
         shape.is_dynamic() &&
         can_use_usm_host(engine, total_output_bytes)) {
@@ -911,6 +911,7 @@ void SyncInferRequest::allocate_outputs() {
 
 void SyncInferRequest::allocate_states() {
     const auto& network = m_graph->get_network();
+    network->get_program()->get_kernels_cache();
     const auto& variables_info = network->get_variables_info();
     for (const auto& vi : variables_info) {
         const auto& state_prims = vi.second.m_primitives;

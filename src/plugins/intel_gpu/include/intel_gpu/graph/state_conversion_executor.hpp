@@ -25,7 +25,18 @@ using state_conversion_key = std::pair<data_types, data_types>;
 class state_conversion_executor {
 public:
     static bool supports(state_conversion_key key) {
-        return (key.first == data_types::bf16 || key.first == data_types::f32) && key.second == data_types::f16;
+        switch (key.first) {
+        case data_types::bf16:
+            return key.second == data_types::f16;
+        case data_types::f32:
+            return key.second == data_types::f16 || key.second == data_types::f64;
+        case data_types::f64:
+            return key.second == data_types::f32;
+        case data_types::i32:
+            return key.second == data_types::i64 || key.second == data_types::u64 || key.second == data_types::u32;
+        default:
+            return false;
+        }
     }
 
     void set_kernels(const std::vector<state_conversion_key>& keys, const std::vector<kernel::ptr>& kernels) {
