@@ -147,10 +147,10 @@ void check_compiled_state_conversion(const ov::Shape& shape,
                                      const ov::element::Type& src_type,
                                      const ov::element::Type& dst_type) {
     auto network = make_state_network(shape, src_type, dst_type);
-    network->get_program()->prepare_state_conversions({{src_type.get_type_enum(), dst_type.get_type_enum()}});
+    network->get_program()->prepare_state_conversions({{static_cast<ov::element::Type_t>(src_type), static_cast<ov::element::Type_t>(dst_type)}});
     auto executor = network->get_program()->get_state_conversion_executor();
     ASSERT_NE(executor, nullptr);
-    ASSERT_TRUE(executor->has_kernel({src_type.get_type_enum(), dst_type.get_type_enum()}));
+    ASSERT_TRUE(executor->has_kernel({static_cast<ov::element::Type_t>(src_type), static_cast<ov::element::Type_t>(dst_type)}));
     check_usm_host_to_device_conversion<Src, Dst>(shape, src_type, dst_type, network);
 }
 
@@ -309,20 +309,20 @@ TEST(convert_and_copy_test_paul, variable_state_reuses_program_kernels_for_sourc
                                         std::numeric_limits<int32_t>::max()};
     auto integer_host = std::make_shared<GpuOnlyHostTensor>(context, ov::element::i32, ov::Shape{2, 3});
     VariableStateInfo i64_info{"i64", layout{ov::Shape{2, 3}, ov::element::i64, format::bfyx},
-                               ov::element::i32.get_type_enum()};
+                               static_cast<ov::element::Type_t>(ov::element::i32)};
     VariableState i64_state(i64_info, context, predictor, retained_program);
     check_state_values<int32_t, int64_t>(i64_state, integer_host, integers, stream,
                                          integer_host->get_impl()->get_original_memory());
 
     VariableStateInfo u32_info{"u32", layout{ov::Shape{2, 3}, ov::element::u32, format::bfyx},
-                               ov::element::i32.get_type_enum()};
+                               static_cast<ov::element::Type_t>(ov::element::i32)};
     VariableState u32_state(u32_info, context, predictor, retained_program);
     check_state_values<int32_t, uint32_t>(u32_state, integer_host, integers, stream,
                                           integer_host->get_impl()->get_original_memory());
 
     if (engine.get_device_info().supports_fp64) {
         VariableStateInfo f64_info{"f64", layout{ov::Shape{2, 6}, ov::element::f64, format::bfyx},
-                                   ov::element::f32.get_type_enum()};
+                                   static_cast<ov::element::Type_t>(ov::element::f32)};
         VariableState f64_state(f64_info, context, predictor, retained_program);
         check_state_values<float, double>(f64_state, host, first_values, stream,
                                           host->get_impl()->get_original_memory());
@@ -380,7 +380,7 @@ TEST(convert_and_copy_test_paul, variable_state_fallback_conditions) {
                                                  f16_host->get_impl()->get_original_memory());
 
     VariableStateInfo unsupported_info{"unsupported", layout{ov::Shape{2, 3}, ov::element::f32, format::bfyx},
-                                       ov::element::f16.get_type_enum()};
+                                       static_cast<ov::element::Type_t>(ov::element::f16)};
     VariableState unsupported(unsupported_info, context, network->get_shape_predictor(), program);
     check_state_values<ov::float16, float>(unsupported, f16_host, f16_values, stream,
                                            f16_host->get_impl()->get_original_memory());

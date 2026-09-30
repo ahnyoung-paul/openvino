@@ -26,6 +26,7 @@
 #include "intel_gpu/primitives/dynamic_quantize.hpp"
 #include "intel_gpu/primitives/grouped_matmul.hpp"
 #include "intel_gpu/primitives/fully_connected.hpp"
+#include "intel_gpu/primitives/kv_cache.hpp"
 #include "dynamic_quantize_inst.h"
 #include "grouped_matmul_inst.h"
 #include "fully_connected_inst.h"
@@ -241,7 +242,7 @@ void Graph::build(std::shared_ptr<cldnn::program> program) {
 
         const auto source_type = info.m_user_specified_type == ov::element::dynamic
                                      ? info.m_layout.data_type
-                                     : info.m_user_specified_type.get_type_enum();
+                                     : static_cast<ov::element::Type_t>(info.m_user_specified_type);
         conversion_keys.emplace_back(source_type, info.m_layout.data_type);
     }
     program->prepare_state_conversions(conversion_keys);

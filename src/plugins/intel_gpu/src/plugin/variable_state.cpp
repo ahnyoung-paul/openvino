@@ -32,7 +32,7 @@ bool try_gpu_conversion(const ov::ITensor* src, const cldnn::memory::ptr& dst,
         src->get_shape() != dst->get_layout().get_shape())
         return false;
 
-    const cldnn::state_conversion_key key{src->get_element_type().get_type_enum(), dst->get_layout().data_type};
+    const cldnn::state_conversion_key key{static_cast<ov::element::Type_t>(src->get_element_type()), dst->get_layout().data_type};
     const auto& device_info = program->get_engine().get_device_info();
     if (!cldnn::state_conversion_executor::supports(key) ||
         ((key.first == cldnn::data_types::f64 || key.second == cldnn::data_types::f64) && !device_info.supports_fp64) ||
