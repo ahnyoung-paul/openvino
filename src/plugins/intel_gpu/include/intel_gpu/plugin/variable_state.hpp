@@ -13,7 +13,7 @@
 #include <unordered_map>
 
 namespace cldnn {
-class program;
+struct program;
 }
 
 namespace ov::intel_gpu {

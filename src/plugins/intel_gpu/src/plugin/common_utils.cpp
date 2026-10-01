@@ -235,7 +235,7 @@ void convert_and_copy(const ov::ITensor* src, cldnn::memory::ptr dst, cldnn::str
     auto dst_et = dst->get_layout().data_type;
 
     if (dst_et == src_et && !transpose) {
-        GPU_DEBUG_COUT << "[state_conversion] copy path, no conversion kernel dtype=" << src_et
+        GPU_DEBUG_INFO << "[state_conversion] copy path, no conversion kernel dtype=" << src_et
                        << " count=" << ov::shape_size(src->get_shape()) << std::endl;
         if (const auto* remote = dynamic_cast<const ov::intel_gpu::RemoteTensorImpl*>(src)) {
             auto mem = remote->get_original_memory();
@@ -249,7 +249,7 @@ void convert_and_copy(const ov::ITensor* src, cldnn::memory::ptr dst, cldnn::str
     OPENVINO_ASSERT(dynamic_cast<const ov::intel_gpu::RemoteTensorImpl*>(src) == nullptr,
                     "[GPU] CPU conversion cannot access a remote source tensor");
     size_t size = ov::shape_size(src->get_shape());
-    GPU_DEBUG_COUT << "[state_conversion] CPU conversion, no OpenCL conversion kernel dtype=" << src_et
+    GPU_DEBUG_INFO << "[state_conversion] CPU conversion, no OpenCL conversion kernel dtype=" << src_et
                    << "->" << ov::element::Type(dst_et) << " count=" << size
                    << " padded=" << static_cast<bool>(src_layout.data_padding)
                    << " transpose=" << transpose << std::endl;
