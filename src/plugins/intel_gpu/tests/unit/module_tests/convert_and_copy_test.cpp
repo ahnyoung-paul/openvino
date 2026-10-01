@@ -72,7 +72,7 @@ public:
     void* data_rw(const ov::element::Type& type) override { return m_tensor->data_rw(type); }
 
     const void* data() const override {
-        OPENVINO_ASSERT(!m_const_data_accessed, "CPU fallback was used for the host import test");
+        OPENVINO_ASSERT(!m_const_data_accessed, "CPU fallback was used for the host conversion test");
         m_const_data_accessed = true;
         return static_cast<const ov::ITensor&>(*m_tensor).data();
     }
@@ -366,12 +366,13 @@ TEST(convert_and_copy_test_paul, variable_state_without_program_uses_cpu_convers
                                            source->get_impl()->get_original_memory());
 }
 
-TEST(convert_and_copy_test_paul, variable_state_imports_aligned_host_and_falls_back_for_unaligned_size) {
+TEST(convert_and_copy_test_paul, variable_state_imports_aligned_host_and_stages_unaligned_inputs) {
     auto& engine = get_test_engine();
     const auto alignment = static_cast<size_t>(engine.get_device_info().cacheline_size.value_or(0));
     if (engine.runtime_type() != runtime_types::ocl || !engine.get_device_info().supports_fp16 ||
-        !engine.supports_allocation(allocation_type::usm_device) || alignment == 0)
-        GTEST_SKIP() << "OpenCL FP16, USM device allocation, and cache-line size are required";
+        !engine.supports_allocation(allocation_type::usm_device) ||
+        !engine.supports_allocation(allocation_type::usm_host) || alignment <= sizeof(float))
+        GTEST_SKIP() << "OpenCL FP16, USM host/device allocations, and cache-line alignment are required";
 
     ASSERT_EQ(alignment % sizeof(float), 0);
     const ov::Shape aligned_shape{alignment / sizeof(float)};
@@ -383,7 +384,7 @@ TEST(convert_and_copy_test_paul, variable_state_imports_aligned_host_and_falls_b
     VariableState variable(network->get_variable_info("state"), context, network->get_shape_predictor(), program);
 
     std::unique_ptr<void, decltype(&ov::util::aligned_free)> storage(
-        ov::util::aligned_alloc(alignment, alignment), ov::util::aligned_free);
+        ov::util::aligned_alloc(alignment, 2 * alignment), ov::util::aligned_free);
     ASSERT_NE(storage, nullptr);
     auto aligned_view = ov::make_tensor(ov::element::f32, aligned_shape, storage.get());
     auto import_only_source = std::make_shared<ImportOnlyHostTensor>(aligned_view);
@@ -392,10 +393,69 @@ TEST(convert_and_copy_test_paul, variable_state_imports_aligned_host_and_falls_b
         aligned_values[i] = static_cast<float>(i) - 4.f;
     check_state_values<float, ov::float16>(variable, import_only_source, aligned_values, stream);
 
+    auto* unaligned_ptr = static_cast<float*>(storage.get()) + 1;
+    auto unaligned_view = ov::make_tensor(ov::element::f32, aligned_shape, unaligned_ptr);
+    auto unaligned_source = std::make_shared<ImportOnlyHostTensor>(unaligned_view);
+    std::vector<float> staged_values(ov::shape_size(aligned_shape), -0.5f);
+    check_state_values<float, ov::float16>(variable, unaligned_source, staged_values, stream);
+
     const ov::Shape unaligned_size_shape{alignment / sizeof(float) + 1};
-    auto unaligned_size_source = ov::make_tensor(ov::element::f32, unaligned_size_shape);
-    std::vector<float> fallback_values(ov::shape_size(unaligned_size_shape), 0.25f);
-    check_state_values<float, ov::float16>(variable, unaligned_size_source, fallback_values, stream);
+    auto unaligned_size_view = ov::make_tensor(ov::element::f32, unaligned_size_shape, storage.get());
+    auto unaligned_size_source = std::make_shared<ImportOnlyHostTensor>(unaligned_size_view);
+    std::vector<float> unaligned_size_values(ov::shape_size(unaligned_size_shape), 0.25f);
+    check_state_values<float, ov::float16>(variable, unaligned_size_source, unaligned_size_values, stream);
+}
+
+TEST(convert_and_copy_test_paul, variable_state_keeps_async_conversion_inputs_until_consumed_or_destroyed) {
+    auto& engine = get_test_engine();
+    if (engine.runtime_type() != runtime_types::ocl || !engine.get_device_info().supports_fp16 ||
+        !engine.supports_allocation(allocation_type::usm_host) ||
+        !engine.supports_allocation(allocation_type::usm_device))
+        GTEST_SKIP() << "OpenCL FP16 and USM host/device allocations are required";
+
+    const ov::Shape shape{2, 3};
+    auto network = make_state_network(shape, ov::element::f32, ov::element::f16);
+    auto program = network->get_program();
+    program->prepare_state_conversions({{data_types::f32, data_types::f16}});
+    auto context = std::make_shared<RemoteContextImpl>("GPU", std::vector<cldnn::device::ptr>{engine.get_device()});
+    auto& stream = context->get_engine().get_service_stream();
+    const auto& info = network->get_variable_info("state");
+    VariableState variable(info, context, network->get_shape_predictor(), program);
+
+    auto source = ov::make_tensor(ov::element::f32, shape);
+    const std::vector<float> values{1.f, -2.f, 3.f, -4.f, 5.f, -6.f};
+    std::copy(values.begin(), values.end(), static_cast<float*>(source->data()));
+    std::weak_ptr<ov::ITensor> pending_source = source;
+    ASSERT_NO_THROW(variable.set_state(ov::SoPtr<ov::ITensor>(source)));
+    source.reset();
+    EXPECT_FALSE(pending_source.expired());
+
+    auto result = variable.get_memory();
+    EXPECT_TRUE(pending_source.expired());
+    {
+        cldnn::mem_lock<ov::float16, mem_lock_type::read> actual(result, stream);
+        for (size_t i = 0; i < values.size(); ++i)
+            EXPECT_EQ(actual[i], ov::float16(values[i]));
+    }
+
+    source = ov::make_tensor(ov::element::f32, shape);
+    std::fill_n(static_cast<float*>(source->data()), values.size(), 0.25f);
+    pending_source = source;
+    ASSERT_NO_THROW(variable.set_state(ov::SoPtr<ov::ITensor>(source)));
+    source.reset();
+    ASSERT_NO_THROW(variable.reset());
+    EXPECT_TRUE(pending_source.expired());
+
+    {
+        VariableState temporary(info, context, network->get_shape_predictor(), program);
+        source = ov::make_tensor(ov::element::f32, shape);
+        std::fill_n(static_cast<float*>(source->data()), values.size(), -0.5f);
+        pending_source = source;
+        ASSERT_NO_THROW(temporary.set_state(ov::SoPtr<ov::ITensor>(source)));
+        source.reset();
+        EXPECT_FALSE(pending_source.expired());
+    }
+    EXPECT_TRUE(pending_source.expired());
 }
 
 TEST(convert_and_copy_test_paul, variable_state_fallback_conditions) {

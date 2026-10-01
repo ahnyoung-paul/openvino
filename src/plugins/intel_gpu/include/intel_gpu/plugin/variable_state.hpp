@@ -57,6 +57,7 @@ class VariableState : public VariableStateBase {
 public:
     VariableState(const VariableStateInfo& info, std::shared_ptr<RemoteContextImpl> context,
                   ShapePredictor::Ptr shape_predictor, std::shared_ptr<cldnn::program> program = nullptr);
+    ~VariableState() override;
     using Ptr = std::shared_ptr<VariableState>;
 
     void reset() override;
@@ -90,7 +91,13 @@ protected:
 
     const cldnn::layout m_initial_layout;
 
-    void update_device_buffer();
+    // Keep conversion inputs alive until the state is consumed or changed.
+    mutable ov::SoPtr<ov::ITensor> m_conversion_input;
+    mutable cldnn::memory::ptr m_conversion_source;
+    mutable cldnn::event::ptr m_conversion_event;
+
+    void wait_for_conversion(const char* caller) const;
+    void update_device_buffer(double* allocation_us = nullptr, double* reinterpret_us = nullptr);
 };
 
 using VariablesMap = std::unordered_map<std::string, std::shared_ptr<VariableStateBase>>;
