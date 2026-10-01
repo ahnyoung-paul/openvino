@@ -14,6 +14,7 @@
 #include "openvino/core/except.hpp"
 
 #include <cstdint>
+#include <array>
 #include <chrono>
 #include <algorithm>
 #include <limits>
@@ -81,7 +82,8 @@ public:
     }
 
     event::ptr execute(state_conversion_key key, memory::cptr src, memory::cptr dst, stream& stream, size_t count,
-                       const std::vector<event::ptr>& dependencies = {}, state_conversion_timing* timing = nullptr) {
+                       const std::vector<event::ptr>& dependencies = {}, state_conversion_timing* timing = nullptr,
+                       const layout* source_layout = nullptr, bool transpose = false) {
         using clock = std::chrono::steady_clock;
         const auto stamp = [timing] { return timing ? clock::now() : clock::time_point{}; };
         const auto elapsed = [](clock::time_point begin, clock::time_point end) {
@@ -93,6 +95,44 @@ public:
         if (count == 0)
             return nullptr;
 
+        const auto& input_layout = source_layout ? *source_layout : src->get_layout();
+        const auto shape = input_layout.get_shape();
+        OPENVINO_ASSERT(!shape.empty() && shape.size() <= 6 && format::is_default_format(input_layout.format),
+                        "[GPU] Unsupported state conversion source layout");
+        OPENVINO_ASSERT(count == ov::shape_size(shape), "[GPU] State conversion element count mismatch");
+        OPENVINO_ASSERT(!transpose || shape.size() >= 2, "[GPU] State transpose requires at least two axes");
+        const auto physical_shape = input_layout.get_padded_dims();
+        std::array<uint64_t, 6> dimensions{1, 1, 1, 1, 1, 1};
+        std::array<uint64_t, 6> strides{0, 0, 0, 0, 0, 0};
+        size_t pitch = 1;
+        size_t source_offset = 0;
+        size_t last_element = 0;
+        for (size_t i = shape.size(); i-- > 0;) {
+            const size_t axis = 6 - shape.size() + i;
+            dimensions[axis] = shape[i];
+            strides[axis] = pitch;
+            OPENVINO_ASSERT(input_layout.data_padding._lower_size[i] >= 0 &&
+                            input_layout.data_padding._upper_size[i] >= 0,
+                            "[GPU] Negative state source padding is unsupported");
+            const auto lower = static_cast<size_t>(input_layout.data_padding._lower_size[i]);
+            OPENVINO_ASSERT(lower <= (std::numeric_limits<size_t>::max() - source_offset) / pitch,
+                            "[GPU] State conversion source offset overflow");
+            source_offset += lower * pitch;
+            OPENVINO_ASSERT(shape[i] > 0 && shape[i] - 1 <= (std::numeric_limits<size_t>::max() - last_element) / pitch,
+                            "[GPU] State conversion source span overflow");
+            last_element += (shape[i] - 1) * pitch;
+            OPENVINO_ASSERT(physical_shape[i] > 0 &&
+                            static_cast<size_t>(physical_shape[i]) <= std::numeric_limits<size_t>::max() / pitch,
+                            "[GPU] State conversion source pitch overflow");
+            pitch *= static_cast<size_t>(physical_shape[i]);
+        }
+        const auto element_size = data_type_traits::size_of(key.first);
+        OPENVINO_ASSERT(src->size() >= element_size && source_offset < src->size() / element_size &&
+                        last_element < src->size() / element_size - source_offset,
+                        "[GPU] State conversion source memory is too small");
+        OPENVINO_ASSERT(count <= dst->size() / data_type_traits::size_of(key.second),
+                        "[GPU] State conversion destination memory is too small");
+
         kernel_arguments_desc desc;
         const auto local_size = std::min(count,
                                          static_cast<size_t>(src->get_engine()->get_device_info().max_work_group_size));
@@ -102,12 +142,22 @@ public:
         desc.workGroups.global = {((count - 1) / local_size + 1) * local_size, 1, 1};
         desc.workGroups.local = {local_size, 1, 1};
         desc.arguments = {{argument_desc::Types::INPUT, 0},
-                          {argument_desc::Types::OUTPUT, 0},
-                          {argument_desc::Types::SCALAR, 0}};
-        scalar_desc scalar{};
-        scalar.t = scalar_desc::Types::UINT64;
-        scalar.v.u64 = static_cast<uint64_t>(count);
-        desc.scalars.push_back(scalar);
+                          {argument_desc::Types::OUTPUT, 0}};
+        const auto add_scalar = [&](uint64_t value) {
+            desc.arguments.push_back({argument_desc::Types::SCALAR, static_cast<uint32_t>(desc.scalars.size())});
+            scalar_desc scalar{};
+            scalar.t = scalar_desc::Types::UINT64;
+            scalar.v.u64 = value;
+            desc.scalars.push_back(scalar);
+        };
+        add_scalar(count);
+        add_scalar(source_offset);
+        add_scalar(static_cast<bool>(input_layout.data_padding));
+        add_scalar(transpose);
+        for (auto dimension : dimensions)
+            add_scalar(dimension);
+        for (auto stride : strides)
+            add_scalar(stride);
         desc.layerID = "state_conversion";
 
         kernel_arguments_data args;
@@ -123,7 +173,9 @@ public:
         GPU_DEBUG_INFO << "[state_conversion] OpenCL enqueue kernel=" << it->second->get_id()
                        << " dtype=" << ov::element::Type(key.first) << "->" << ov::element::Type(key.second)
                        << " count=" << count << " global=" << desc.workGroups.global[0]
-                       << " local=" << desc.workGroups.local[0] << std::endl;
+                       << " local=" << desc.workGroups.local[0]
+                       << " padded=" << static_cast<bool>(input_layout.data_padding)
+                       << " transpose=" << transpose << std::endl;
         const auto before_enqueue = stamp();
         auto completion = stream.enqueue_kernel(*it->second, desc, args, dependencies, true);
         const auto after_enqueue = stamp();

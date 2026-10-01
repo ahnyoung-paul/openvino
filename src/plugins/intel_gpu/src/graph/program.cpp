@@ -1955,7 +1955,7 @@ void program::save(cldnn::BinaryOutputBuffer& ob) const {
             ob << get_node_ptr(impl_id)->get_selected_impl()->get_cached_kernel_ids(kernels_cache);
         }
 
-        constexpr uint32_t state_conversion_cache_version = 1;
+        constexpr uint32_t state_conversion_cache_version = 2;
         ob << state_conversion_cache_version;
         auto keys = _state_conversion_executor ? _state_conversion_executor->get_keys() : std::vector<state_conversion_key>{};
         ob << keys.size();
@@ -2165,7 +2165,7 @@ void program::load(cldnn::BinaryInputBuffer& ib,
 
         uint32_t state_conversion_cache_version;
         ib >> state_conversion_cache_version;
-        OPENVINO_ASSERT(state_conversion_cache_version == 1, "[GPU] Unsupported state conversion cache version");
+        OPENVINO_ASSERT(state_conversion_cache_version == 2, "[GPU] Unsupported state conversion cache version");
         size_t conversion_count;
         ib >> conversion_count;
         std::vector<state_conversion_key> conversion_keys;

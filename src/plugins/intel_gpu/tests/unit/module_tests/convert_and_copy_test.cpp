@@ -16,6 +16,7 @@
 #include "openvino/runtime/make_tensor.hpp"
 #include "openvino/reference/convert.hpp"
 #include "openvino/util/memory.hpp"
+#include "openvino/util/env_util.hpp"
 #include "intel_gpu/primitives/assign.hpp"
 #include "intel_gpu/primitives/input_layout.hpp"
 #include "intel_gpu/primitives/read_value.hpp"
@@ -456,6 +457,61 @@ TEST(convert_and_copy_test_paul, variable_state_keeps_async_conversion_inputs_un
         EXPECT_FALSE(pending_source.expired());
     }
     EXPECT_TRUE(pending_source.expired());
+}
+
+TEST(convert_and_copy_test_paul, variable_state_padded_roi_uses_gpu_without_packing) {
+    auto& engine = get_test_engine();
+    if (!ov::util::getenv_bool("USE_GPU_CONVERSION", false) ||
+        engine.runtime_type() != runtime_types::ocl || !engine.get_device_info().supports_fp16 ||
+        !engine.supports_allocation(allocation_type::usm_host) ||
+        !engine.supports_allocation(allocation_type::usm_device))
+        GTEST_SKIP() << "USE_GPU_CONVERSION=1, OpenCL FP16 and USM allocations are required";
+
+    auto network = make_state_network({2, 2}, ov::element::f32, ov::element::f16);
+    auto program = network->get_program();
+    program->prepare_state_conversions({{data_types::f32, data_types::f16}});
+    auto context = std::make_shared<RemoteContextImpl>("GPU", std::vector<cldnn::device::ptr>{engine.get_device()});
+    auto& stream = context->get_engine().get_service_stream();
+    for (bool transpose : {false, true}) {
+        auto info = network->get_variable_info("state");
+        info.transpose_required = transpose;
+        VariableState variable(info, context, network->get_shape_predictor(), program);
+        ov::Tensor parent(ov::element::f32, {2, 4});
+        const std::vector<float> physical_values{1.f, 2.f, 3.f, 4.f, 5.f, 6.f, 7.f, 8.f};
+        std::copy(physical_values.begin(), physical_values.end(), parent.data<float>());
+        ov::Tensor view(parent, {0, 2}, {2, 4});
+        ASSERT_FALSE(view.is_continuous());
+        auto source = std::make_shared<ImportOnlyHostTensor>(get_tensor_impl(view)._ptr);
+        // The wrapper rejects a second data() access, detecting a CPU fallback.
+        ASSERT_NO_THROW(variable.set_state(ov::SoPtr<ov::ITensor>(source)));
+        source.reset();
+        view = {};
+        parent = {};
+        cldnn::mem_lock<ov::float16, mem_lock_type::read> result(variable.get_memory(), stream);
+        const std::vector<float> expected = transpose ? std::vector<float>{3.f, 7.f, 4.f, 8.f}
+                                                       : std::vector<float>{3.f, 4.f, 7.f, 8.f};
+        for (size_t i = 0; i < expected.size(); ++i)
+            ASSERT_EQ(result[i], ov::float16(expected[i]));
+    }
+}
+
+TEST(convert_and_copy_test_paul, cpu_padded_roi_preserves_values_and_transpose) {
+    auto& engine = get_test_engine();
+    auto& stream = get_test_stream();
+    ov::Tensor parent(ov::element::f32, {2, 4});
+    const std::vector<float> values{1.f, 2.f, 3.f, 4.f, 5.f, 6.f, 7.f, 8.f};
+    std::copy(values.begin(), values.end(), parent.data<float>());
+    ov::Tensor view(parent, {0, 2}, {2, 4});
+    const layout source_layout(ov::Shape{2, 2}, data_types::f32, format::bfyx, padding({0, 0}, {0, 2}));
+    for (bool transpose : {false, true}) {
+        auto destination = engine.allocate_memory(layout{ov::Shape{2, 2}, data_types::f32, format::bfyx});
+        ASSERT_NO_THROW(convert_and_copy(get_tensor_impl(view)._ptr.get(), destination, stream, source_layout, transpose));
+        cldnn::mem_lock<float, mem_lock_type::read> result(destination, stream);
+        const std::vector<float> expected = transpose ? std::vector<float>{3.f, 7.f, 4.f, 8.f}
+                                                       : std::vector<float>{3.f, 4.f, 7.f, 8.f};
+        for (size_t i = 0; i < expected.size(); ++i)
+            ASSERT_EQ(result[i], expected[i]);
+    }
 }
 
 TEST(convert_and_copy_test_paul, variable_state_fallback_conditions) {

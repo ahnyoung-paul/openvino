@@ -92,9 +92,9 @@ bool try_gpu_conversion(const ov::ITensor* src, const cldnn::memory::ptr& dst,
                         cldnn::stream& stream, const cldnn::layout& src_layout,
                         const std::shared_ptr<cldnn::program>& program,
                         cldnn::memory::ptr& src_memory, cldnn::event::ptr& completion,
-                        state_conversion_profile& profile) {
+                        state_conversion_profile& profile, bool transpose) {
     if (!program || program->get_engine().runtime_type() != cldnn::runtime_types::ocl ||
-        src_layout.data_padding || dst->get_layout().data_padding ||
+        dst->get_layout().data_padding ||
         !cldnn::format::is_default_format(src_layout.format) ||
         src_layout.format != dst->get_layout().format ||
         src->get_shape() != dst->get_layout().get_shape())
@@ -109,14 +109,19 @@ bool try_gpu_conversion(const ov::ITensor* src, const cldnn::memory::ptr& dst,
 
     const auto& shape = src->get_shape();
     const auto& strides = src->get_strides();
-    if (shape.empty() || strides.size() != shape.size())
+    if (shape.empty() || shape.size() > 6 || strides.size() != shape.size())
         return false;
+    const auto physical_shape = src_layout.get_padded_dims();
     size_t expected_stride = src->get_element_type().size();
+    size_t source_span = expected_stride;
     for (size_t i = shape.size(); i-- > 0;) {
-        if (strides[i] != expected_stride ||
-            shape[i] > std::numeric_limits<size_t>::max() / expected_stride)
+        if (shape[i] == 0 || (shape[i] > 1 && strides[i] != expected_stride) ||
+            strides[i] == 0 || shape[i] - 1 > (std::numeric_limits<size_t>::max() - source_span) / strides[i] ||
+            physical_shape[i] <= 0 || static_cast<size_t>(physical_shape[i]) >
+                std::numeric_limits<size_t>::max() / expected_stride)
             return false;
-        expected_stride *= shape[i];
+        source_span += (shape[i] - 1) * strides[i];
+        expected_stride *= static_cast<size_t>(physical_shape[i]);
     }
 
     auto* dst_engine = dst->get_engine();
@@ -144,19 +149,23 @@ bool try_gpu_conversion(const ov::ITensor* src, const cldnn::memory::ptr& dst,
         const auto* host_ptr = src->data();
         if (host_ptr == nullptr)
             return false;
+        // Copy the view's physical span, preserving row gaps without reading beyond its last element.
+        const cldnn::layout span_layout(ov::Shape{source_span / src->get_element_type().size()},
+                                       src->get_element_type(), cldnn::format::bfyx);
         if (alignment != 0 && reinterpret_cast<std::uintptr_t>(host_ptr) % alignment == 0 &&
-            expected_stride % alignment == 0) {
+            source_span % alignment == 0) {
             profile.measure(profile.host_import_us, [&] {
                 src_memory = dst_engine->create_hostbuffer(host_ptr,
-                                                       expected_stride,
+                                                       source_span,
                                                        cldnn::allocation_type::cl_mem,
-                                                       src_layout);
+                                                       span_layout);
             });
             imported_host_pointer = true;
             profile.path = "host_import";
             profile.measure(profile.source_log_us, [&] {
                 GPU_DEBUG_INFO << "[state_conversion] host pointer imported dtype=" << src->get_element_type()
-                               << " bytes=" << expected_stride << " alignment=" << alignment << std::endl;
+                               << " bytes=" << source_span << " alignment=" << alignment
+                               << " padded=" << static_cast<bool>(src_layout.data_padding) << std::endl;
             });
         } else {
             if (!dst_engine->supports_allocation(cldnn::allocation_type::usm_host)) {
@@ -164,13 +173,14 @@ bool try_gpu_conversion(const ov::ITensor* src, const cldnn::memory::ptr& dst,
                 return false;
             }
             profile.measure(profile.staging_alloc_us, [&] {
-                src_memory = dst_engine->allocate_memory(src_layout, cldnn::allocation_type::usm_host, false);
+                src_memory = dst_engine->allocate_memory(span_layout, cldnn::allocation_type::usm_host, false);
             });
             staging_source = host_ptr;
             profile.path = "usm_host_staging";
             profile.measure(profile.source_log_us, [&] {
                 GPU_DEBUG_INFO << "[state_conversion] host staging to USM_HOST dtype=" << src->get_element_type()
-                               << " bytes=" << expected_stride << std::endl;
+                               << " bytes=" << source_span
+                               << " padded=" << static_cast<bool>(src_layout.data_padding) << std::endl;
             });
         }
     }
@@ -199,17 +209,17 @@ bool try_gpu_conversion(const ov::ITensor* src, const cldnn::memory::ptr& dst,
         if (staging_source) {
             cldnn::event::ptr copy_event;
             profile.measure(profile.copy_submit_us, [&] {
-                copy_event = src_memory->copy_from(stream, staging_source, false);
+                copy_event = src_memory->copy_from(stream, staging_source, 0, 0, source_span, false);
             });
             OPENVINO_ASSERT(copy_event, "[GPU] Host staging copy did not return an event");
             profile.measure(profile.executor_us, [&] {
                 completion = executor->execute(key, src_memory, dst, stream, ov::shape_size(shape), {copy_event},
-                                               profile.enabled ? &profile.kernel : nullptr);
+                                               profile.enabled ? &profile.kernel : nullptr, &src_layout, transpose);
             });
         } else {
             profile.measure(profile.executor_us, [&] {
                 completion = executor->execute(key, src_memory, dst, stream, ov::shape_size(shape), {},
-                                               profile.enabled ? &profile.kernel : nullptr);
+                                               profile.enabled ? &profile.kernel : nullptr, &src_layout, transpose);
             });
         }
         OPENVINO_ASSERT(completion, "[GPU] State conversion did not return a completion event");
@@ -331,6 +341,7 @@ void VariableState::set_state(const ov::SoPtr<ov::ITensor>& state) {
                                            std::vector<ov::Dimension::value_type>(src_rank, 0),
                                            dynamic_pad_dims);
     auto src_stride = state->get_strides();
+    OPENVINO_ASSERT(src_stride.size() == src_rank, "[GPU] State source stride rank mismatch");
     for (size_t i = 0; i < src_rank; ++i) {
         src_stride[i] /= state->get_element_type().bitwidth() / 8;
     }
@@ -380,19 +391,19 @@ void VariableState::set_state(const ov::SoPtr<ov::ITensor>& state) {
 
     // check whether the src tensor is padded
     const auto stride_begin = profile.enabled ? conversion_clock::now() : conversion_clock::time_point{};
-    std::vector<size_t> src_stride_no_pad(src_rank, 1);
     std::vector<ov::Dimension::value_type> upper_pad(src_rank, 0);
     std::vector<ov::Dimension::value_type> lower_pad(src_rank, 0);
-    for (int32_t i = static_cast<int32_t>(src_stride.size()) - 1; i >= 0; --i) {
-        if (i <= static_cast<int32_t>(src_stride.size()) - 2)
-            src_stride_no_pad[i] = src_stride_no_pad[i + 1] * src_shape[i + 1];
-        if (src_stride[i] != src_stride_no_pad[i]) {
-            OPENVINO_ASSERT(src_stride[i] > src_stride_no_pad[i]);
-            size_t padded_size = src_stride[i] / src_stride[i + 1];
-            size_t non_padded_size = src_stride_no_pad[i] / src_stride_no_pad[i + 1];
-            ov::Dimension::value_type pad_dim = i + 1;
-            upper_pad[pad_dim] = static_cast<ov::Dimension::value_type>(padded_size) - static_cast<ov::Dimension::value_type>(non_padded_size);
-        }
+    OPENVINO_ASSERT(src_stride.empty() || src_stride.back() == 1,
+                    "[GPU] State source innermost stride must be one element");
+    for (size_t i = src_rank; i-- > 1;) {
+        OPENVINO_ASSERT(src_stride[i] > 0 && src_stride[i - 1] % src_stride[i] == 0,
+                        "[GPU] State source strides cannot be represented as padding");
+        const size_t padded_size = src_stride[i - 1] / src_stride[i];
+        OPENVINO_ASSERT(padded_size >= src_shape[i], "[GPU] Overlapping state source strides are unsupported");
+        OPENVINO_ASSERT(padded_size - src_shape[i] <=
+                        static_cast<size_t>(std::numeric_limits<ov::Dimension::value_type>::max()),
+                        "[GPU] State source padding is too large");
+        upper_pad[i] = static_cast<ov::Dimension::value_type>(padded_size - src_shape[i]);
     }
     cldnn::padding src_padd = cldnn::padding(lower_pad, upper_pad);
     auto src_fmt = cldnn::format::get_default_format(src_rank);
@@ -402,11 +413,11 @@ void VariableState::set_state(const ov::SoPtr<ov::ITensor>& state) {
 
     auto& stream = m_context->get_engine().get_service_stream();
     bool gpu_conversion = false;
-    if (use_gpu_conversion && !m_transpose_required && state->get_element_type() == get_user_specified_type() &&
+    if (use_gpu_conversion && state->get_element_type() == get_user_specified_type() &&
         state->get_element_type() != m_layout.data_type) {
         profile.measure(profile.gpu_try_us, [&] {
             gpu_conversion = try_gpu_conversion(state._ptr.get(), m_memory, stream, src_layout, m_program,
-                                                m_conversion_source, m_conversion_event, profile);
+                                                m_conversion_source, m_conversion_event, profile, m_transpose_required);
         });
     }
     if (gpu_conversion) {
@@ -414,7 +425,8 @@ void VariableState::set_state(const ov::SoPtr<ov::ITensor>& state) {
         set();
         return;
     }
-    profile.path = state->get_element_type() == m_layout.data_type && !m_transpose_required ? "copy" : "cpu_fallback";
+    profile.path = state->get_element_type() == m_layout.data_type && !m_transpose_required && !src_padd
+                       ? "copy" : "cpu_fallback";
     m_conversion_source.reset();
     profile.measure(profile.fallback_us, [&] {
         convert_and_copy(state._ptr.get(), m_memory, stream, src_layout, m_transpose_required);

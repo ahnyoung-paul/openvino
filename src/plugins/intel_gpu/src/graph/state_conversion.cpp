@@ -18,7 +18,7 @@ namespace {
 
 std::shared_ptr<kernel_string> make_source(state_conversion_key key) {
     auto source = std::make_shared<kernel_string>();
-    source->entry_point = "state_convert_" + std::to_string(static_cast<int>(key.first)) + "_" +
+    source->entry_point = "state_convert_v2_" + std::to_string(static_cast<int>(key.first)) + "_" +
                           std::to_string(static_cast<int>(key.second));
 
     const char* input_type = nullptr;
@@ -28,28 +28,28 @@ std::shared_ptr<kernel_string> make_source(state_conversion_key key) {
     case data_types::bf16:
         input_type = "ushort";
         output_type = "half";
-        value = "convert_half_rte(as_float(((uint)input[index]) << 16))";
+        value = "convert_half_rte(as_float(((uint)input[src_index]) << 16))";
         break;
     case data_types::f32:
         input_type = "float";
         if (key.second == data_types::f16) {
             output_type = "half";
-            value = "convert_half_rte(input[index])";
+            value = "convert_half_rte(input[src_index])";
         } else {
             output_type = "double";
-            value = "(double)input[index]";
+            value = "(double)input[src_index]";
         }
         break;
     case data_types::f64:
         input_type = "double";
         output_type = "float";
-        value = "convert_float_rte(input[index])";
+        value = "convert_float_rte(input[src_index])";
         break;
     case data_types::i32:
         input_type = "int";
         output_type = key.second == data_types::i64 ? "long" :
                       key.second == data_types::u64 ? "ulong" : "uint";
-        value = "(" + std::string(output_type) + ")input[index]";
+        value = "(" + std::string(output_type) + ")input[src_index]";
         break;
     default:
         OPENVINO_THROW("[GPU] Unsupported state conversion type");
@@ -60,9 +60,28 @@ std::shared_ptr<kernel_string> make_source(state_conversion_key key) {
     if (key.second == data_types::f16)
         source->str += "#pragma OPENCL EXTENSION cl_khr_fp16 : enable\n";
     source->str += "__kernel void " + source->entry_point + "(__global const " + input_type + "* input, "
-                  "__global " + output_type + "* output, ulong count) {\n"
+                  "__global " + output_type + "* output, ulong count, ulong src_offset, ulong padded, ulong transpose,\n"
+                  "    ulong d0, ulong d1, ulong d2, ulong d3, ulong d4, ulong d5,\n"
+                  "    ulong s0, ulong s1, ulong s2, ulong s3, ulong s4, ulong s5) {\n"
                   "    size_t index = get_global_id(0);\n"
-                  "    if (index < count) output[index] = " + value + ";\n"
+                  "    if (index >= count) return;\n"
+                  "    size_t src_index = src_offset + index;\n"
+                  "    if (padded) {\n"
+                  "        const ulong dims[6] = {d0, d1, d2, d3, d4, d5};\n"
+                  "        const ulong strides[6] = {s0, s1, s2, s3, s4, s5};\n"
+                  "        size_t remaining = index;\n"
+                  "        src_index = src_offset;\n"
+                  "        for (int axis = 5; axis >= 0; --axis) {\n"
+                  "            src_index += (remaining % dims[axis]) * strides[axis];\n"
+                  "            remaining /= dims[axis];\n"
+                  "        }\n"
+                  "    }\n"
+                  "    size_t dst_index = index;\n"
+                  "    if (transpose) {\n"
+                  "        size_t plane = d4 * d5;\n"
+                  "        dst_index = (index / plane) * plane + (index % d5) * d4 + (index / d5) % d4;\n"
+                  "    }\n"
+                  "    output[dst_index] = " + value + ";\n"
                   "}\n";
     return source;
 }

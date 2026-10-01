@@ -230,8 +230,6 @@ void Graph::build(std::shared_ptr<cldnn::program> program) {
     std::vector<cldnn::state_conversion_key> conversion_keys;
     for (const auto& variable : m_network->get_variables_info()) {
         const auto& info = variable.second;
-        if (info.transpose_required)
-            continue;
         const bool special_kv_state = std::any_of(info.m_primitives.begin(), info.m_primitives.end(),
             [](const cldnn::primitive* primitive) {
                 const auto* kv = dynamic_cast<const cldnn::kv_cache*>(primitive);
