@@ -14,6 +14,7 @@
 #include "intel_gpu/runtime/memory_caps.hpp"
 #include "intel_gpu/runtime/layout.hpp"
 #include "intel_gpu/runtime/debug_configuration.hpp"
+#include <cstdint>
 #include <memory>
 #include <limits>
 #include <utility>
@@ -51,31 +52,61 @@ bool try_gpu_conversion(const ov::ITensor* src, const cldnn::memory::ptr& dst,
         expected_stride *= shape[i];
     }
 
-    cldnn::memory::ptr src_memory;
-    if (const auto* host = dynamic_cast<const USMHostTensor*>(src))
-        src_memory = host->get_impl()->get_original_memory();
-    else if (const auto* remote = dynamic_cast<const RemoteTensorImpl*>(src))
-        src_memory = remote->get_original_memory();
-    else
-        return false;
-
-    if (!src_memory || (src_memory->get_allocation_type() != cldnn::allocation_type::usm_host &&
-                        src_memory->get_allocation_type() != cldnn::allocation_type::usm_device) ||
-        (dst->get_allocation_type() != cldnn::allocation_type::usm_device &&
-         dst->get_allocation_type() != cldnn::allocation_type::cl_mem))
-        return false;
-    auto* src_engine = src_memory->get_engine();
     auto* dst_engine = dst->get_engine();
-    if (!src_engine || !dst_engine || src_engine->runtime_type() != cldnn::runtime_types::ocl ||
-        dst_engine->runtime_type() != cldnn::runtime_types::ocl ||
-        src_engine->get_user_context(cldnn::runtime_types::ocl) !=
-            dst_engine->get_user_context(cldnn::runtime_types::ocl) ||
+    if (!dst_engine || dst_engine->runtime_type() != cldnn::runtime_types::ocl ||
+        (dst->get_allocation_type() != cldnn::allocation_type::usm_device &&
+         dst->get_allocation_type() != cldnn::allocation_type::cl_mem) ||
         program->get_engine().get_user_context(cldnn::runtime_types::ocl) !=
             dst_engine->get_user_context(cldnn::runtime_types::ocl))
         return false;
 
+    cldnn::memory::ptr src_memory;
+    bool imported_host_pointer = false;
+    if (const auto* host = dynamic_cast<const USMHostTensor*>(src)) {
+        src_memory = host->get_impl()->get_original_memory();
+        if (!src_memory)
+            return false;
+    } else if (const auto* remote = dynamic_cast<const RemoteTensorImpl*>(src)) {
+        src_memory = remote->get_original_memory();
+        if (!src_memory)
+            return false;
+    } else if (dynamic_cast<const ov::IRemoteTensor*>(src)) {
+        return false;
+    } else {
+        const auto alignment = static_cast<size_t>(device_info.cacheline_size.value_or(0));
+        const auto* host_ptr = src->data();
+        if (alignment == 0 || host_ptr == nullptr ||
+            reinterpret_cast<std::uintptr_t>(host_ptr) % alignment != 0 ||
+            expected_stride % alignment != 0) {
+            GPU_DEBUG_INFO << "[state_conversion] host import unavailable dtype=" << src->get_element_type()
+                           << " bytes=" << expected_stride << " alignment=" << alignment << std::endl;
+            return false;
+        }
+        src_memory = dst_engine->create_hostbuffer(host_ptr,
+                                                   expected_stride,
+                                                   cldnn::allocation_type::cl_mem,
+                                                   src_layout);
+        imported_host_pointer = true;
+        GPU_DEBUG_INFO << "[state_conversion] host pointer imported dtype=" << src->get_element_type()
+                       << " bytes=" << expected_stride << " alignment=" << alignment << std::endl;
+    }
+
+    if (!imported_host_pointer) {
+        auto* src_engine = src_memory->get_engine();
+        if ((src_memory->get_allocation_type() != cldnn::allocation_type::usm_host &&
+             src_memory->get_allocation_type() != cldnn::allocation_type::usm_device) ||
+            !src_engine || src_engine->runtime_type() != cldnn::runtime_types::ocl ||
+            src_engine->get_user_context(cldnn::runtime_types::ocl) !=
+                dst_engine->get_user_context(cldnn::runtime_types::ocl))
+            return false;
+    }
+
     auto executor = program->get_state_conversion_executor();
     OPENVINO_ASSERT(executor && executor->has_kernel(key), "[GPU] State conversion kernel was not prepared");
+    if (!imported_host_pointer) {
+        GPU_DEBUG_INFO << "[state_conversion] direct source allocation=" << src_memory->get_allocation_type()
+                       << std::endl;
+    }
     executor->execute(key, src_memory, dst, stream, ov::shape_size(shape));
     return true;
 }
@@ -149,8 +180,36 @@ void VariableState::set_state(const ov::SoPtr<ov::ITensor>& state) {
     update_device_buffer();
 
     if (actual_size == 0) {
+        GPU_DEBUG_INFO << "[state_conversion] empty state, no conversion kernel state=" << m_name << std::endl;
         set();
         return;
+    }
+
+    GPU_DEBUG_IF(true) {
+        const char* tensor_kind = "host_tensor";
+        const char* allocation_check = "unavailable";
+        cldnn::memory::ptr source_memory;
+        const auto* source = state._ptr.get();
+        if (const auto* host = dynamic_cast<const USMHostTensor*>(source)) {
+            tensor_kind = "USMHostTensor";
+            source_memory = host->get_impl()->get_original_memory();
+        } else if (const auto* remote = dynamic_cast<const RemoteTensorImpl*>(source)) {
+            tensor_kind = "RemoteTensorImpl";
+            source_memory = remote->get_original_memory();
+        } else if (dynamic_cast<const ov::IRemoteTensor*>(source)) {
+            tensor_kind = "IRemoteTensor";
+        }
+        auto allocation = cldnn::allocation_type::unknown;
+        if (source_memory) {
+            allocation = source_memory->get_allocation_type();
+            allocation_check = "original_memory";
+        }
+        GPU_DEBUG_INFO << "[state_conversion] input state=" << m_name
+                       << " tensor=" << tensor_kind << " allocation=" << allocation
+                       << " allocation_check=" << allocation_check
+                       << " dtype=" << state->get_element_type() << "->" << ov::element::Type(m_layout.data_type)
+                       << " count=" << ov::shape_size(src_shape) << " program=" << static_cast<bool>(m_program)
+                       << std::endl;
     }
 
     // check whether the src tensor is padded

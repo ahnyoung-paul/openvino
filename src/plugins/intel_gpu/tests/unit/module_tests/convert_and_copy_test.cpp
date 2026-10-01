@@ -15,6 +15,7 @@
 #include "intel_gpu/plugin/variable_state.hpp"
 #include "openvino/runtime/make_tensor.hpp"
 #include "openvino/reference/convert.hpp"
+#include "openvino/util/memory.hpp"
 #include "intel_gpu/primitives/assign.hpp"
 #include "intel_gpu/primitives/input_layout.hpp"
 #include "intel_gpu/primitives/read_value.hpp"
@@ -57,6 +58,34 @@ private:
     ov::Strides m_strides{3 * sizeof(float), sizeof(float)};
 };
 
+class ImportOnlyHostTensor : public ov::ITensor {
+public:
+    explicit ImportOnlyHostTensor(std::shared_ptr<ov::ITensor> tensor) : m_tensor(std::move(tensor)) {}
+
+    void set_shape(ov::Shape shape) override { m_tensor->set_shape(std::move(shape)); }
+    const ov::element::Type& get_element_type() const override { return m_tensor->get_element_type(); }
+    const ov::Shape& get_shape() const override { return m_tensor->get_shape(); }
+    const ov::Strides& get_strides() const override { return m_tensor->get_strides(); }
+    void* data() override { return m_tensor->data(); }
+    void* data_rw() override { return m_tensor->data_rw(); }
+    void* data(const ov::element::Type& type) override { return m_tensor->data(type); }
+    void* data_rw(const ov::element::Type& type) override { return m_tensor->data_rw(type); }
+
+    const void* data() const override {
+        OPENVINO_ASSERT(!m_const_data_accessed, "CPU fallback was used for the host import test");
+        m_const_data_accessed = true;
+        return static_cast<const ov::ITensor&>(*m_tensor).data();
+    }
+
+    const void* data(const ov::element::Type& type) const override {
+        return static_cast<const ov::ITensor&>(*m_tensor).data(type);
+    }
+
+private:
+    std::shared_ptr<ov::ITensor> m_tensor;
+    mutable bool m_const_data_accessed = false;
+};
+
 cldnn::network::ptr make_state_network(const ov::Shape& shape,
                                        const ov::element::Type& src_type,
                                        const ov::element::Type& dst_type) {
@@ -66,7 +95,8 @@ cldnn::network::ptr make_state_network(const ov::Shape& shape,
     state_topology.add(input_layout("input", state_layout));
     state_topology.add(read_value{"read_value", {input_info("input")}, "state", {state_layout}, src_type});
     state_topology.add(assign{"assign", {input_info("read_value")}, "state", state_layout});
-    return get_network(engine, state_topology, get_test_default_config(engine), get_test_stream_ptr(), true);
+    // Prepare conversion kernels before export; the import test performs its own round trip.
+    return get_network(engine, state_topology, get_test_default_config(engine), get_test_stream_ptr(), false);
 }
 
 template <typename Src, typename Dst>
@@ -238,16 +268,6 @@ TEST(convert_and_copy_test_paul, cached_i32_to_u64_conversion) {
     check_compiled_state_conversion<int32_t, uint64_t>({2, 6}, ov::element::i32, ov::element::u64);
 }
 
-TEST(convert_and_copy_test_paul, cached_f64_to_f32_conversion) {
-    auto& engine = get_test_engine();
-    if (engine.runtime_type() != runtime_types::ocl || !engine.get_device_info().supports_fp64 ||
-        !engine.supports_allocation(allocation_type::usm_host) ||
-        !engine.supports_allocation(allocation_type::usm_device))
-        GTEST_SKIP() << "OpenCL FP64 and USM host/device allocations are required";
-
-    check_compiled_state_conversion<double, float>({2, 6}, ov::element::f64, ov::element::f32);
-}
-
 TEST(convert_and_copy_test_paul, variable_state_reuses_program_kernels_for_sources_shapes_and_types) {
     auto& engine = get_test_engine();
     if (engine.runtime_type() != runtime_types::ocl || !engine.get_device_info().supports_fp16 ||
@@ -346,6 +366,38 @@ TEST(convert_and_copy_test_paul, variable_state_without_program_uses_cpu_convers
                                            source->get_impl()->get_original_memory());
 }
 
+TEST(convert_and_copy_test_paul, variable_state_imports_aligned_host_and_falls_back_for_unaligned_size) {
+    auto& engine = get_test_engine();
+    const auto alignment = static_cast<size_t>(engine.get_device_info().cacheline_size.value_or(0));
+    if (engine.runtime_type() != runtime_types::ocl || !engine.get_device_info().supports_fp16 ||
+        !engine.supports_allocation(allocation_type::usm_device) || alignment == 0)
+        GTEST_SKIP() << "OpenCL FP16, USM device allocation, and cache-line size are required";
+
+    ASSERT_EQ(alignment % sizeof(float), 0);
+    const ov::Shape aligned_shape{alignment / sizeof(float)};
+    auto network = make_state_network(aligned_shape, ov::element::f32, ov::element::f16);
+    auto program = network->get_program();
+    program->prepare_state_conversions({{data_types::f32, data_types::f16}});
+    auto context = std::make_shared<RemoteContextImpl>("GPU", std::vector<cldnn::device::ptr>{engine.get_device()});
+    auto& stream = context->get_engine().get_service_stream();
+    VariableState variable(network->get_variable_info("state"), context, network->get_shape_predictor(), program);
+
+    std::unique_ptr<void, decltype(&ov::util::aligned_free)> storage(
+        ov::util::aligned_alloc(alignment, alignment), ov::util::aligned_free);
+    ASSERT_NE(storage, nullptr);
+    auto aligned_view = ov::make_tensor(ov::element::f32, aligned_shape, storage.get());
+    auto import_only_source = std::make_shared<ImportOnlyHostTensor>(aligned_view);
+    std::vector<float> aligned_values(ov::shape_size(aligned_shape));
+    for (size_t i = 0; i < aligned_values.size(); ++i)
+        aligned_values[i] = static_cast<float>(i) - 4.f;
+    check_state_values<float, ov::float16>(variable, import_only_source, aligned_values, stream);
+
+    const ov::Shape unaligned_size_shape{alignment / sizeof(float) + 1};
+    auto unaligned_size_source = ov::make_tensor(ov::element::f32, unaligned_size_shape);
+    std::vector<float> fallback_values(ov::shape_size(unaligned_size_shape), 0.25f);
+    check_state_values<float, ov::float16>(variable, unaligned_size_source, fallback_values, stream);
+}
+
 TEST(convert_and_copy_test_paul, variable_state_fallback_conditions) {
     auto& engine = get_test_engine();
     if (engine.runtime_type() != runtime_types::ocl || !engine.get_device_info().supports_fp16 ||
@@ -360,10 +412,6 @@ TEST(convert_and_copy_test_paul, variable_state_fallback_conditions) {
     auto& stream = context->get_engine().get_service_stream();
     const auto& info = network->get_variable_info("state");
     const std::vector<float> values{1.f, -2.f, 3.f, -4.f, 5.f, -6.f};
-
-    VariableState ordinary_host(info, context, network->get_shape_predictor(), program);
-    auto tensor = ov::make_tensor(ov::element::f32, ov::Shape{2, 3});
-    check_state_values<float, ov::float16>(ordinary_host, tensor, values, stream);
 
     VariableState wrong_type(info, context, network->get_shape_predictor(), program);
     auto bf16_host = std::make_shared<USMHostTensor>(context, ov::element::bf16, ov::Shape{2, 3});

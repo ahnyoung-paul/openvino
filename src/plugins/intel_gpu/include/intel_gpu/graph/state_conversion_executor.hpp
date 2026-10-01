@@ -9,6 +9,7 @@
 #include "intel_gpu/runtime/engine.hpp"
 #include "intel_gpu/runtime/layout.hpp"
 #include "intel_gpu/runtime/stream.hpp"
+#include "intel_gpu/runtime/debug_configuration.hpp"
 
 #include "openvino/core/except.hpp"
 
@@ -96,14 +97,21 @@ public:
         kernel_arguments_data args;
         args.inputs.push_back(std::move(src));
         args.outputs.push_back(std::move(dst));
+        args.scalars = &desc.scalars;
 
         std::lock_guard<std::mutex> lock(_mutex);
         stream.set_arguments(*it->second, desc, args);
+        GPU_DEBUG_COUT << "[state_conversion] OpenCL enqueue kernel=" << it->second->get_id()
+                       << " dtype=" << ov::element::Type(key.first) << "->" << ov::element::Type(key.second)
+                       << " count=" << count << " global=" << desc.workGroups.global[0]
+                       << " local=" << desc.workGroups.local[0] << std::endl;
         auto event = stream.enqueue_kernel(*it->second, desc, args, {}, true);
         if (event)
             event->wait();
         else
             stream.finish();
+        GPU_DEBUG_COUT << "[state_conversion] OpenCL completed kernel=" << it->second->get_id()
+                       << " count=" << count << std::endl;
     }
 
 private:
