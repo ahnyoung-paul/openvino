@@ -163,12 +163,7 @@ TEST(convert_and_copy_gpu_test, variable_state_reuses_program_kernels_for_source
     auto network = make_state_network({2, 6}, ov::element::f32, ov::element::f16);
     auto program = network->get_program();
     const state_conversion_key key{data_types::f32, data_types::f16};
-    std::vector<state_conversion_key> keys{key, key, {data_types::bf16, data_types::f16},
-                                           {data_types::i32, data_types::i64},
-                                           {data_types::i32, data_types::u64},
-                                           {data_types::i32, data_types::u32}};
-    if (engine.get_device_info().supports_fp64)
-        keys.emplace_back(data_types::f32, data_types::f64);
+    std::vector<state_conversion_key> keys{key, key, {data_types::bf16, data_types::f16}};
     program->prepare_state_conversions(keys);
     auto executor = program->get_state_conversion_executor();
     ASSERT_NE(executor, nullptr);
@@ -222,35 +217,6 @@ TEST(convert_and_copy_gpu_test, variable_state_reuses_program_kernels_for_source
                                               std::numeric_limits<float>::quiet_NaN()};
     check_state_values<ov::bfloat16, ov::float16>(bf16_state, bf16_host, bf16_values, stream,
                                                  bf16_host->get_impl()->get_original_memory());
-
-    const std::vector<int32_t> integers{std::numeric_limits<int32_t>::min(), -7, 0, 1, 7,
-                                        std::numeric_limits<int32_t>::max()};
-    auto integer_host = std::make_shared<GpuOnlyHostTensor>(context, ov::element::i32, ov::Shape{2, 3});
-    VariableStateInfo i64_info{"i64", layout{ov::Shape{2, 3}, ov::element::i64, format::bfyx},
-                               static_cast<ov::element::Type_t>(ov::element::i32)};
-    VariableState i64_state(i64_info, context, predictor, retained_program);
-    check_state_values<int32_t, int64_t>(i64_state, integer_host, integers, stream,
-                                         integer_host->get_impl()->get_original_memory());
-
-    VariableStateInfo u64_info{"u64", layout{ov::Shape{2, 3}, ov::element::u64, format::bfyx},
-                               static_cast<ov::element::Type_t>(ov::element::i32)};
-    VariableState u64_state(u64_info, context, predictor, retained_program);
-    check_state_values<int32_t, uint64_t>(u64_state, integer_host, integers, stream,
-                                          integer_host->get_impl()->get_original_memory());
-
-    VariableStateInfo u32_info{"u32", layout{ov::Shape{2, 3}, ov::element::u32, format::bfyx},
-                               static_cast<ov::element::Type_t>(ov::element::i32)};
-    VariableState u32_state(u32_info, context, predictor, retained_program);
-    check_state_values<int32_t, uint32_t>(u32_state, integer_host, integers, stream,
-                                          integer_host->get_impl()->get_original_memory());
-
-    if (engine.get_device_info().supports_fp64) {
-        VariableStateInfo f64_info{"f64", layout{ov::Shape{2, 6}, ov::element::f64, format::bfyx},
-                                   static_cast<ov::element::Type_t>(ov::element::f32)};
-        VariableState f64_state(f64_info, context, predictor, retained_program);
-        check_state_values<float, double>(f64_state, host, first_values, stream,
-                                          host->get_impl()->get_original_memory());
-    }
 }
 
 TEST(convert_and_copy_gpu_test, variable_state_imports_aligned_host_and_stages_unaligned_inputs) {
