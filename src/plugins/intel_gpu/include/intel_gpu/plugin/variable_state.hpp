@@ -96,8 +96,8 @@ protected:
     mutable cldnn::memory::ptr m_conversion_source;
     mutable cldnn::event::ptr m_conversion_event;
 
-    void wait_for_conversion(const char* caller) const;
-    void update_device_buffer(double* allocation_us = nullptr, double* reinterpret_us = nullptr);
+    void wait_for_gpu_conversion() const;
+    void update_device_buffer();
 };
 
 using VariablesMap = std::unordered_map<std::string, std::shared_ptr<VariableStateBase>>;

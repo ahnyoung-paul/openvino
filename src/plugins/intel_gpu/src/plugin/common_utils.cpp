@@ -16,7 +16,6 @@
 #include "openvino/op/util/op_types.hpp"
 
 #include <algorithm>
-#include <chrono>
 #include <memory>
 
 namespace {
@@ -258,8 +257,6 @@ void convert_and_copy(const ov::ITensor* src, cldnn::memory::ptr dst, cldnn::str
     auto dst_et = dst->get_layout().data_type;
 
     if (dst_et == src_et && !transpose && !src_layout.data_padding) {
-        GPU_DEBUG_INFO << "[state_conversion] copy path, no conversion kernel dtype=" << src_et
-                       << " count=" << ov::shape_size(src->get_shape()) << std::endl;
         if (const auto* remote = dynamic_cast<const ov::intel_gpu::RemoteTensorImpl*>(src)) {
             auto mem = remote->get_original_memory();
             dst->copy_from(stream, *mem, blocking);
@@ -272,25 +269,12 @@ void convert_and_copy(const ov::ITensor* src, cldnn::memory::ptr dst, cldnn::str
     OPENVINO_ASSERT(dynamic_cast<const ov::intel_gpu::RemoteTensorImpl*>(src) == nullptr,
                     "[GPU] CPU conversion cannot access a remote source tensor");
     size_t size = ov::shape_size(src->get_shape());
-    GPU_DEBUG_INFO << "[state_conversion] CPU conversion, no OpenCL conversion kernel dtype=" << src_et
-                   << "->" << ov::element::Type(dst_et) << " count=" << size
-                   << " padded=" << static_cast<bool>(src_layout.data_padding)
+    GPU_DEBUG_INFO << "[state_conversion] CPU dtype=" << src_et << "->" << ov::element::Type(dst_et)
+                   << " count=" << size << " padded=" << static_cast<bool>(src_layout.data_padding)
                    << " transpose=" << transpose << std::endl;
     ov::Tensor tmp_tensor(dst_et, src->get_shape());
-    const bool timing_enabled = GPU_DEBUG_VALUE_OR(ov::intel_gpu::ExecutionConfig::get_verbose() >= 1, false);
-    using timing_clock = std::chrono::steady_clock;
-    const auto convert_begin = timing_enabled ? timing_clock::now() : timing_clock::time_point{};
     ::convert_and_copy(src->data(), src_et, tmp_tensor.data(), dst_et, size, src_layout, transpose);
-    const auto convert_end = timing_enabled ? timing_clock::now() : timing_clock::time_point{};
     dst->copy_from(stream, tmp_tensor.data(), blocking);
-    const auto copy_end = timing_enabled ? timing_clock::now() : timing_clock::time_point{};
-    if (timing_enabled) {
-        GPU_DEBUG_INFO << "[state_conversion][cpu_timing] dtype=" << src_et << "->" << ov::element::Type(dst_et)
-                       << " count=" << size
-                       << " convert_us=" << std::chrono::duration<double, std::micro>(convert_end - convert_begin).count()
-                       << " copy_from_us=" << std::chrono::duration<double, std::micro>(copy_end - convert_end).count()
-                       << " blocking=" << blocking << std::endl;
-    }
 }
 
 void convert_and_copy(const cldnn::memory::ptr src, ov::ITensor* dst, const cldnn::stream& stream) {
