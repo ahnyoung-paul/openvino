@@ -86,11 +86,12 @@ public:
         OPENVINO_ASSERT(count == ov::shape_size(shape), "[GPU] State conversion element count mismatch");
         OPENVINO_ASSERT(!transpose || shape.size() >= 2, "[GPU] State transpose requires at least two axes");
         const auto physical_shape = input_layout.get_padded_dims();
+        // Right-align dimensions so axes 4 and 5 are always the last two tensor axes.
         std::array<uint64_t, 6> dimensions{1, 1, 1, 1, 1, 1};
         std::array<uint64_t, 6> strides{0, 0, 0, 0, 0, 0};
         size_t pitch = 1;
         size_t source_offset = 0;
-        size_t last_element = 0;
+        size_t last_element_offset = 0;
         for (size_t i = shape.size(); i-- > 0;) {
             const size_t axis = 6 - shape.size() + i;
             dimensions[axis] = shape[i];
@@ -102,9 +103,9 @@ public:
             OPENVINO_ASSERT(lower <= (std::numeric_limits<size_t>::max() - source_offset) / pitch,
                             "[GPU] State conversion source offset overflow");
             source_offset += lower * pitch;
-            OPENVINO_ASSERT(shape[i] > 0 && shape[i] - 1 <= (std::numeric_limits<size_t>::max() - last_element) / pitch,
+            OPENVINO_ASSERT(shape[i] > 0 && shape[i] - 1 <= (std::numeric_limits<size_t>::max() - last_element_offset) / pitch,
                             "[GPU] State conversion source span overflow");
-            last_element += (shape[i] - 1) * pitch;
+            last_element_offset += (shape[i] - 1) * pitch;
             OPENVINO_ASSERT(physical_shape[i] > 0 &&
                             static_cast<size_t>(physical_shape[i]) <= std::numeric_limits<size_t>::max() / pitch,
                             "[GPU] State conversion source pitch overflow");
@@ -112,7 +113,7 @@ public:
         }
         const auto element_size = data_type_traits::size_of(key.first);
         OPENVINO_ASSERT(src->size() >= element_size && source_offset < src->size() / element_size &&
-                        last_element < src->size() / element_size - source_offset,
+                        last_element_offset < src->size() / element_size - source_offset,
                         "[GPU] State conversion source memory is too small");
         OPENVINO_ASSERT(count <= dst->size() / data_type_traits::size_of(key.second),
                         "[GPU] State conversion destination memory is too small");

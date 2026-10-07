@@ -124,66 +124,6 @@ void check_state_values(VariableState& variable,
     }
 }
 
-template <typename Src, typename Dst>
-void check_usm_host_to_device_conversion(const ov::Shape& shape,
-                                         const ov::element::Type& src_type,
-                                         const ov::element::Type& dst_type,
-                                         cldnn::network::ptr network = nullptr) {
-    auto& engine = get_test_engine();
-    auto& stream = get_test_stream();
-    auto context = std::make_shared<RemoteContextImpl>("GPU", std::vector<cldnn::device::ptr>{engine.get_device()});
-
-    std::shared_ptr<USMHostTensor> src;
-    if (network)
-        src = std::make_shared<GpuOnlyHostTensor>(context, src_type, shape);
-    else
-        src = std::make_shared<USMHostTensor>(context, src_type, shape);
-    auto src_mem = src->get_impl()->get_original_memory();
-    ASSERT_EQ(src_mem->get_allocation_type(), allocation_type::usm_host);
-
-    const auto count = ov::shape_size(shape);
-    std::vector<Src> values(count);
-    for (size_t i = 0; i < count; ++i)
-        values[i] = static_cast<Src>(static_cast<float>(static_cast<int>(i % 257) - 128) / 7.f);
-    std::copy(values.begin(), values.end(), static_cast<Src*>(src->data()));
-
-    std::vector<Dst> expected(count);
-    ov::reference::convert(values.data(), expected.data(), count);
-
-    const auto fmt = format::get_default_format(shape.size());
-    layout src_layout{shape, src_type, fmt};
-    layout dst_layout{shape, dst_type, fmt};
-    cldnn::memory::ptr dst_mem;
-    if (network) {
-        auto variable = std::make_shared<VariableState>(network->get_variable_info("state"), context,
-                                                        network->get_shape_predictor(),
-                                                        network->get_program());
-        OV_ASSERT_NO_THROW(variable->set_state(ov::SoPtr<ov::ITensor>(src)));
-        dst_mem = variable->get_memory();
-    } else {
-        dst_mem = engine.allocate_memory(dst_layout, allocation_type::usm_device);
-        OV_ASSERT_NO_THROW(convert_and_copy(src.get(), dst_mem, stream, src_layout, false));
-    }
-    ASSERT_NE(dst_mem, nullptr);
-
-    auto& read_stream = network ? context->get_engine().get_service_stream() : stream;
-    cldnn::mem_lock<Dst, mem_lock_type::read> actual(dst_mem, read_stream);
-    for (size_t i = 0; i < count; ++i)
-        ASSERT_EQ(actual[i], expected[i]) << "element " << i;
-}
-
-template <typename Src, typename Dst>
-void check_compiled_state_conversion(const ov::Shape& shape,
-                                     const ov::element::Type& src_type,
-                                     const ov::element::Type& dst_type) {
-    auto network = make_state_network(shape, src_type, dst_type);
-    network->get_program()->prepare_state_conversions({{static_cast<ov::element::Type_t>(src_type), static_cast<ov::element::Type_t>(dst_type)}});
-    auto executor = network->get_program()->get_state_conversion_executor();
-    ASSERT_NE(executor, nullptr);
-    ASSERT_TRUE(executor->has_kernel({static_cast<ov::element::Type_t>(src_type), static_cast<ov::element::Type_t>(dst_type)}));
-    check_usm_host_to_device_conversion<Src, Dst>(shape, src_type, dst_type, network);
-}
-
 }  // namespace
 
 // IRemoteTensor::data() always throws, so if the fast-path `return` is ever dropped again and
@@ -213,62 +153,7 @@ TEST(convert_and_copy_test, remote_tensor_fast_path_does_not_fall_through) {
     }
 }
 
-TEST(convert_and_copy_test_paul, usm_host_bf16_to_f16_small_and_large) {
-    if (!get_test_engine().supports_allocation(allocation_type::usm_host) ||
-        !get_test_engine().supports_allocation(allocation_type::usm_device))
-        GTEST_SKIP() << "USM host or device allocation is not supported";
-
-    check_usm_host_to_device_conversion<ov::bfloat16, ov::float16>({1, 2, 2, 3}, ov::element::bf16, ov::element::f16);
-    check_usm_host_to_device_conversion<ov::bfloat16, ov::float16>({1, 1, 256, 256}, ov::element::bf16, ov::element::f16);
-}
-
-TEST(convert_and_copy_test_paul, usm_host_f32_to_f16) {
-    if (!get_test_engine().supports_allocation(allocation_type::usm_host) ||
-        !get_test_engine().supports_allocation(allocation_type::usm_device))
-        GTEST_SKIP() << "USM host or device allocation is not supported";
-
-    check_usm_host_to_device_conversion<float, ov::float16>({1, 2, 3, 4, 5}, ov::element::f32, ov::element::f16);
-}
-
-TEST(convert_and_copy_test_paul, cached_state_conversion_kernel) {
-    auto& engine = get_test_engine();
-    if (engine.runtime_type() != runtime_types::ocl ||
-        !engine.supports_allocation(allocation_type::usm_host) ||
-        !engine.supports_allocation(allocation_type::usm_device))
-        GTEST_SKIP() << "OpenCL USM host/device allocations are required";
-
-    const ov::Shape shape{2, 6};
-    auto network = make_state_network(shape, ov::element::bf16, ov::element::f16);
-    network->get_program()->prepare_state_conversions({{data_types::bf16, data_types::f16}});
-    auto executor = network->get_program()->get_state_conversion_executor();
-    ASSERT_NE(executor, nullptr);
-    ASSERT_TRUE(executor->has_kernel({data_types::bf16, data_types::f16}));
-    check_usm_host_to_device_conversion<ov::bfloat16, ov::float16>(shape, ov::element::bf16, ov::element::f16,
-                                                                   network);
-}
-
-TEST(convert_and_copy_test_paul, supported_state_conversion_pairs) {
-    EXPECT_TRUE(state_conversion_executor::supports({data_types::bf16, data_types::f16}));
-    EXPECT_TRUE(state_conversion_executor::supports({data_types::f32, data_types::f16}));
-    EXPECT_TRUE(state_conversion_executor::supports({data_types::f64, data_types::f32}));
-    EXPECT_TRUE(state_conversion_executor::supports({data_types::f32, data_types::f64}));
-    EXPECT_TRUE(state_conversion_executor::supports({data_types::i32, data_types::i64}));
-    EXPECT_TRUE(state_conversion_executor::supports({data_types::i32, data_types::u64}));
-    EXPECT_TRUE(state_conversion_executor::supports({data_types::i32, data_types::u32}));
-    EXPECT_FALSE(state_conversion_executor::supports({data_types::i8, data_types::f16}));
-}
-
-TEST(convert_and_copy_test_paul, cached_i32_to_u64_conversion) {
-    auto& engine = get_test_engine();
-    if (engine.runtime_type() != runtime_types::ocl ||
-        !engine.supports_allocation(allocation_type::usm_host) ||
-        !engine.supports_allocation(allocation_type::usm_device))
-        GTEST_SKIP() << "OpenCL USM host/device allocations are required";
-
-    check_compiled_state_conversion<int32_t, uint64_t>({2, 6}, ov::element::i32, ov::element::u64);
-}
-
-TEST(convert_and_copy_test_paul, variable_state_reuses_program_kernels_for_sources_shapes_and_types) {
+TEST(convert_and_copy_gpu_test, variable_state_reuses_program_kernels_for_sources_shapes_and_types) {
     auto& engine = get_test_engine();
     if (engine.runtime_type() != runtime_types::ocl || !engine.get_device_info().supports_fp16 ||
         !engine.supports_allocation(allocation_type::usm_host) ||
@@ -278,7 +163,9 @@ TEST(convert_and_copy_test_paul, variable_state_reuses_program_kernels_for_sourc
     auto network = make_state_network({2, 6}, ov::element::f32, ov::element::f16);
     auto program = network->get_program();
     const state_conversion_key key{data_types::f32, data_types::f16};
-    std::vector<state_conversion_key> keys{key, key, {data_types::i32, data_types::i64},
+    std::vector<state_conversion_key> keys{key, key, {data_types::bf16, data_types::f16},
+                                           {data_types::i32, data_types::i64},
+                                           {data_types::i32, data_types::u64},
                                            {data_types::i32, data_types::u32}};
     if (engine.get_device_info().supports_fp64)
         keys.emplace_back(data_types::f32, data_types::f64);
@@ -325,6 +212,17 @@ TEST(convert_and_copy_test_paul, variable_state_reuses_program_kernels_for_sourc
     EXPECT_EQ(program_weak.lock()->get_state_conversion_executor(), executor);
 
     auto retained_program = program_weak.lock();
+    VariableStateInfo bf16_info{"bf16", layout{ov::Shape{2, 6}, ov::element::f16, format::bfyx},
+                                static_cast<ov::element::Type_t>(ov::element::bf16)};
+    VariableState bf16_state(bf16_info, context, predictor, retained_program);
+    auto bf16_host = std::make_shared<GpuOnlyHostTensor>(context, ov::element::bf16, ov::Shape{2, 6});
+    const std::vector<ov::bfloat16> bf16_values{0.f, -0.f, 1.f, -1.f, 0.1f, -0.1f,
+                                              65504.f, 1e-8f, 3.5f, -3.5f,
+                                              std::numeric_limits<float>::infinity(),
+                                              std::numeric_limits<float>::quiet_NaN()};
+    check_state_values<ov::bfloat16, ov::float16>(bf16_state, bf16_host, bf16_values, stream,
+                                                 bf16_host->get_impl()->get_original_memory());
+
     const std::vector<int32_t> integers{std::numeric_limits<int32_t>::min(), -7, 0, 1, 7,
                                         std::numeric_limits<int32_t>::max()};
     auto integer_host = std::make_shared<GpuOnlyHostTensor>(context, ov::element::i32, ov::Shape{2, 3});
@@ -333,6 +231,12 @@ TEST(convert_and_copy_test_paul, variable_state_reuses_program_kernels_for_sourc
     VariableState i64_state(i64_info, context, predictor, retained_program);
     check_state_values<int32_t, int64_t>(i64_state, integer_host, integers, stream,
                                          integer_host->get_impl()->get_original_memory());
+
+    VariableStateInfo u64_info{"u64", layout{ov::Shape{2, 3}, ov::element::u64, format::bfyx},
+                               static_cast<ov::element::Type_t>(ov::element::i32)};
+    VariableState u64_state(u64_info, context, predictor, retained_program);
+    check_state_values<int32_t, uint64_t>(u64_state, integer_host, integers, stream,
+                                          integer_host->get_impl()->get_original_memory());
 
     VariableStateInfo u32_info{"u32", layout{ov::Shape{2, 3}, ov::element::u32, format::bfyx},
                                static_cast<ov::element::Type_t>(ov::element::i32)};
@@ -349,24 +253,7 @@ TEST(convert_and_copy_test_paul, variable_state_reuses_program_kernels_for_sourc
     }
 }
 
-TEST(convert_and_copy_test_paul, variable_state_without_program_uses_cpu_conversion) {
-    auto& engine = get_test_engine();
-    if (engine.runtime_type() != runtime_types::ocl || !engine.get_device_info().supports_fp16 ||
-        !engine.supports_allocation(allocation_type::usm_host) ||
-        !engine.supports_allocation(allocation_type::usm_device))
-        GTEST_SKIP() << "OpenCL USM host/device allocations are required";
-
-    auto network = make_state_network({2, 3}, ov::element::f32, ov::element::f16);
-    auto context = std::make_shared<RemoteContextImpl>("GPU", std::vector<cldnn::device::ptr>{engine.get_device()});
-    auto& stream = context->get_engine().get_service_stream();
-    VariableState variable(network->get_variable_info("state"), context, network->get_shape_predictor());
-    auto source = std::make_shared<USMHostTensor>(context, ov::element::f32, ov::Shape{2, 3});
-    const std::vector<float> values{1.f, -2.f, 3.f, -4.f, 5.f, -6.f};
-    check_state_values<float, ov::float16>(variable, source, values, stream,
-                                           source->get_impl()->get_original_memory());
-}
-
-TEST(convert_and_copy_test_paul, variable_state_imports_aligned_host_and_stages_unaligned_inputs) {
+TEST(convert_and_copy_gpu_test, variable_state_imports_aligned_host_and_stages_unaligned_inputs) {
     auto& engine = get_test_engine();
     const auto alignment = static_cast<size_t>(engine.get_device_info().cacheline_size.value_or(0));
     if (engine.runtime_type() != runtime_types::ocl || !engine.get_device_info().supports_fp16 ||
@@ -406,7 +293,7 @@ TEST(convert_and_copy_test_paul, variable_state_imports_aligned_host_and_stages_
     check_state_values<float, ov::float16>(variable, unaligned_size_source, unaligned_size_values, stream);
 }
 
-TEST(convert_and_copy_test_paul, variable_state_keeps_async_conversion_inputs_until_consumed_or_destroyed) {
+TEST(convert_and_copy_gpu_test, variable_state_keeps_async_conversion_inputs_until_consumed_or_destroyed) {
     auto& engine = get_test_engine();
     if (engine.runtime_type() != runtime_types::ocl || !engine.get_device_info().supports_fp16 ||
         !engine.supports_allocation(allocation_type::usm_host) ||
@@ -458,7 +345,7 @@ TEST(convert_and_copy_test_paul, variable_state_keeps_async_conversion_inputs_un
     EXPECT_TRUE(pending_source.expired());
 }
 
-TEST(convert_and_copy_test_paul, variable_state_padded_roi_uses_gpu_without_packing) {
+TEST(convert_and_copy_gpu_test, variable_state_padded_roi_uses_gpu_without_packing) {
     auto& engine = get_test_engine();
     if (engine.runtime_type() != runtime_types::ocl || !engine.get_device_info().supports_fp16 ||
         !engine.supports_allocation(allocation_type::usm_host) ||
@@ -493,7 +380,7 @@ TEST(convert_and_copy_test_paul, variable_state_padded_roi_uses_gpu_without_pack
     }
 }
 
-TEST(convert_and_copy_test_paul, cpu_padded_roi_preserves_values_and_transpose) {
+TEST(convert_and_copy_gpu_test, cpu_padded_roi_preserves_values_and_transpose) {
     auto& engine = get_test_engine();
     auto& stream = get_test_stream();
     ov::Tensor parent(ov::element::f32, {2, 4});
@@ -512,7 +399,7 @@ TEST(convert_and_copy_test_paul, cpu_padded_roi_preserves_values_and_transpose) 
     }
 }
 
-TEST(convert_and_copy_test_paul, variable_state_fallback_conditions) {
+TEST(convert_and_copy_gpu_test, variable_state_fallback_conditions) {
     auto& engine = get_test_engine();
     if (engine.runtime_type() != runtime_types::ocl || !engine.get_device_info().supports_fp16 ||
         !engine.supports_allocation(allocation_type::usm_host) ||
@@ -526,6 +413,11 @@ TEST(convert_and_copy_test_paul, variable_state_fallback_conditions) {
     auto& stream = context->get_engine().get_service_stream();
     const auto& info = network->get_variable_info("state");
     const std::vector<float> values{1.f, -2.f, 3.f, -4.f, 5.f, -6.f};
+
+    VariableState without_program(info, context, network->get_shape_predictor());
+    auto host = std::make_shared<USMHostTensor>(context, ov::element::f32, ov::Shape{2, 3});
+    check_state_values<float, ov::float16>(without_program, host, values, stream,
+                                           host->get_impl()->get_original_memory());
 
     VariableState wrong_type(info, context, network->get_shape_predictor(), program);
     auto bf16_host = std::make_shared<USMHostTensor>(context, ov::element::bf16, ov::Shape{2, 3});
@@ -581,7 +473,7 @@ TEST(convert_and_copy_test_paul, variable_state_fallback_conditions) {
     EXPECT_EQ(empty.get_memory(), nullptr);
 }
 
-TEST(convert_and_copy_test_paul, variable_state_missing_prepared_kernel_is_error) {
+TEST(convert_and_copy_gpu_test, variable_state_missing_prepared_kernel_is_error) {
     auto& engine = get_test_engine();
     if (engine.runtime_type() != runtime_types::ocl || !engine.get_device_info().supports_fp16 ||
         !engine.supports_allocation(allocation_type::usm_host) ||
@@ -615,7 +507,7 @@ TEST(convert_and_copy_test_paul, variable_state_missing_prepared_kernel_is_error
     }
 }
 
-TEST(convert_and_copy_test_paul, imported_state_conversion_kernel_runs_without_recompilation) {
+TEST(convert_and_copy_gpu_test, imported_state_conversion_kernel_runs_without_recompilation) {
     auto& engine = get_test_engine();
     if (engine.runtime_type() != runtime_types::ocl || !engine.get_device_info().supports_fp16 ||
         !engine.supports_allocation(allocation_type::usm_host) ||

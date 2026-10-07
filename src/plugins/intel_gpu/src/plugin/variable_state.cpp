@@ -23,6 +23,7 @@ namespace ov::intel_gpu {
 
 namespace {
 
+// Returns false for unsupported inputs; true means conversion was submitted.
 bool convert_and_copy_gpu(const ov::ITensor* src, const cldnn::memory::ptr& dst,
                         cldnn::stream& stream, const cldnn::layout& src_layout,
                         const std::shared_ptr<cldnn::program>& program,
@@ -48,14 +49,16 @@ bool convert_and_copy_gpu(const ov::ITensor* src, const cldnn::memory::ptr& dst,
         return false;
     const auto physical_shape = src_layout.get_padded_dims();
     size_t expected_stride = src->get_element_type().size();
-    size_t source_span = expected_stride;
+    size_t source_span_bytes = expected_stride;
     for (size_t i = shape.size(); i-- > 0;) {
         if (shape[i] == 0 || (shape[i] > 1 && strides[i] != expected_stride) ||
-            strides[i] == 0 || shape[i] - 1 > (std::numeric_limits<size_t>::max() - source_span) / strides[i] ||
+            strides[i] == 0)
+            return false;
+        if (shape[i] - 1 > (std::numeric_limits<size_t>::max() - source_span_bytes) / strides[i] ||
             physical_shape[i] <= 0 || static_cast<size_t>(physical_shape[i]) >
                 std::numeric_limits<size_t>::max() / expected_stride)
             return false;
-        source_span += (shape[i] - 1) * strides[i];
+        source_span_bytes += (shape[i] - 1) * strides[i];
         expected_stride *= static_cast<size_t>(physical_shape[i]);
     }
 
@@ -85,12 +88,12 @@ bool convert_and_copy_gpu(const ov::ITensor* src, const cldnn::memory::ptr& dst,
         if (host_ptr == nullptr)
             return false;
         // Copy the view's physical span, preserving row gaps without reading beyond its last element.
-        const cldnn::layout span_layout(ov::Shape{source_span / src->get_element_type().size()},
+        const cldnn::layout span_layout(ov::Shape{source_span_bytes / src->get_element_type().size()},
                                        src->get_element_type(), cldnn::format::bfyx);
         if (alignment != 0 && reinterpret_cast<std::uintptr_t>(host_ptr) % alignment == 0 &&
-            source_span % alignment == 0) {
+            source_span_bytes % alignment == 0) {
             src_memory = dst_engine->create_hostbuffer(host_ptr,
-                                                      source_span,
+                                                      source_span_bytes,
                                                       cldnn::allocation_type::cl_mem,
                                                       span_layout);
             imported_host_pointer = true;
@@ -117,7 +120,7 @@ bool convert_and_copy_gpu(const ov::ITensor* src, const cldnn::memory::ptr& dst,
     OPENVINO_ASSERT(executor && executor->has_kernel(key), "[GPU] State conversion kernel was not prepared");
     try {
         if (staging_source) {
-            auto copy_event = src_memory->copy_from(stream, staging_source, 0, 0, source_span, false);
+            auto copy_event = src_memory->copy_from(stream, staging_source, 0, 0, source_span_bytes, false);
             OPENVINO_ASSERT(copy_event, "[GPU] Host staging copy did not return an event");
             completion = executor->execute(key, src_memory, dst, stream, ov::shape_size(shape), {copy_event},
                                            &src_layout, transpose);
@@ -237,7 +240,7 @@ void VariableState::set_state(const ov::SoPtr<ov::ITensor>& state) {
         return;
     }
 
-    // check whether the src tensor is padded
+    // Derive upper padding from adjacent strides to preserve gaps in tensor views.
     std::vector<ov::Dimension::value_type> upper_pad(src_rank, 0);
     std::vector<ov::Dimension::value_type> lower_pad(src_rank, 0);
     OPENVINO_ASSERT(src_stride.empty() || src_stride.back() == 1,
