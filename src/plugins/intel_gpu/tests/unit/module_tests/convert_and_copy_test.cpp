@@ -16,7 +16,6 @@
 #include "openvino/runtime/make_tensor.hpp"
 #include "openvino/reference/convert.hpp"
 #include "openvino/util/memory.hpp"
-#include "openvino/util/env_util.hpp"
 #include "intel_gpu/primitives/assign.hpp"
 #include "intel_gpu/primitives/input_layout.hpp"
 #include "intel_gpu/primitives/read_value.hpp"
@@ -461,11 +460,10 @@ TEST(convert_and_copy_test_paul, variable_state_keeps_async_conversion_inputs_un
 
 TEST(convert_and_copy_test_paul, variable_state_padded_roi_uses_gpu_without_packing) {
     auto& engine = get_test_engine();
-    if (!ov::util::getenv_bool("USE_GPU_CONVERSION", false) ||
-        engine.runtime_type() != runtime_types::ocl || !engine.get_device_info().supports_fp16 ||
+    if (engine.runtime_type() != runtime_types::ocl || !engine.get_device_info().supports_fp16 ||
         !engine.supports_allocation(allocation_type::usm_host) ||
         !engine.supports_allocation(allocation_type::usm_device))
-        GTEST_SKIP() << "USE_GPU_CONVERSION=1, OpenCL FP16 and USM allocations are required";
+        GTEST_SKIP() << "OpenCL FP16 and USM allocations are required";
 
     auto network = make_state_network({2, 2}, ov::element::f32, ov::element::f16);
     auto program = network->get_program();

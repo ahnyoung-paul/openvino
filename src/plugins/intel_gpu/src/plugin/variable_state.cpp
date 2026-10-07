@@ -4,7 +4,6 @@
 
 #include "openvino/core/type/element_type.hpp"
 #include "openvino/runtime/make_tensor.hpp"
-#include "openvino/util/env_util.hpp"
 #include "intel_gpu/plugin/remote_context.hpp"
 #include "intel_gpu/plugin/common_utils.hpp"
 #include "intel_gpu/plugin/remote_tensor.hpp"
@@ -216,7 +215,6 @@ void VariableState::set_layout(const cldnn::layout& new_layout) {
 
 void VariableState::set_state(const ov::SoPtr<ov::ITensor>& state) {
     wait_for_gpu_conversion();
-    const bool use_gpu_conversion = ov::util::getenv_bool("USE_GPU_CONVERSION", false);
     auto src_shape = state->get_shape();
     size_t src_rank = src_shape.size();
     cldnn::padding::DynamicDimsMask dynamic_pad_dims;
@@ -260,7 +258,7 @@ void VariableState::set_state(const ov::SoPtr<ov::ITensor>& state) {
 
     auto& stream = m_context->get_engine().get_service_stream();
     bool gpu_conversion_submitted = false;
-    if (use_gpu_conversion && state->get_element_type() == get_user_specified_type() &&
+    if (state->get_element_type() == get_user_specified_type() &&
         state->get_element_type() != m_layout.data_type) {
         gpu_conversion_submitted = convert_and_copy_gpu(state._ptr.get(), m_memory, stream, src_layout, m_program,
                                                        m_conversion_source, m_conversion_event, m_transpose_required);
