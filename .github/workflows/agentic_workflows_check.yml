@@ -27,7 +27,7 @@ jobs:
           submodules: 'false'
 
       - name: Install gh-aw
-        uses: github/gh-aw/actions/setup-cli@57c8c22d3eefb88d996ec6e49a461944adfee625
+        uses: github/gh-aw/actions/setup-cli@e9bbac56be590e414b9c2795023f7dbe018d978a
         with:
           version: v0.89.17
 
