@@ -775,7 +775,7 @@ void TransformationsPipeline::apply(std::shared_ptr<ov::Model> func) {
         manager.register_pass<ov::pass::BroadcastTransition>();
 
         auto sincos_constants = std::make_shared<ov::intel_gpu::CollectSinCosConstants::ConstantSet>();
-        // manager.register_pass<ov::intel_gpu::CollectSinCosConstants>(sincos_constants);
+        manager.register_pass<ov::intel_gpu::CollectSinCosConstants>(sincos_constants);
         manager.register_pass<ov::pass::KeepConstantsPrecisionAndAddConverts>();
         pass_config->set_callback<ov::pass::KeepConstantsPrecisionAndAddConverts>(
             [sincos_constants](const_node_ptr& node) -> bool {
@@ -1670,6 +1670,11 @@ void TransformationsPipeline::apply(std::shared_ptr<ov::Model> func) {
         manager.register_pass<ov::intel_gpu::SwiGluFusionWithClamp>();
         // This Validate is needed for proper data type propagation after applying IncreasePositionIdsPrecision pass
         manager.register_pass<ov::pass::Validate>();
+        {
+                // Temporary debugging only: remove this dump registration after investigation.
+            std::string path = GPU_DEBUG_VALUE_OR(config.get_dump_graphs_path(), "");
+            manager.register_pass<ov::intel_gpu::DumpNetwork>(path, "after_increase_position_ids");
+        }
 
         float activations_scale_factor = config.get_activations_scale_factor();
 

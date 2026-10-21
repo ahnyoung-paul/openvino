@@ -14,10 +14,13 @@
 #include <openvino/pass/manager.hpp>
 #include <openvino/core/model.hpp>
 #include "openvino/core/coordinate_diff.hpp"
+#include "openvino/core/validation_util.hpp"
 #include "openvino/core/type/element_type.hpp"
 #include "openvino/op/constant.hpp"
 #include "openvino/op/concat.hpp"
 #include "openvino/op/cos.hpp"
+#include "openvino/op/divide.hpp"
+#include "openvino/op/exp.hpp"
 #include "openvino/op/multiply.hpp"
 #include "openvino/op/sin.hpp"
 #include "openvino/op/reshape.hpp"
@@ -37,6 +40,8 @@
 #include "ov_ops/rms.hpp"
 #include "openvino/op/split.hpp"
 #include "openvino/op/scaled_dot_product_attention.hpp"
+#include "openvino/op/scatter_nd_update.hpp"
+#include "openvino/op/slice.hpp"
 
 #include <plugin/transformations/increase_position_ids_precision.hpp>
 #include <plugin/transformations/increase_rms_input_precision.hpp>
@@ -446,11 +451,13 @@ static void test_IncreasePositionIdsLTXVideo(std::shared_ptr<ov::Model>& model,
         // Upstream with converts: Convert(f16→f32) before Multiply inputs, Convert on Add constant
         auto convert_mul_in = std::make_shared<ov::op::v0::Convert>(param_mul_in, ov::element::f32);
         auto mul_const = ov::op::v0::Constant::create(ov::element::f16, ov::Shape{1, 1, 64}, {3.14f});
-        auto convert_mul_const = std::make_shared<ov::op::v0::Convert>(mul_const, ov::element::f32);
+        auto convert_mul_const = ov::util::get_constant_from_source(
+            std::make_shared<ov::op::v0::Convert>(mul_const, ov::element::f32));
         auto multiply = std::make_shared<ov::op::v1::Multiply>(convert_mul_in, convert_mul_const);
 
         auto add_const = ov::op::v0::Constant::create(ov::element::f16, ov::Shape{1, 1, 64}, {1e-6f});
-        auto convert_add_const = std::make_shared<ov::op::v0::Convert>(add_const, ov::element::f32);
+        auto convert_add_const = ov::util::get_constant_from_source(
+            std::make_shared<ov::op::v0::Convert>(add_const, ov::element::f32));
         auto add = std::make_shared<ov::op::v1::Add>(multiply, convert_add_const);
 
         auto transpose_order = ov::op::v0::Constant::create(ov::element::i32, ov::Shape{3}, {0, 2, 1});
@@ -561,10 +568,12 @@ static void test_IncreasePositionIdsLTXVideoGather(std::shared_ptr<ov::Model>& m
         // Upstream with f32 converts inserted by the pass
         auto convert_mul_in = std::make_shared<ov::op::v0::Convert>(param_mul_in, ov::element::f32);
         auto mul_const = ov::op::v0::Constant::create(ov::element::f16, ov::Shape{1, 1, 64}, {3.14f});
-        auto convert_mul_const = std::make_shared<ov::op::v0::Convert>(mul_const, ov::element::f32);
+        auto convert_mul_const = ov::util::get_constant_from_source(
+            std::make_shared<ov::op::v0::Convert>(mul_const, ov::element::f32));
         auto multiply = std::make_shared<ov::op::v1::Multiply>(convert_mul_in, convert_mul_const);
         auto add_const = ov::op::v0::Constant::create(ov::element::f16, ov::Shape{1, 1, 64}, {1e-6f});
-        auto convert_add_const = std::make_shared<ov::op::v0::Convert>(add_const, ov::element::f32);
+        auto convert_add_const = ov::util::get_constant_from_source(
+            std::make_shared<ov::op::v0::Convert>(add_const, ov::element::f32));
         auto add = std::make_shared<ov::op::v1::Add>(multiply, convert_add_const);
         auto transpose_order = ov::op::v0::Constant::create(ov::element::i32, ov::Shape{3}, {0, 2, 1});
         auto transpose_up = std::make_shared<ov::op::v1::Transpose>(add, transpose_order);
@@ -605,6 +614,211 @@ TEST_F(TransformationTestsF, IncreasePositionIdsLTXVideoGather_T) {
 
 TEST_F(TransformationTestsF, IncreasePositionIdsLTXVideoGather_F) {
     test_IncreasePositionIdsLTXVideoGather(model, model_ref, manager, comparator, false);
+}
+
+namespace {
+
+struct LtxAngleTestModel {
+    std::shared_ptr<ov::Model> model;
+    std::shared_ptr<ov::Node> coordinates;
+    std::shared_ptr<ov::Node> scale;
+    std::shared_ptr<ov::Node> coefficient;
+    std::shared_ptr<ov::Node> offset;
+    std::shared_ptr<ov::Node> coefficient_downcast;
+    std::shared_ptr<ov::Node> scatter;
+    std::shared_ptr<ov::Node> sin_gather;
+    std::shared_ptr<ov::Node> cos_gather;
+    std::shared_ptr<ov::Node> rope;
+};
+
+LtxAngleTestModel make_ltx_angle_test_model(bool fp32_trig = false,
+                                          bool unsupported = false,
+                                          bool reduction_scatter = false) {
+    LtxAngleTestModel graph;
+    auto coordinates = std::make_shared<ov::op::v0::Parameter>(ov::element::i64, ov::Shape{2});
+    auto scale = std::make_shared<ov::op::v0::Parameter>(ov::element::f32, ov::Shape{2});
+    auto x = std::make_shared<ov::op::v0::Parameter>(ov::element::f16, ov::Shape{1, 1, 4});
+    auto positions = std::make_shared<ov::op::v0::Convert>(coordinates, ov::element::f16);
+    positions->set_friendly_name("ltx_positions");
+    auto scale_downcast = std::make_shared<ov::op::v0::Convert>(scale, ov::element::f16);
+    auto axis = ov::op::v0::Constant::create(ov::element::i64, ov::Shape{}, {0});
+    auto gather = std::make_shared<ov::op::v8::Gather>(scale_downcast, coordinates, axis);
+    gather->set_friendly_name("ltx_scale_gather");
+    auto scaled = std::make_shared<ov::op::v1::Multiply>(positions, gather);
+    auto divisor = ov::op::v0::Constant::create(ov::element::f16, ov::Shape{}, {20});
+    auto divided = std::make_shared<ov::op::v1::Divide>(scaled, divisor);
+    divided->set_friendly_name("ltx_divide");
+    auto start = ov::op::v0::Constant::create(ov::element::i64, ov::Shape{1}, {0});
+    auto stop = ov::op::v0::Constant::create(ov::element::i64, ov::Shape{1}, {1});
+    auto step = ov::op::v0::Constant::create(ov::element::i64, ov::Shape{1}, {1});
+    auto updates = std::make_shared<ov::op::v8::Slice>(divided, start, stop, step);
+    auto scatter_indices = ov::op::v0::Constant::create(ov::element::i64, ov::Shape{1, 1}, {0});
+    std::shared_ptr<ov::Node> data = positions;
+    if (unsupported) {
+        data = std::make_shared<ov::op::v0::Exp>(data);
+    }
+    if (reduction_scatter) {
+        graph.scatter = std::make_shared<ov::op::v15::ScatterNDUpdate>(
+            data, scatter_indices, updates, ov::op::v15::ScatterNDUpdate::Reduction::SUM);
+    } else {
+        graph.scatter = std::make_shared<ov::op::v3::ScatterNDUpdate>(data, scatter_indices, updates);
+    }
+    graph.scatter->set_friendly_name("ltx_scatter");
+    auto concat = std::make_shared<ov::op::v0::Concat>(ov::OutputVector{graph.scatter, graph.scatter}, 0);
+    auto split = std::make_shared<ov::op::v1::Split>(concat, axis, 2);
+    split->set_friendly_name("ltx_split");
+    std::shared_ptr<ov::Node> values = std::make_shared<ov::op::v0::Convert>(split->output(1), ov::element::f32);
+    const auto trig_type = fp32_trig ? ov::element::f32 : ov::element::f16;
+    if (!fp32_trig) {
+        values = std::make_shared<ov::op::v0::Convert>(values, ov::element::f16);
+    }
+    graph.coefficient = ov::op::v0::Constant::create(ov::element::f32, ov::Shape{2}, {31415.927734f});
+    graph.offset = ov::op::v0::Constant::create(ov::element::f32, ov::Shape{2}, {-15707.963867f});
+    graph.coefficient_downcast = std::make_shared<ov::op::v0::Convert>(graph.coefficient, trig_type);
+    auto offset_downcast = std::make_shared<ov::op::v0::Convert>(graph.offset, trig_type);
+    auto multiply = std::make_shared<ov::op::v1::Multiply>(values, graph.coefficient_downcast);
+    auto add = std::make_shared<ov::op::v1::Add>(multiply, offset_downcast);
+    auto order = ov::op::v0::Constant::create(ov::element::i64, ov::Shape{1}, {0});
+    auto transpose = std::make_shared<ov::op::v1::Transpose>(add, order);
+    auto shape = ov::op::v0::Constant::create(ov::element::i64, ov::Shape{3}, {1, 1, 2});
+    auto reshape = std::make_shared<ov::op::v1::Reshape>(transpose, shape, false);
+    auto sin = std::make_shared<ov::op::v0::Sin>(reshape);
+    auto cos = std::make_shared<ov::op::v0::Cos>(reshape);
+    auto table_indices = ov::op::v0::Constant::create(ov::element::i64, ov::Shape{2}, {0, 1});
+    auto table_axis = ov::op::v0::Constant::create(ov::element::i64, ov::Shape{}, {-1});
+    graph.sin_gather = std::make_shared<ov::op::v8::Gather>(sin, table_indices, table_axis);
+    graph.cos_gather = std::make_shared<ov::op::v8::Gather>(cos, table_indices, table_axis);
+    auto padding = ov::op::v0::Constant::create(trig_type, ov::Shape{1, 1, 2}, {0});
+    auto sin_table = std::make_shared<ov::op::v0::Concat>(ov::OutputVector{padding, graph.sin_gather}, -1);
+    auto cos_table = std::make_shared<ov::op::v0::Concat>(ov::OutputVector{padding, graph.cos_gather}, -1);
+    ov::op::internal::RoPE::Config config;
+    config.is_ltx_video = true;
+    config.rotary_ndims = 4;
+    graph.rope = std::make_shared<ov::op::internal::RoPE>(ov::OutputVector{x, cos_table, sin_table}, config);
+    auto second_rope = graph.rope->clone_with_new_inputs(graph.rope->input_values());
+    graph.model = std::make_shared<ov::Model>(
+        ov::OutputVector{graph.rope, second_rope, graph.scatter, graph.coefficient_downcast},
+        ov::ParameterVector{coordinates, scale, x});
+    graph.coordinates = coordinates;
+    graph.scale = scale;
+    return graph;
+}
+
+void run_ltx_angle_pass(const std::shared_ptr<ov::Model>& model) {
+    ov::pass::Manager manager;
+    manager.register_pass<IncreasePositionIdsPrecisionForLtxVideo>();
+    manager.run_passes(model);
+}
+
+std::shared_ptr<ov::Node> find_ltx_fp32_node(const std::shared_ptr<ov::Model>& model, const std::string& name) {
+    for (const auto& node : model->get_ordered_ops()) {
+        if (node->get_friendly_name().find(name + "/fp32_") == 0) {
+            return node;
+        }
+    }
+    return nullptr;
+}
+
+}  // namespace
+
+TEST(IncreasePositionIdsLtxAngleTest, PreservedConstantsAndAllValuePortsBecomeFP32) {
+    auto graph = make_ltx_angle_test_model();
+    run_ltx_angle_pass(graph.model);
+    ASSERT_NO_THROW(graph.model->validate_nodes_and_infer_types());
+
+    const auto sin_boundary = graph.sin_gather->input_value(0).get_node_shared_ptr();
+    const auto cos_boundary = graph.cos_gather->input_value(0).get_node_shared_ptr();
+    ASSERT_TRUE(ov::is_type<ov::op::v0::Convert>(sin_boundary));
+    ASSERT_TRUE(ov::is_type<ov::op::v0::Convert>(cos_boundary));
+    EXPECT_EQ(sin_boundary->get_output_element_type(0), ov::element::f16);
+    EXPECT_EQ(cos_boundary->get_output_element_type(0), ov::element::f16);
+    const auto sin = sin_boundary->input_value(0).get_node_shared_ptr();
+    const auto cos = cos_boundary->input_value(0).get_node_shared_ptr();
+    ASSERT_TRUE(ov::is_type<ov::op::v0::Sin>(sin));
+    ASSERT_TRUE(ov::is_type<ov::op::v0::Cos>(cos));
+    EXPECT_EQ(sin->get_output_element_type(0), ov::element::f32);
+    EXPECT_EQ(cos->get_output_element_type(0), ov::element::f32);
+    EXPECT_EQ(sin->input_value(0), cos->input_value(0));
+
+    const auto add = sin->input_value(0).get_node()->input_value(0).get_node()->input_value(0).get_node_shared_ptr();
+    ASSERT_TRUE(ov::is_type<ov::op::v1::Add>(add));
+    EXPECT_EQ(add->input_value(1), graph.offset->output(0));
+    const auto multiply = add->input_value(0).get_node_shared_ptr();
+    EXPECT_EQ(multiply->input_value(1), graph.coefficient->output(0));
+    EXPECT_EQ(multiply->input_value(0).get_index(), 1);
+    const auto split = multiply->input_value(0).get_node_shared_ptr();
+    ASSERT_TRUE(ov::is_type<ov::op::v1::Split>(split));
+    const auto concat = split->input_value(0).get_node_shared_ptr();
+    EXPECT_EQ(concat->input_value(0), concat->input_value(1));
+
+    const auto scatter = find_ltx_fp32_node(graph.model, "ltx_scatter");
+    ASSERT_NE(scatter, nullptr);
+    EXPECT_EQ(concat->input_value(0), scatter->output(0));
+    EXPECT_EQ(scatter->get_input_element_type(0), ov::element::f32);
+    EXPECT_EQ(scatter->get_input_element_type(2), ov::element::f32);
+    EXPECT_EQ(scatter->input_value(1), graph.scatter->input_value(1));
+    const auto positions = scatter->input_value(0).get_node_shared_ptr();
+    ASSERT_TRUE(ov::is_type<ov::op::v0::Convert>(positions));
+    EXPECT_EQ(positions->input_value(0), graph.coordinates->output(0));
+    EXPECT_EQ(positions->get_output_element_type(0), ov::element::f32);
+    const auto gather = find_ltx_fp32_node(graph.model, "ltx_scale_gather");
+    ASSERT_NE(gather, nullptr);
+    EXPECT_EQ(gather->input_value(0), graph.scale->output(0));
+    EXPECT_EQ(gather->input_value(1), graph.coordinates->output(0));
+    EXPECT_EQ(gather->get_input_element_type(1), ov::element::i64);
+    EXPECT_EQ(gather->get_input_element_type(2), ov::element::i64);
+    const auto divide = find_ltx_fp32_node(graph.model, "ltx_divide");
+    ASSERT_NE(divide, nullptr);
+    EXPECT_EQ(divide->get_input_element_type(0), ov::element::f32);
+    EXPECT_EQ(divide->get_input_element_type(1), ov::element::f32);
+    ASSERT_TRUE(ov::is_type<ov::op::v0::Constant>(divide->input_value(1).get_node()));
+    EXPECT_EQ(graph.model->get_results()[2]->input_value(0), graph.scatter->output(0));
+    EXPECT_EQ(graph.model->get_results()[3]->input_value(0), graph.coefficient_downcast->output(0));
+    EXPECT_EQ(graph.scatter->get_output_element_type(0), ov::element::f16);
+    EXPECT_EQ(graph.coefficient_downcast->get_output_element_type(0), ov::element::f16);
+    EXPECT_EQ(graph.model->get_results()[0]->input_value(0), graph.rope->output(0));
+    EXPECT_TRUE(ov::is_type<ov::op::internal::RoPE>(graph.model->get_results()[1]->input_value(0).get_node()));
+
+    const auto nodes = graph.model->get_ordered_ops();
+    run_ltx_angle_pass(graph.model);
+    EXPECT_EQ(nodes, graph.model->get_ordered_ops());
+}
+
+TEST(IncreasePositionIdsLtxAngleTest, FP32MultiplyDoesNotHideFP16Ancestors) {
+    auto graph = make_ltx_angle_test_model(true);
+    run_ltx_angle_pass(graph.model);
+    ASSERT_NO_THROW(graph.model->validate_nodes_and_infer_types());
+    EXPECT_NE(find_ltx_fp32_node(graph.model, "ltx_scatter"), nullptr);
+    EXPECT_EQ(graph.sin_gather->get_input_element_type(0), ov::element::f32);
+    EXPECT_TRUE(ov::is_type<ov::op::v0::Sin>(graph.sin_gather->input_value(0).get_node()));
+    const auto nodes = graph.model->get_ordered_ops();
+    run_ltx_angle_pass(graph.model);
+    EXPECT_EQ(nodes, graph.model->get_ordered_ops());
+}
+
+TEST(IncreasePositionIdsLtxAngleTest, ScatterReductionAttributesAndIntegerIndicesArePreserved) {
+    auto graph = make_ltx_angle_test_model(false, false, true);
+    run_ltx_angle_pass(graph.model);
+    const auto scatter = ov::as_type_ptr<ov::op::v15::ScatterNDUpdate>(
+        find_ltx_fp32_node(graph.model, "ltx_scatter"));
+    ASSERT_NE(scatter, nullptr);
+    EXPECT_EQ(scatter->get_reduction(), ov::op::v15::ScatterNDUpdate::Reduction::SUM);
+    EXPECT_EQ(scatter->input_value(1), graph.scatter->input_value(1));
+    EXPECT_EQ(scatter->get_input_element_type(0), ov::element::f32);
+    EXPECT_EQ(scatter->get_input_element_type(2), ov::element::f32);
+    EXPECT_NO_THROW(graph.model->validate_nodes_and_infer_types());
+}
+
+TEST(IncreasePositionIdsLtxAngleTest, UnsupportedValueBranchLeavesWholeMatchUnchanged) {
+    auto graph = make_ltx_angle_test_model(false, true);
+    const auto nodes = graph.model->get_ordered_ops();
+    const auto sin_input = graph.sin_gather->input_value(0);
+    const auto cos_input = graph.cos_gather->input_value(0);
+    run_ltx_angle_pass(graph.model);
+    EXPECT_EQ(nodes, graph.model->get_ordered_ops());
+    EXPECT_EQ(sin_input, graph.sin_gather->input_value(0));
+    EXPECT_EQ(cos_input, graph.cos_gather->input_value(0));
+    EXPECT_EQ(find_ltx_fp32_node(graph.model, "ltx_positions"), nullptr);
 }
 
 TEST_F(TransformationTestsF, IncreasePositionIdsPrecisionForQwen25VL) {

@@ -4,16 +4,24 @@
 
 #include "increase_position_ids_precision.hpp"
 
+#include <map>
+#include <numeric>
 #include <set>
+#include <utility>
+#include <vector>
 
 #include "intel_gpu/op/gemm.hpp"
+#include "intel_gpu/runtime/debug_configuration.hpp"
 #include "openvino/core/graph_util.hpp"
 #include "openvino/core/rt_info.hpp"
+#include "openvino/core/validation_util.hpp"
 #include "openvino/op/add.hpp"
 #include "openvino/op/broadcast.hpp"
 #include "openvino/op/concat.hpp"
 #include "openvino/op/constant.hpp"
+#include "openvino/op/convert.hpp"
 #include "openvino/op/cos.hpp"
+#include "openvino/op/divide.hpp"
 #include "openvino/op/gather.hpp"
 #include "openvino/op/gather_nd.hpp"
 #include "openvino/op/gelu.hpp"
@@ -22,12 +30,16 @@
 #include "openvino/op/parameter.hpp"
 #include "openvino/op/reshape.hpp"
 #include "openvino/op/scaled_dot_product_attention.hpp"
+#include "openvino/op/scatter_nd_update.hpp"
 #include "openvino/op/shape_of.hpp"
 #include "openvino/op/sin.hpp"
+#include "openvino/op/slice.hpp"
+#include "openvino/op/split.hpp"
 #include "openvino/op/squeeze.hpp"
 #include "openvino/op/strided_slice.hpp"
 #include "openvino/op/subtract.hpp"
 #include "openvino/op/swish.hpp"
+#include "openvino/op/tile.hpp"
 #include "openvino/op/transpose.hpp"
 #include "openvino/op/unsqueeze.hpp"
 #include "openvino/op/variadic_split.hpp"
@@ -323,6 +335,181 @@ IncreasePositionIdsPrecisionForQwen3VL::IncreasePositionIdsPrecisionForQwen3VL()
     this->register_matcher(m, callback);
 }
 
+namespace {
+
+bool get_ltx_angle_data_ports(const ov::Output<ov::Node>& output, std::vector<size_t>& ports) {
+    const auto node = output.get_node_shared_ptr();
+    const auto type = output.get_element_type();
+    if (type != ov::element::f16 && type != ov::element::f32) {
+        return false;
+    }
+    if (ov::is_type_any_of<ov::op::v0::Constant, ov::op::v0::Parameter>(node)) {
+        return true;
+    }
+    if (ov::is_type<ov::op::v0::Convert>(node)) {
+        const auto source_type = node->get_input_element_type(0);
+        if (source_type.is_integral_number()) {
+            return true;
+        }
+        if (source_type != ov::element::f16 && source_type != ov::element::f32) {
+            return false;
+        }
+        ports = {0};
+    } else if (ov::is_type_any_of<ov::op::v1::Add,
+                                  ov::op::v1::Subtract,
+                                  ov::op::v1::Multiply,
+                                  ov::op::v1::Divide,
+                                  ov::op::v0::Concat>(node)) {
+        ports.resize(node->get_input_size());
+        std::iota(ports.begin(), ports.end(), size_t{0});
+    } else if (ov::is_type_any_of<ov::op::v3::ScatterNDUpdate, ov::op::v15::ScatterNDUpdate>(node)) {
+        ports = {0, 2};
+    } else if (ov::is_type_any_of<ov::op::v1::Reshape,
+                                  ov::op::v1::Transpose,
+                                  ov::op::v0::Squeeze,
+                                  ov::op::v15::Squeeze,
+                                  ov::op::v0::Unsqueeze,
+                                  ov::op::v1::Broadcast,
+                                  ov::op::v3::Broadcast,
+                                  ov::op::v0::Tile,
+                                  ov::op::v1::Gather,
+                                  ov::op::v7::Gather,
+                                  ov::op::v8::Gather,
+                                  ov::op::v5::GatherND,
+                                  ov::op::v8::GatherND,
+                                  ov::op::v8::Slice,
+                                  ov::op::v1::StridedSlice,
+                                  ov::op::v1::Split,
+                                  ov::op::v1::VariadicSplit>(node)) {
+        ports = {0};
+    } else {
+        return false;
+    }
+    return true;
+}
+
+bool increase_ltx_angle_precision(const std::shared_ptr<ov::Node>& sin, const std::shared_ptr<ov::Node>& cos) {
+    // Phase 1: inspect both upstream value paths before changing any live edge.
+    const ov::OutputVector roots{sin->input_value(0), cos->input_value(0)};
+    // Output keys preserve Split output indices and deduplicate shared Sin/Cos dependencies.
+    std::map<ov::Output<ov::Node>, std::vector<size_t>> data_ports;
+    // Stack flag: false schedules dependencies; true records the output after those dependencies.
+    std::vector<std::pair<ov::Output<ov::Node>, bool>> pending;
+    ov::OutputVector ordered;
+    for (const auto& root : roots) {
+        pending.emplace_back(root, false);
+    }
+    while (!pending.empty()) {
+        const auto [output, expanded] = pending.back();
+        pending.pop_back();
+        if (expanded) {
+            ordered.push_back(output);
+            continue;
+        }
+        if (data_ports.count(output)) {
+            continue;
+        }
+        std::vector<size_t> ports;
+        // Follow value ports only; shape, axis and index inputs stay outside the reconstructed region.
+        if (!get_ltx_angle_data_ports(output, ports)) {
+            GPU_DEBUG_LOG << "IncreasePositionIdsPrecisionForLtxVideo: unsupported angle output " << output
+                          << "; leaving Sin/Cos unchanged" << std::endl;
+            return false;
+        }
+        data_ports.emplace(output, ports);
+        pending.emplace_back(output, true);
+        for (const auto port : ports) {
+            pending.emplace_back(output.get_node()->input_value(port), false);
+        }
+    }
+
+    // Phase 2: build FP32 replacements in dependency-first order, leaving the original region intact.
+    const auto copy_info = [](const std::shared_ptr<ov::Node>& source, const std::shared_ptr<ov::Node>& replacement) {
+        ov::copy_runtime_info(source, replacement);
+        replacement->set_friendly_name(source->get_friendly_name() + "/fp32_" + replacement->get_name());
+    };
+    // Both roots use one original-output -> FP32-output map, so shared computations are rebuilt once.
+    std::map<ov::Output<ov::Node>, ov::Output<ov::Node>> replacements;
+    for (const auto& output : ordered) {
+        if (replacements.count(output)) {
+            continue;
+        }
+        const auto node = output.get_node_shared_ptr();
+        const auto& ports = data_ports.at(output);
+        if (ov::is_type_any_of<ov::op::v0::Constant, ov::op::v0::Parameter>(node)) {
+            if (output.get_element_type() == ov::element::f32) {
+                // Reuse Step01's preserved Constants and original FP32 Parameters directly.
+                replacements.emplace(output, output);
+            } else {
+                // Genuine FP16 leaves can only be upcast; earlier rounding cannot be recovered.
+                std::shared_ptr<ov::Node> promoted = std::make_shared<ov::op::v0::Convert>(output, ov::element::f32);
+                if (ov::is_type<ov::op::v0::Constant>(node)) {
+                    promoted = ov::util::get_constant_from_source(promoted);
+                    OPENVINO_ASSERT(promoted, "Could not promote LTX angle Constant to FP32");
+                }
+                copy_info(node, promoted);
+                replacements.emplace(output, promoted->output(0));
+            }
+        } else if (ov::is_type<ov::op::v0::Convert>(node)) {
+            if (!ports.empty()) {
+                // The floating source is already FP32 here: bypass downcasts and redundant upcasts.
+                replacements.emplace(output, replacements.at(node->input_value(0)));
+            } else if (output.get_element_type() == ov::element::f32) {
+                replacements.emplace(output, output);
+            } else {
+                // Keep coordinate generation integer and enter FP32 at the existing Convert boundary.
+                auto converted = std::make_shared<ov::op::v0::Convert>(node->input_value(0), ov::element::f32);
+                copy_info(node, converted);
+                replacements.emplace(output, converted->output(0));
+            }
+        } else {
+            auto inputs = node->input_values();
+            // Replace only value inputs; control inputs retain their original types and producers.
+            for (const auto port : ports) {
+                inputs[port] = replacements.at(inputs[port]);
+            }
+            if (output.get_element_type() == ov::element::f32 && inputs == node->input_values()) {
+                for (size_t i = 0; i < node->get_output_size(); ++i) {
+                    replacements.emplace(node->output(i), node->output(i));
+                }
+            } else {
+                const auto rebuilt = node->clone_with_new_inputs(inputs);
+                copy_info(node, rebuilt);
+                // All Split/VariadicSplit outputs must reference the same clone, with their indices unchanged.
+                for (size_t i = 0; i < node->get_output_size(); ++i) {
+                    OPENVINO_ASSERT(rebuilt->get_output_element_type(i) == ov::element::f32,
+                                    "LTX angle reconstruction must produce FP32");
+                    replacements.emplace(node->output(i), rebuilt->output(i));
+                }
+            }
+        }
+    }
+    if (replacements.at(roots[0]) == roots[0] && replacements.at(roots[1]) == roots[1]) {
+        return false;
+    }
+
+    // Phase 3: prepare both FP32 Sin/Cos branches before reconnecting either one.
+    // Only their outputs are replaced; unrelated users of the old angle region keep their original edges.
+    ov::NodeVector boundaries;
+    for (const auto& node : {sin, cos}) {
+        auto rebuilt = node->clone_with_new_inputs({replacements.at(node->input_value(0))});
+        copy_info(node, rebuilt);
+        if (node->get_output_element_type(0) != ov::element::f32) {
+            // Restore precision after Sin/Cos so downstream table and Concat inputs keep matching types.
+            auto boundary = std::make_shared<ov::op::v0::Convert>(rebuilt, node->get_output_element_type(0));
+            ov::copy_runtime_info(node, boundary);
+            rebuilt = boundary;
+        }
+        rebuilt->set_friendly_name(node->get_friendly_name());
+        boundaries.push_back(rebuilt);
+    }
+    ov::replace_node(sin, boundaries[0]);
+    ov::replace_node(cos, boundaries[1]);
+    return true;
+}
+
+}  // namespace
+
 IncreasePositionIdsPrecisionForLtxVideo::IncreasePositionIdsPrecisionForLtxVideo() {
     using namespace ov::pass::pattern;
     using ov::pass::pattern::op::Or;
@@ -344,7 +531,7 @@ IncreasePositionIdsPrecisionForLtxVideo::IncreasePositionIdsPrecisionForLtxVideo
 
     // Upstream: Multiply → Add(Constant) → Transpose → Reshape (same for both models)
     auto mul = wrap_type<ov::op::v1::Multiply>({any_input(), any_input()});
-    auto add_constant = wrap_type<ov::op::v0::Constant>();
+    auto add_constant = optional<ov::op::v0::Convert>({wrap_type<ov::op::v0::Constant>()});
     auto add = wrap_type<ov::op::v1::Add>({mul, add_constant});
     auto transpose_up = wrap_type<ov::op::v1::Transpose>({add, any_input()});
     auto reshape = wrap_type<ov::op::v1::Reshape>({transpose_up, any_input()});
@@ -390,26 +577,13 @@ IncreasePositionIdsPrecisionForLtxVideo::IncreasePositionIdsPrecisionForLtxVideo
     ov::matcher_pass_callback callback = [=](ov::pass::pattern::Matcher& m) {
         const auto& pattern_map = m.get_pattern_value_map();
 
-        auto mul_node = ov::as_type_ptr<ov::op::v1::Multiply>(pattern_map.at(mul).get_node_shared_ptr());
-        auto constant_node = ov::as_type_ptr<ov::op::v0::Constant>(pattern_map.at(add_constant).get_node_shared_ptr());
         auto cos_node = ov::as_type_ptr<ov::op::v0::Cos>(pattern_map.at(cos).get_node_shared_ptr());
         auto sin_node = ov::as_type_ptr<ov::op::v0::Sin>(pattern_map.at(sin).get_node_shared_ptr());
 
-        const auto desired_et = ov::element::f32;
-        const auto original_et = mul_node->get_output_element_type(0);
-        if (original_et == desired_et) {
+        if (transformation_callback(m.get_match_root())) {
             return false;
         }
-
-        size_t input_idx = 0;
-        bool is_changed = insert_converts_before_if_needed(mul_node, desired_et, input_idx);
-        if (is_changed) {
-            insert_converts_after_if_needed(constant_node, desired_et, input_idx);
-            size_t output_idx = 0;
-            insert_converts_after_if_needed(cos_node, original_et, output_idx);
-            insert_converts_after_if_needed(sin_node, original_et, output_idx);
-        }
-        return true;
+        return increase_ltx_angle_precision(sin_node, cos_node);
     };
 
     auto m = std::make_shared<ov::pass::pattern::Matcher>(rope, "IncreasePositionIdsPrecisionForLtxVideo");
