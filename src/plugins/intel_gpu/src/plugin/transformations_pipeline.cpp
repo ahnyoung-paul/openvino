@@ -86,6 +86,7 @@
 #include "plugin/transformations/bcast_and_pad_zp_buffers.hpp"
 #include "plugin/transformations/binary_conv_to_conv.hpp"
 #include "plugin/transformations/clamp_fp16_output.hpp"
+#include "plugin/transformations/collect_sincos_constants.hpp"
 #include "plugin/transformations/convert_convolution.hpp"
 #include "plugin/transformations/convert_fc_to_compressed.hpp"
 #include "transformations/op_conversions/convert_grouped_matmul_to_compressed.hpp"
@@ -775,9 +776,14 @@ void TransformationsPipeline::apply(std::shared_ptr<ov::Model> func) {
         manager.register_pass<ov::pass::BroadcastElementwiseFusion>();
         manager.register_pass<ov::pass::BroadcastTransition>();
 
+        auto sincos_constants = std::make_shared<ov::intel_gpu::CollectSinCosConstants::ConstantSet>();
+        // manager.register_pass<ov::intel_gpu::CollectSinCosConstants>(sincos_constants);
         manager.register_pass<ov::pass::KeepConstantsPrecisionAndAddConverts>();
         pass_config->set_callback<ov::pass::KeepConstantsPrecisionAndAddConverts>(
-            [](const_node_ptr& node) -> bool {
+            [sincos_constants](const_node_ptr& node) -> bool {
+                if (sincos_constants->count(node.get()) != 0) {
+                    return false;
+                }
                 auto* next_node = node->get_output_target_inputs(0).begin()->get_node();
                 if (is_type<ov::op::v0::Convert>(next_node)) {
                     next_node = next_node->get_output_target_inputs(0).begin()->get_node();
@@ -841,6 +847,10 @@ void TransformationsPipeline::apply(std::shared_ptr<ov::Model> func) {
                                                           keep_precision_sensitive_in_fp32_1,
                                                           convert_input_output_precision,
                                                           store_original_precision_as_rt_attribute);
+
+        // Temporary debugging only: remove this dump registration after investigation.
+        std::string path = GPU_DEBUG_VALUE_OR(config.get_dump_graphs_path(), "");
+        manager.register_pass<ov::intel_gpu::DumpNetwork>(path, "after_fp_convert_precision");
 
         // The one_hot primitive takes on/off as compile time values,
         // so OneHot ops fed by a runtime scalar are turned into a boolean mask + Select.
