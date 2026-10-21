@@ -76,6 +76,9 @@ bool CollectSinCosConstants::run_on_model(const std::shared_ptr<ov::Model>& mode
             continue;
         }
 
+        // Preserve coefficients on supported angle-value paths, not every Constant upstream of Sin/Cos.
+        // These arithmetic ops combine operand values; Concat carries values from every input.
+        // Follow all operands so coefficients on either side of an expression are included.
         if (ov::is_type_any_of<ov::op::v1::Add,
                                ov::op::v1::Subtract,
                                ov::op::v1::Multiply,
@@ -97,10 +100,14 @@ bool CollectSinCosConstants::run_on_model(const std::shared_ptr<ov::Model>& mode
                                       ov::op::v1::StridedSlice,
                                       ov::op::v1::Split,
                                       ov::op::v1::VariadicSplit>(node)) {
-            // Shape, axis and index inputs do not carry angle coefficients.
+            // These versions convert, rearrange or select values from input 0. Other inputs describe
+            // shapes, axes, indices or slice bounds; they are not floating-point angle coefficients.
             pending.push_back(node->input_value(0));
         }
-        // MatMul and unlisted operations are traversal boundaries; do not enter subgraph bodies.
+        // Keep an explicit allowlist: floating-point type alone does not identify an angle-value path.
+        // Stop at MatMul (which can lead to large weight/activation subgraphs) and unlisted operations;
+        // do not enter subgraph bodies. Add an op/version only after checking all value-input ports
+        // and whether traversing it would preserve unrelated Constants.
     }
 
     return false;
