@@ -779,24 +779,7 @@ void TransformationsPipeline::apply(std::shared_ptr<ov::Model> func) {
         manager.register_pass<ov::pass::KeepConstantsPrecisionAndAddConverts>();
         pass_config->set_callback<ov::pass::KeepConstantsPrecisionAndAddConverts>(
             [sincos_constants](const_node_ptr& node) -> bool {
-                const auto targets = node->get_output_target_inputs(0);
-                const ov::Node* next_node = node.get();
-                if (!targets.empty()) {
-                    next_node = targets.begin()->get_node();
-                }
-                if (is_type<ov::op::v0::Convert>(next_node)) {
-                    const auto convert_targets = next_node->get_output_target_inputs(0);
-                    if (!convert_targets.empty()) {
-                        next_node = convert_targets.begin()->get_node();
-                    }
-                }
-                if (is_type_any_of<ov::op::v0::MatMul,
-                                   ov::op::internal::MOE,
-                                   ov::op::internal::GatherMatmulCompressed,
-                                   ov::op::internal::GroupedMatMulCompressed>(next_node)) {
-                    return false;
-                }
-                return sincos_constants->count(node.get()) == 0;
+                return ov::intel_gpu::skip_constant_precision_preservation(node, *sincos_constants);
             });
 
         // Disable subtract folding only for the dGPUs to meet the requirements of oneDNN:
