@@ -5,7 +5,6 @@
 #include "increase_position_ids_precision.hpp"
 
 #include <map>
-#include <numeric>
 #include <set>
 #include <utility>
 #include <vector>
@@ -21,7 +20,6 @@
 #include "openvino/op/constant.hpp"
 #include "openvino/op/convert.hpp"
 #include "openvino/op/cos.hpp"
-#include "openvino/op/divide.hpp"
 #include "openvino/op/gather.hpp"
 #include "openvino/op/gather_nd.hpp"
 #include "openvino/op/gelu.hpp"
@@ -30,18 +28,16 @@
 #include "openvino/op/parameter.hpp"
 #include "openvino/op/reshape.hpp"
 #include "openvino/op/scaled_dot_product_attention.hpp"
-#include "openvino/op/scatter_nd_update.hpp"
 #include "openvino/op/shape_of.hpp"
 #include "openvino/op/sin.hpp"
-#include "openvino/op/slice.hpp"
-#include "openvino/op/split.hpp"
 #include "openvino/op/squeeze.hpp"
 #include "openvino/op/strided_slice.hpp"
 #include "openvino/op/subtract.hpp"
 #include "openvino/op/swish.hpp"
-#include "openvino/op/tile.hpp"
 #include "openvino/op/transpose.hpp"
 #include "openvino/op/unsqueeze.hpp"
+#include "openvino/op/util/multi_subgraph_base.hpp"
+#include "openvino/op/util/variable_extension.hpp"
 #include "openvino/op/variadic_split.hpp"
 #include "openvino/pass/pattern/op/optional.hpp"
 #include "openvino/pass/pattern/op/or.hpp"
@@ -337,57 +333,6 @@ IncreasePositionIdsPrecisionForQwen3VL::IncreasePositionIdsPrecisionForQwen3VL()
 
 namespace {
 
-bool get_ltx_angle_data_ports(const ov::Output<ov::Node>& output, std::vector<size_t>& ports) {
-    const auto node = output.get_node_shared_ptr();
-    const auto type = output.get_element_type();
-    if (type != ov::element::f16 && type != ov::element::f32) {
-        return false;
-    }
-    if (ov::is_type_any_of<ov::op::v0::Constant, ov::op::v0::Parameter>(node)) {
-        return true;
-    }
-    if (ov::is_type<ov::op::v0::Convert>(node)) {
-        const auto source_type = node->get_input_element_type(0);
-        if (source_type.is_integral_number()) {
-            return true;
-        }
-        if (source_type != ov::element::f16 && source_type != ov::element::f32) {
-            return false;
-        }
-        ports = {0};
-    } else if (ov::is_type_any_of<ov::op::v1::Add,
-                                  ov::op::v1::Subtract,
-                                  ov::op::v1::Multiply,
-                                  ov::op::v1::Divide,
-                                  ov::op::v0::Concat>(node)) {
-        ports.resize(node->get_input_size());
-        std::iota(ports.begin(), ports.end(), size_t{0});
-    } else if (ov::is_type_any_of<ov::op::v3::ScatterNDUpdate, ov::op::v15::ScatterNDUpdate>(node)) {
-        ports = {0, 2};
-    } else if (ov::is_type_any_of<ov::op::v1::Reshape,
-                                  ov::op::v1::Transpose,
-                                  ov::op::v0::Squeeze,
-                                  ov::op::v15::Squeeze,
-                                  ov::op::v0::Unsqueeze,
-                                  ov::op::v1::Broadcast,
-                                  ov::op::v3::Broadcast,
-                                  ov::op::v0::Tile,
-                                  ov::op::v1::Gather,
-                                  ov::op::v7::Gather,
-                                  ov::op::v8::Gather,
-                                  ov::op::v5::GatherND,
-                                  ov::op::v8::GatherND,
-                                  ov::op::v8::Slice,
-                                  ov::op::v1::StridedSlice,
-                                  ov::op::v1::Split,
-                                  ov::op::v1::VariadicSplit>(node)) {
-        ports = {0};
-    } else {
-        return false;
-    }
-    return true;
-}
-
 bool increase_ltx_angle_precision(const std::shared_ptr<ov::Node>& sin, const std::shared_ptr<ov::Node>& cos) {
     // Phase 1: inspect both upstream value paths before changing any live edge.
     const ov::OutputVector roots{sin->input_value(0), cos->input_value(0)};
@@ -409,10 +354,30 @@ bool increase_ltx_angle_precision(const std::shared_ptr<ov::Node>& sin, const st
         if (data_ports.count(output)) {
             continue;
         }
-        std::vector<size_t> ports;
-        // Follow value ports only; shape, axis and index inputs stay outside the reconstructed region.
-        if (!get_ltx_angle_data_ports(output, ports)) {
+        const auto node = output.get_node_shared_ptr();
+        const auto type = output.get_element_type();
+        // Changing outer inputs alone cannot safely rebuild bodies or state/control dependencies.
+        if ((type != ov::element::f16 && type != ov::element::f32) ||
+            ov::is_type<ov::op::util::MultiSubGraphOp>(node) ||
+            std::dynamic_pointer_cast<ov::op::util::VariableExtension>(node) ||
+            !node->get_control_dependencies().empty()) {
             GPU_DEBUG_LOG << "IncreasePositionIdsPrecisionForLtxVideo: unsupported angle output " << output
+                          << "; leaving Sin/Cos unchanged" << std::endl;
+            return false;
+        }
+        std::vector<size_t> ports;
+        // Input types select value dependencies without an op allowlist; integer/bool controls stay unchanged.
+        for (size_t i = 0; i < node->get_input_size(); ++i) {
+            if (node->get_input_element_type(i).is_real()) {
+                ports.push_back(i);
+            }
+        }
+        const bool is_leaf = ov::is_type_any_of<ov::op::v0::Constant, ov::op::v0::Parameter>(node);
+        const bool is_convert = ov::is_type<ov::op::v0::Convert>(node);
+        // Only an existing integer-to-float Convert may enter from an integer value path.
+        if ((!is_leaf && !is_convert && ports.empty()) ||
+            (is_convert && ports.empty() && !node->get_input_element_type(0).is_integral_number())) {
+            GPU_DEBUG_LOG << "IncreasePositionIdsPrecisionForLtxVideo: unsupported angle source " << output
                           << "; leaving Sin/Cos unchanged" << std::endl;
             return false;
         }
@@ -464,7 +429,7 @@ bool increase_ltx_angle_precision(const std::shared_ptr<ov::Node>& sin, const st
             }
         } else {
             auto inputs = node->input_values();
-            // Replace only value inputs; control inputs retain their original types and producers.
+            // Replace only floating-point inputs; integer/bool inputs retain their original producers.
             for (const auto port : ports) {
                 inputs[port] = replacements.at(inputs[port]);
             }
@@ -475,10 +440,18 @@ bool increase_ltx_angle_precision(const std::shared_ptr<ov::Node>& sin, const st
             } else {
                 const auto rebuilt = node->clone_with_new_inputs(inputs);
                 copy_info(node, rebuilt);
-                // All Split/VariadicSplit outputs must reference the same clone, with their indices unchanged.
+                // Verify every sibling before recording any output of this shared clone.
                 for (size_t i = 0; i < node->get_output_size(); ++i) {
-                    OPENVINO_ASSERT(rebuilt->get_output_element_type(i) == ov::element::f32,
-                                    "LTX angle reconstruction must produce FP32");
+                    const auto expected = node->get_output_element_type(i).is_real()
+                                              ? ov::element::f32
+                                              : node->get_output_element_type(i);
+                    if (rebuilt->get_output_element_type(i) != expected) {
+                        GPU_DEBUG_LOG << "IncreasePositionIdsPrecisionForLtxVideo: incompatible rebuilt output "
+                                      << rebuilt->output(i) << "; leaving Sin/Cos unchanged" << std::endl;
+                        return false;
+                    }
+                }
+                for (size_t i = 0; i < node->get_output_size(); ++i) {
                     replacements.emplace(node->output(i), rebuilt->output(i));
                 }
             }
