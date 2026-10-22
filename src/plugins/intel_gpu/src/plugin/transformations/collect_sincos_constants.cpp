@@ -10,9 +10,14 @@
 #include "intel_gpu/runtime/debug_configuration.hpp"
 #include "openvino/core/model.hpp"
 #include "openvino/op/constant.hpp"
+#include "openvino/op/convert.hpp"
 #include "openvino/op/cos.hpp"
+#include "openvino/op/matmul.hpp"
+#include "openvino/op/moe.hpp"
 #include "openvino/op/sin.hpp"
 #include "openvino/pass/visualize_tree.hpp"
+#include "ov_ops/gather_matmul_compressed.hpp"
+#include "ov_ops/grouped_matmul_compressed.hpp"
 
 namespace ov::intel_gpu {
 
@@ -72,6 +77,29 @@ bool CollectSinCosConstants::run_on_model(const std::shared_ptr<ov::Model>& mode
     }
 
     return false;
+}
+
+// Shared by the GPU pipeline and accuracy regression tests to avoid duplicating the preservation policy.
+bool skip_constant_precision_preservation(const std::shared_ptr<const ov::Node>& node,
+                                          const CollectSinCosConstants::ConstantSet& sincos_constants) {
+    const auto targets = node->get_output_target_inputs(0);
+    const ov::Node* next_node = node.get();
+    if (!targets.empty()) {
+        next_node = targets.begin()->get_node();
+    }
+    if (ov::is_type<ov::op::v0::Convert>(next_node)) {
+        const auto convert_targets = next_node->get_output_target_inputs(0);
+        if (!convert_targets.empty()) {
+            next_node = convert_targets.begin()->get_node();
+        }
+    }
+    if (ov::is_type_any_of<ov::op::v0::MatMul,
+                           ov::op::internal::MOE,
+                           ov::op::internal::GatherMatmulCompressed,
+                           ov::op::internal::GroupedMatMulCompressed>(next_node)) {
+        return false;
+    }
+    return sincos_constants.count(node.get()) == 0;
 }
 
 }  // namespace ov::intel_gpu

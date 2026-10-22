@@ -37,4 +37,7 @@ private:
     std::shared_ptr<ConstantSet> m_constants;
 };
 
+bool skip_constant_precision_preservation(const std::shared_ptr<const ov::Node>& node,
+                                          const CollectSinCosConstants::ConstantSet& sincos_constants);
+
 }  // namespace ov::intel_gpu
