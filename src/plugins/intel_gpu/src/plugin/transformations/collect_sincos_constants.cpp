@@ -9,24 +9,9 @@
 
 #include "intel_gpu/runtime/debug_configuration.hpp"
 #include "openvino/core/model.hpp"
-#include "openvino/op/add.hpp"
-#include "openvino/op/broadcast.hpp"
-#include "openvino/op/concat.hpp"
 #include "openvino/op/constant.hpp"
-#include "openvino/op/convert.hpp"
 #include "openvino/op/cos.hpp"
-#include "openvino/op/divide.hpp"
-#include "openvino/op/gather.hpp"
-#include "openvino/op/reshape.hpp"
 #include "openvino/op/sin.hpp"
-#include "openvino/op/split.hpp"
-#include "openvino/op/squeeze.hpp"
-#include "openvino/op/strided_slice.hpp"
-#include "openvino/op/subtract.hpp"
-#include "openvino/op/transpose.hpp"
-#include "openvino/op/unsqueeze.hpp"
-#include "openvino/op/variadic_split.hpp"
-#include "openvino/op/multiply.hpp"
 #include "openvino/pass/visualize_tree.hpp"
 
 namespace ov::intel_gpu {
@@ -76,38 +61,14 @@ bool CollectSinCosConstants::run_on_model(const std::shared_ptr<ov::Model>& mode
             continue;
         }
 
-        // Preserve coefficients on supported angle-value paths, not every Constant upstream of Sin/Cos.
-        // These arithmetic ops combine operand values; Concat carries values from every input.
-        // Follow all operands so coefficients on either side of an expression are included.
-        if (ov::is_type_any_of<ov::op::v1::Add,
-                               ov::op::v1::Subtract,
-                               ov::op::v1::Multiply,
-                               ov::op::v1::Divide,
-                               ov::op::v0::Concat>(node)) {
-            for (const auto& input : node->input_values()) {
+        // Follow floating-point dependencies without an op allowlist, including through MatMul.
+        // Integer/bool inputs (e.g. shapes, axes and indices) end the path even if derived from floats.
+        // Only outer-graph input edges are followed; subgraph bodies are not traversed.
+        for (const auto& input : node->input_values()) {
+            if (input.get_element_type().is_real()) {
                 pending.push_back(input);
             }
-        } else if (ov::is_type_any_of<ov::op::v0::Convert,
-                                      ov::op::v1::Reshape,
-                                      ov::op::v1::Transpose,
-                                      ov::op::v0::Squeeze,
-                                      ov::op::v0::Unsqueeze,
-                                      ov::op::v1::Broadcast,
-                                      ov::op::v3::Broadcast,
-                                      ov::op::v1::Gather,
-                                      ov::op::v7::Gather,
-                                      ov::op::v8::Gather,
-                                      ov::op::v1::StridedSlice,
-                                      ov::op::v1::Split,
-                                      ov::op::v1::VariadicSplit>(node)) {
-            // These versions convert, rearrange or select values from input 0. Other inputs describe
-            // shapes, axes, indices or slice bounds; they are not floating-point angle coefficients.
-            pending.push_back(node->input_value(0));
         }
-        // Keep an explicit allowlist: floating-point type alone does not identify an angle-value path.
-        // Stop at MatMul (which can lead to large weight/activation subgraphs) and unlisted operations;
-        // do not enter subgraph bodies. Add an op/version only after checking all value-input ports
-        // and whether traversing it would preserve unrelated Constants.
     }
 
     return false;
