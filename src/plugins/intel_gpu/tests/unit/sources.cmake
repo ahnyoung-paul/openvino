@@ -336,6 +336,7 @@ set(GPU_UNIT_TESTS_SRCS
     ${CMAKE_CURRENT_LIST_DIR}/transformations/group_query_attention_decomposition_test.cpp
     ${CMAKE_CURRENT_LIST_DIR}/transformations/horizontal_fc_fusion_test.cpp
     ${CMAKE_CURRENT_LIST_DIR}/transformations/increase_precision_test.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/transformations/increase_precision_discovery_test.cpp
     ${CMAKE_CURRENT_LIST_DIR}/transformations/indirect_kv_cache_test.cpp
     ${CMAKE_CURRENT_LIST_DIR}/transformations/keep_gqa_kv_scale_precision_test.cpp
     ${CMAKE_CURRENT_LIST_DIR}/transformations/keep_xattention_threshold_precision_test.cpp

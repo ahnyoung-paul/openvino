@@ -523,6 +523,8 @@ TEST_F(TransformationTestsF, IncreasePositionIdsLTXVideo_T) {
 }
 
 TEST_F(TransformationTestsF, IncreasePositionIdsLTXVideo_F) {
+    manager.get_pass_config()->set_callback<IncreasePositionIdsPrecisionForLtxVideo>(
+        [](const std::shared_ptr<const ov::Node>&) { return true; });
     test_IncreasePositionIdsLTXVideo(model, model_ref, manager, comparator, false);
 }
 
@@ -623,6 +625,8 @@ TEST_F(TransformationTestsF, IncreasePositionIdsLTXVideoGather_T) {
 }
 
 TEST_F(TransformationTestsF, IncreasePositionIdsLTXVideoGather_F) {
+    manager.get_pass_config()->set_callback<IncreasePositionIdsPrecisionForLtxVideo>(
+        [](const std::shared_ptr<const ov::Node>&) { return true; });
     test_IncreasePositionIdsLTXVideoGather(model, model_ref, manager, comparator, false);
 }
 

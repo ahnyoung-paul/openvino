@@ -338,6 +338,8 @@ bool increase_ltx_angle_precision(const std::shared_ptr<ov::Node>& sin, const st
     const ov::OutputVector roots{sin->input_value(0), cos->input_value(0)};
     // Output keys preserve Split output indices and deduplicate shared Sin/Cos dependencies.
     std::map<ov::Output<ov::Node>, std::vector<size_t>> data_ports;
+    bool has_angle_arithmetic = false;
+    bool has_fp16_output = false;
     // Stack flag: false schedules dependencies; true records the output after those dependencies.
     std::vector<std::pair<ov::Output<ov::Node>, bool>> pending;
     ov::OutputVector ordered;
@@ -355,7 +357,12 @@ bool increase_ltx_angle_precision(const std::shared_ptr<ov::Node>& sin, const st
             continue;
         }
         const auto node = output.get_node_shared_ptr();
+        has_angle_arithmetic |= ov::is_type_any_of<ov::op::v1::Add,
+                                                   ov::op::v1::Multiply,
+                                                   ov::op::v0::MatMul,
+                                                   ov::intel_gpu::op::Gemm>(node);
         const auto type = output.get_element_type();
+        has_fp16_output |= type == ov::element::f16;
         // Changing outer inputs alone cannot safely rebuild bodies or state/control dependencies.
         if ((type != ov::element::f16 && type != ov::element::f32) ||
             ov::is_type<ov::op::util::MultiSubGraphOp>(node) ||
@@ -388,6 +395,15 @@ bool increase_ltx_angle_precision(const std::shared_ptr<ov::Node>& sin, const st
         }
     }
 
+    if (!has_angle_arithmetic) {
+        GPU_DEBUG_LOG << "IncreasePositionIdsPrecisionForLtxVideo: no angle arithmetic; leaving Sin/Cos unchanged"
+                      << std::endl;
+        return false;
+    }
+    if (!has_fp16_output) {
+        return false;
+    }
+
     // Phase 2: build FP32 replacements in dependency-first order, leaving the original region intact.
     const auto copy_info = [](const std::shared_ptr<ov::Node>& source, const std::shared_ptr<ov::Node>& replacement) {
         ov::copy_runtime_info(source, replacement);
@@ -417,8 +433,14 @@ bool increase_ltx_angle_precision(const std::shared_ptr<ov::Node>& sin, const st
             }
         } else if (ov::is_type<ov::op::v0::Convert>(node)) {
             if (!ports.empty()) {
-                // The floating source is already FP32 here: bypass downcasts and redundant upcasts.
-                replacements.emplace(output, replacements.at(node->input_value(0)));
+                const auto input = node->input_value(0);
+                if (output.get_element_type() == ov::element::f32 && input.get_element_type() == ov::element::f16 &&
+                    ov::is_type<ov::op::v0::Parameter>(input.get_node())) {
+                    // This is an irreducible input boundary, not recoverable FP16 arithmetic.
+                    replacements.emplace(output, output);
+                } else {
+                    replacements.emplace(output, replacements.at(input));
+                }
             } else if (output.get_element_type() == ov::element::f32) {
                 replacements.emplace(output, output);
             } else {
@@ -485,81 +507,36 @@ bool increase_ltx_angle_precision(const std::shared_ptr<ov::Node>& sin, const st
 
 IncreasePositionIdsPrecisionForLtxVideo::IncreasePositionIdsPrecisionForLtxVideo() {
     using namespace ov::pass::pattern;
-    using ov::pass::pattern::op::Or;
-
-    // LTX-Video RoPE position encoding pattern (anchored on fused RoPE).
-    // Handles two topology variants sharing the same upstream path.
-    //
-    // model1 (original):
-    //   Multiply → Add(Constant) → Transpose → Reshape
-    //       → Sin → Transpose → Unsqueeze → Broadcast → GatherND → Transpose → Concat_sin
-    //       → Cos → Transpose → Unsqueeze → Broadcast → GatherND → Transpose → Concat_cos
-    //       → RoPE(x, Concat_cos, Concat_sin)
-    //
-    // model2 (new topology):
-    //   Multiply → Add(Constant) → Transpose → Reshape
-    //       → Sin → Gather(Sin, Const, Const) → Concat(Broadcast, Gather)  [sin_concat]
-    //       → Cos → Gather(Cos, Const, Const) → Concat(Broadcast, Gather)  [cos_concat]
-    //       → RoPE(x, Concat_cos, Concat_sin)
-
-    // Upstream: Multiply → Add(Constant) → Transpose → Reshape (same for both models)
-    auto mul = wrap_type<ov::op::v1::Multiply>({any_input(), any_input()});
-    auto add_constant = optional<ov::op::v0::Convert>({wrap_type<ov::op::v0::Constant>()});
-    auto add = wrap_type<ov::op::v1::Add>({mul, add_constant});
-    auto transpose_up = wrap_type<ov::op::v1::Transpose>({add, any_input()});
-    auto reshape = wrap_type<ov::op::v1::Reshape>({transpose_up, any_input()});
-
-    // Sin and Cos nodes (shared between both model variants)
-    auto sin = wrap_type<ov::op::v0::Sin>({reshape});
-    auto cos = wrap_type<ov::op::v0::Cos>({reshape});
-
-    // model1 sin path: Sin → Transpose → Unsqueeze → Broadcast → GatherND → Transpose → Concat
-    auto sin_transpose = wrap_type<ov::op::v1::Transpose>({sin, any_input()});
-    auto sin_unsqueeze = wrap_type<ov::op::v0::Unsqueeze>({sin_transpose, any_input()});
-    auto sin_broadcast = wrap_type<ov::op::v3::Broadcast>({sin_unsqueeze, any_input()});
-    auto sin_gathernd = wrap_type<ov::op::v8::GatherND>({sin_broadcast, any_input()});
-    auto sin_transpose2 = wrap_type<ov::op::v1::Transpose>({sin_gathernd, any_input()});
-    auto sin_concat_m1 = wrap_type<ov::op::v0::Concat>({any_input(), sin_transpose2});
-
-    // model2 sin path: Sin → Gather → Concat
-    auto sin_gather_m2 = wrap_type<ov::op::v8::Gather>({sin, any_input(), any_input()});
-    auto sin_concat_m2 = wrap_type<ov::op::v0::Concat>({any_input(), sin_gather_m2});
-
-    auto sin_concat = std::make_shared<Or>(OutputVector{sin_concat_m1, sin_concat_m2});
-
-    // model1 cos path: Cos → Transpose → Unsqueeze → Broadcast → GatherND → Transpose → Concat
-    auto cos_transpose = wrap_type<ov::op::v1::Transpose>({cos, any_input()});
-    auto cos_unsqueeze = wrap_type<ov::op::v0::Unsqueeze>({cos_transpose, any_input()});
-    auto cos_broadcast = wrap_type<ov::op::v3::Broadcast>({cos_unsqueeze, any_input()});
-    auto cos_gathernd = wrap_type<ov::op::v8::GatherND>({cos_broadcast, any_input()});
-    auto cos_transpose2 = wrap_type<ov::op::v1::Transpose>({cos_gathernd, any_input()});
-    auto cos_concat_m1 = wrap_type<ov::op::v0::Concat>({any_input(), cos_transpose2});
-
-    // model2 cos path: Cos → Gather → Concat
-    auto cos_gather_m2 = wrap_type<ov::op::v8::Gather>({cos, any_input(), any_input()});
-    auto cos_concat_m2 = wrap_type<ov::op::v0::Concat>({any_input(), cos_gather_m2});
-
-    auto cos_concat = std::make_shared<Or>(OutputVector{cos_concat_m1, cos_concat_m2});
-
-    // RoPE: input 0 = x, input 1 = cos_concat, input 2 = sin_concat
-    auto rope = wrap_type<ov::op::internal::RoPE>({any_input(), cos_concat, sin_concat}, [](const ov::Output<ov::Node>& output) {
-        auto node = ov::as_type_ptr<ov::op::internal::RoPE>(output.get_node_shared_ptr());
-        return node && node->get_config().is_ltx_video;
-    });
+    // Sin owns the rewrite; Cos is discovered from the exact same angle output.
+    auto sin = wrap_type<ov::op::v0::Sin>({any_input()});
 
     ov::matcher_pass_callback callback = [OV_CAPTURE_CPY_AND_THIS](ov::pass::pattern::Matcher& m) {
-        const auto& pattern_map = m.get_pattern_value_map();
-
-        auto cos_node = ov::as_type_ptr<ov::op::v0::Cos>(pattern_map.at(cos).get_node_shared_ptr());
-        auto sin_node = ov::as_type_ptr<ov::op::v0::Sin>(pattern_map.at(sin).get_node_shared_ptr());
-
-        if (transformation_callback(m.get_match_root())) {
+        const auto sin_node = ov::as_type_ptr<ov::op::v0::Sin>(m.get_match_root());
+        std::shared_ptr<ov::Node> cos_node;
+        size_t sin_count = 0;
+        size_t cos_count = 0;
+        for (const auto& input : sin_node->input_value(0).get_target_inputs()) {
+            const auto consumer = input.get_node()->shared_from_this();
+            if (ov::is_type<ov::op::v0::Sin>(consumer)) {
+                ++sin_count;
+            } else if (ov::is_type<ov::op::v0::Cos>(consumer)) {
+                ++cos_count;
+                cos_node = consumer;
+            }
+        }
+        if (sin_count != 1 || cos_count != 1) {
+            GPU_DEBUG_LOG << "IncreasePositionIdsPrecisionForLtxVideo: missing or ambiguous Sin/Cos pair at "
+                          << sin_node->input_value(0) << "; leaving graph unchanged" << std::endl;
+            return false;
+        }
+        // With no RoPE requirement, opt-out is evaluated on both actual trigonometric roots.
+        if (transformation_callback(sin_node) || transformation_callback(cos_node)) {
             return false;
         }
         return increase_ltx_angle_precision(sin_node, cos_node);
     };
 
-    auto m = std::make_shared<ov::pass::pattern::Matcher>(rope, "IncreasePositionIdsPrecisionForLtxVideo");
+    auto m = std::make_shared<ov::pass::pattern::Matcher>(sin, "IncreasePositionIdsPrecisionForLtxVideo");
     this->register_matcher(m, callback);
 }
 
