@@ -835,10 +835,6 @@ void TransformationsPipeline::apply(std::shared_ptr<ov::Model> func) {
                                                           convert_input_output_precision,
                                                           store_original_precision_as_rt_attribute);
 
-        // Temporary debugging only: remove this dump registration after investigation.
-        std::string path = GPU_DEBUG_VALUE_OR(config.get_dump_graphs_path(), "");
-        manager.register_pass<ov::intel_gpu::DumpNetwork>(path, "after_fp_convert_precision");
-
         // The one_hot primitive takes on/off as compile time values,
         // so OneHot ops fed by a runtime scalar are turned into a boolean mask + Select.
         // This runs right before "CommonOptimizations",
@@ -1660,11 +1656,6 @@ void TransformationsPipeline::apply(std::shared_ptr<ov::Model> func) {
         manager.register_pass<ov::intel_gpu::SwiGluFusionWithClamp>();
         // This Validate is needed for proper data type propagation after applying IncreasePositionIdsPrecision pass
         manager.register_pass<ov::pass::Validate>();
-        {
-                // Temporary debugging only: remove this dump registration after investigation.
-            std::string path = GPU_DEBUG_VALUE_OR(config.get_dump_graphs_path(), "");
-            manager.register_pass<ov::intel_gpu::DumpNetwork>(path, "after_increase_position_ids");
-        }
 
         float activations_scale_factor = config.get_activations_scale_factor();
 

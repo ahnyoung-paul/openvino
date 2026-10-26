@@ -4,10 +4,8 @@
 
 #include "collect_sincos_constants.hpp"
 
-#include <filesystem>
 #include <vector>
 
-#include "intel_gpu/runtime/debug_configuration.hpp"
 #include "openvino/core/model.hpp"
 #include "openvino/op/constant.hpp"
 #include "openvino/op/convert.hpp"
@@ -15,25 +13,10 @@
 #include "openvino/op/matmul.hpp"
 #include "openvino/op/moe.hpp"
 #include "openvino/op/sin.hpp"
-#include "openvino/pass/visualize_tree.hpp"
 #include "ov_ops/gather_matmul_compressed.hpp"
 #include "ov_ops/grouped_matmul_compressed.hpp"
 
 namespace ov::intel_gpu {
-
-// Temporary debugging only: remove this implementation after investigation.
-DumpNetwork::DumpNetwork(const std::string& path, const std::string& tag) : m_path(path), m_tag(tag) {}
-
-bool DumpNetwork::run_on_model(const std::shared_ptr<ov::Model>& model) {
-    if (m_path.empty()) {
-        return false;
-    }
-    std::filesystem::create_directories(m_path);
-    const auto filename = std::filesystem::path(m_path) / (model->get_name() + "_" + m_tag + ".svg");
-    ov::pass::VisualizeTree(filename).run_on_model(model);
-    GPU_DEBUG_COUT << "Dumped network to " << filename << std::endl;
-    return false;
-}
 
 CollectSinCosConstants::CollectSinCosConstants(const std::shared_ptr<ConstantSet>& constants) : m_constants(constants) {
     OPENVINO_ASSERT(m_constants, "CollectSinCosConstants requires a shared Constant set");
